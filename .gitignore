@@ -7,3 +7,5 @@ web/public/assets/
 node_modules/
 __pycache__/
 .DS_Store
+# plan execution scratch (ledgers, briefs)
+.superpowers/
