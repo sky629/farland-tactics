@@ -1,0 +1,9 @@
+# original game data and archives (copyrighted, not redistributed)
+extracted/
+*.egg
+# generated web assets (from tools/ft2_export.py)
+web/public/assets/
+# toolchains
+node_modules/
+__pycache__/
+.DS_Store
