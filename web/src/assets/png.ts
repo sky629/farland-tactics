@@ -6,7 +6,7 @@ export class PngFormatError extends Error {
 
 const SIGNATURE = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
 
-async function inflate(zlibData: Uint8Array): Promise<Uint8Array> {
+async function inflate(zlibData: Uint8Array<ArrayBuffer>): Promise<Uint8Array> {
   const stream = new Blob([zlibData]).stream().pipeThrough(new DecompressionStream('deflate'));
   return new Uint8Array(await new Response(stream).arrayBuffer());
 }
