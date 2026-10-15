@@ -69,6 +69,10 @@ describe('compileAnim – steps and movement', () => {
   it('an empty trailing step is dropped', () => {
     expect(compile('P1 M0,0\r\n').steps).toHaveLength(1);
   });
+  it("M with '-' in place of the comma reads as a negative second number (corpus char_28b M32-16, char_68v M0-40)", () => {
+    expect(compile('P1 M32-16').steps[0]).toMatchObject({ dx: 32, dy: -16 });
+    expect(compile('P1 M0-40').steps[0]).toMatchObject({ dx: 0, dy: -40 });
+  });
   it('HP flips the whole list, H before a number flips that frame, HM negates dx, VM negates dy', () => {
     expect(compile('HP1-2').steps[0]!.frames.every((x) => x.flipH && !x.flipV)).toBe(true);
     const mixed = compile('P1,H2,V3').steps[0]!.frames;
