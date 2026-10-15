@@ -2,9 +2,43 @@
 <html lang="ko">
 <head>
 <meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>FT2 viewer</title>
+<link rel="icon" href="data:,">
+<style>
+  :root { color-scheme: dark; }
+  body { margin: 0; background: #14120e; color: #eae4d6; font: 13px/1.4 system-ui, sans-serif; display: flex; min-height: 100vh; }
+  #panel { width: 260px; padding: 12px; box-sizing: border-box; display: flex; flex-direction: column; gap: 8px; background: #1e1a14; }
+  #panel label { display: flex; flex-direction: column; gap: 2px; }
+  #panel select, #panel button { font: inherit; }
+  #stage { flex: 1; display: grid; place-items: center; overflow: auto; }
+  canvas { image-rendering: pixelated; image-rendering: crisp-edges; background: #000; }
+  #status { font-family: ui-monospace, monospace; white-space: pre-wrap; }
+  #error { color: #ff6b6b; font-family: ui-monospace, monospace; white-space: pre-wrap; }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; }
+  .row label { flex-direction: row; align-items: center; gap: 4px; }
+</style>
 </head>
 <body>
+<aside id="panel">
+  <label>맵 <select id="map"></select></label>
+  <label>스프라이트 <select id="sprite"></select></label>
+  <label>애니 <select id="anim"></select></label>
+  <div class="row">
+    <button id="clear">배치 전부 지우기</button>
+  </div>
+  <div class="row">
+    <label><input type="checkbox" id="grid" checked> 격자</label>
+    <label><input type="checkbox" id="height"> 높이</label>
+    <label><input type="checkbox" id="land"> land</label>
+    <label><input type="checkbox" id="blocked"> blocked</label>
+    <label><input type="checkbox" id="loop" checked> 반복</label>
+  </div>
+  <div>셀 클릭: 선택한 애니를 배치 · 방향키/드래그: 스크롤 · Shift: 투시</div>
+  <div id="status"></div>
+  <div id="error"></div>
+</aside>
+<main id="stage"><canvas id="view"></canvas></main>
 <script type="module" src="/src/viewer/main.ts"></script>
 </body>
 </html>

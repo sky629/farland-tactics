@@ -12,3 +12,6 @@ __pycache__/
 
 # vitest json reports written by the rtk shell hook
 web/.vitest/
+
+# playwright MCP screenshots/snapshots
+.playwright-mcp/
