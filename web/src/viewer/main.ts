@@ -5,6 +5,7 @@ import { AnimPlayer } from '../sprite/animPlayer';
 import { ApdModel } from '../sprite/apdModel';
 import { Renderer, type PlacedSprite, type Scene } from '../render/renderer';
 import { clampCamera, fitScale } from './scale';
+import { startViewer } from './startup';
 
 const $ = <T extends HTMLElement>(id: string): T => {
   const el = document.getElementById(id);
@@ -130,18 +131,20 @@ function bind(): void {
   window.addEventListener('resize', resize);
 }
 
-async function main(): Promise<void> {
-  bind();
-  resize();
-  const index = await loader.index();
-  const option = (v: string) => Object.assign(document.createElement('option'), { value: v, textContent: v });
-  $<HTMLSelectElement>('map').replaceChildren(...index.maps.map(option));
-  $<HTMLSelectElement>('sprite').replaceChildren(...index.sprites.map(option));
-  const firstMap = index.maps.includes('stage02') ? 'stage02' : index.maps[0];
-  const firstSprite = index.sprites.includes('char_01a') ? 'char_01a' : index.sprites[0];
-  if (firstMap) { $<HTMLSelectElement>('map').value = firstMap; await loadMap(firstMap); }
-  if (firstSprite) { $<HTMLSelectElement>('sprite').value = firstSprite; await loadApd(firstSprite); }
-  requestAnimationFrame(frame);
-}
-
-main().catch(showError);
+bind();
+resize();
+void startViewer({
+  index: () => loader.index(),
+  populate: (index, defaults) => {
+    const option = (v: string) => Object.assign(document.createElement('option'), { value: v, textContent: v });
+    const mapSel = $<HTMLSelectElement>('map'), spriteSel = $<HTMLSelectElement>('sprite');
+    mapSel.replaceChildren(...index.maps.map(option));
+    spriteSel.replaceChildren(...index.sprites.map(option));
+    if (defaults.map) mapSel.value = defaults.map;
+    if (defaults.sprite) spriteSel.value = defaults.sprite;
+  },
+  loadMap,
+  loadApd,
+  startLoop: () => requestAnimationFrame(frame),
+  onError: showError,
+});

@@ -140,7 +140,7 @@ export function compileAnim(apd: ApdData, animIndex: number, depth = 0): Timelin
       continue;
     }
     switch (ch) {
-      case ' ': case ',': elemFlip = 0; mark = 0; range = false; negative = false; break;
+      case ' ': case ',': elemFlip = 0; break;   // FUN_00424c80 separators clear only the H/V element bits (AND 0x0c); range, mark and sign stay until the next number
       case '\r': case '\n': case 'H': case 'V': break;
       case 'A': mark = 1; break;
       case 'B': mark = 2; break;

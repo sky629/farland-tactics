@@ -43,6 +43,19 @@ describe('compileAnim – frames', () => {
     expect(step.frames).toEqual([f(16, 50, { mark: 1, trigger: 2 }), f(15, 50), f(14, 50, { trigger: 2 }), f(13, 50)]);
     expect(step).toMatchObject({ dx: 16, dy: 32, totalMs: 200 });
   });
+  it("separators clear only the element flip; a pending range or mark survives a space (corpus char_12b 'PA(05)22- 24,24,24')", () => {
+    const frames = compile('S100\r\nPA(05)22- 24,24,24').steps[0]!.frames;
+    expect(frames.map((x) => x.pattern)).toEqual([22, 23, 24, 24, 24]);
+    expect(frames[0]).toEqual(f(22, 100, { mark: 1, trigger: 5 }));
+    expect(frames[1]).toEqual(f(23, 100));
+    expect(compile('PA,16').steps[0]!.frames[0]).toEqual(f(16, 200, { mark: 1 }));
+    expect(compile('P1 -3').steps[0]!.frames.map((x) => x.pattern)).toEqual([1, 2, 3]);
+  });
+  it('H/V count only when written right before the digits (FUN_00425100 looks at pos-1 and pos-2)', () => {
+    expect(compile('PA(6)H16').steps[0]!.frames[0]).toEqual(f(16, 200, { mark: 1, trigger: 6, flipH: true }));
+    expect(compile('PHA(6)16').steps[0]!.frames[0]).toEqual(f(16, 200, { mark: 1, trigger: 6 }));
+    expect(compile('PVH7').steps[0]!.frames[0]).toMatchObject({ flipH: true, flipV: true });
+  });
   it('(#n) sets triggerSharp', () => {
     expect(compile('P(#3)7').steps[0]!.frames[0]).toEqual(f(7, 200, { trigger: 3, triggerSharp: true }));
   });

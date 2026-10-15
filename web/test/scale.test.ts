@@ -21,4 +21,8 @@ describe('clampCamera', () => {
   it('is always (0, 0) for a 640×480 map', () => {
     expect(clampCamera(64, 48, 640, 480)).toEqual({ x: 0, y: 0 });
   });
+  it('rounds to whole map pixels (dragging at 2× or 3× scale produces fractions)', () => {
+    expect(clampCamera(10.5, 20.4, 1344, 896)).toEqual({ x: 11, y: 20 });
+    expect(clampCamera(703.6, 415.5, 1344, 896)).toEqual({ x: 704, y: 416 });
+  });
 });
