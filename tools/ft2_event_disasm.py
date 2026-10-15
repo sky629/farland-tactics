@@ -42,7 +42,7 @@ MAIN_OPS = {
     0x08: ("ANIM", "usn"),               # unit, anim name ('*' prefix = flag 2), loop(0)/once
     0x09: ("WAIT_FADE", ""),
     0x0a: ("LOAD_MAP", "n"),             # map\stage%02d.map
-    0x0b: ("CLEAR_SCENE", "n"),          # arg unused; frees all sprites/units
+    0x0b: ("LOAD_UNITS", "n"),           # clears unit slots 10..49, loads roster data\stage%03d.dat (FUN_0041fcf0)
     0x0c: ("CAMERA_TILE", "nn"),
     0x0d: ("CAMERA_UNIT", "u"),
     0x0e: ("MUSIC", "n"),                # midi\bgm%02d.mid ; -1 = stop

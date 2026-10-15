@@ -50,7 +50,7 @@ list   := number* 0                   ; SHOP 전용, 0 으로 종료
 | 08 | ANIM | u, s(anim), n | 스프라이트 애니메이션 지정 `FUN_00429a50`. n=0 → 플래그 0x11(반복), n≠0 → 0x01(1회). 이름 앞 `*` → 플래그 \|2 (강제/우선) | [관찰] 0x408f13 |
 | 09 | WAIT_FADE | – | 팔레트 페이드가 끝날 때까지 재시도 | [관찰] 0x408fd7 |
 | 0A | LOAD_MAP | n | `map\stage%02d.map` 로드 `FUN_0042d5d0(n)`, 위성뷰 갱신 | [관찰] 0x408ff0 |
-| 0B | CLEAR_SCENE | n(무시) | 모든 유닛 스프라이트/로드된 스프라이트 데이터 20슬롯 해제 | [관찰] 0x40901d |
+| 0B | LOAD_UNITS | n | 슬롯 10~49 유닛 삭제, 스프라이트 슬롯 해제 후 전투 로스터 `data\stage%03d.dat`(n)를 읽어 레코드(28 B = 유닛 구조체 앞 14워드)마다 `FUN_0041fae0`로 유닛 생성 (`FUN_0041fcf0`). 데이터의 n은 모두 존재하는 STAGE 파일이며 보통 맵 번호와 같다(150/126/137은 같은 맵의 다른 로스터) | [관찰] 0x40901d, 호출 0x409030, 포맷 0x44bf08 |
 | 0C | CAMERA_TILE | n x, n y | 타일 좌표로 카메라 이동 | [관찰] 0x409079 |
 | 0D | CAMERA_UNIT | u | 유닛 위치로 카메라 | [관찰] 0x4090d8 |
 | 0E | MUSIC | n | `midi\bgm%02d.mid`(또는 `_gs`) 재생 후 볼륨 최대. n<0 정지 | [관찰] 0x40912a, FUN_0042e8c0 |
@@ -228,6 +228,7 @@ list   := number* 0                   ; SHOP 전용, 0 으로 종료
 | 5 | `bmp\face%02d%c.bmp` | MSG_TOP/BOTTOM 초상 |
 | 7 | `bmp\%s.bmp` | SHOW_IMAGE, 마을 배경 |
 | 8 | `map\stage%02d.map` | LOAD_MAP |
+| 13 | `data\stage%03d.dat` | LOAD_UNITS (전투 로스터) |
 | 9 | `sprite\%s.apd` | LOAD_SPRITE |
 | 11 | `sprite\char_%02d%c.apd` | RESPRITE_UNIT, 유닛 기본 스프라이트 |
 | 15 | `wave\%s.wav` | SOUND |

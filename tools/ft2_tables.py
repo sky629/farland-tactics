@@ -26,8 +26,10 @@ ITEM_FIELDS = ['price', 'hp_heal', 'mp_heal', 'atk', 'def', 'wis', 'mgr', 'agi',
 # magic.dat numeric layout (FUN_0043b4a0, FUN_00438d70): learn level, MP cost (<= 0 → physical skill),
 # three element powers, min/max range.
 MAGIC_NUM_FIELDS = ['learn_level', 'mp_cost', 'elem0', 'elem1', 'elem2', 'range_min', 'range_max']
-STAGE_FIELDS = ['unit_id', 'race', 'level', 'f_3', 'c', 'c_hi', 'r', 'r_hi', 'side', 'f_9',
-                'f_10', 'f_11', 'f_12', 'f_13']  # c and r are i32 (FUN_0041fae0 copies them as dwords)
+# STAGE%03d.dat record = the first 14 words of the 124 B unit struct (FUN_0041fcf0 copies 28 bytes, then moves
+# words 12..13 to unit[0xe..0xf] = drop item / drop gold and zeroes the accessory slots). c and r are i32.
+STAGE_FIELDS = ['unit_id', 'race', 'level', 'dir', 'c', 'c_hi', 'r', 'r_hi', 'status', 'side',
+                'weapon', 'armor', 'drop_item', 'drop_gold']
 
 
 def name(b: bytes) -> str:
