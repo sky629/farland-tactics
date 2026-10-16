@@ -1,0 +1,112 @@
+import { describe, expect, it } from 'vitest';
+import { newCampaign } from '../src/game/campaign';
+import { FakeHost } from '../src/script/host';
+import { ScriptVm } from '../src/script/vm';
+import { unit } from './helpers/battleFixtures';
+import { prog, res } from './helpers/scriptFixtures';
+
+const start = (rows: Parameters<typeof prog>[1], rosters: Parameters<typeof res>[1] = {}) => {
+  const host = new FakeHost(); const c = newCampaign();
+  c.units[0] = unit({ slot: 0, id: 1, c: 2, r: 2 }); c.units[1] = unit({ slot: 1, id: 2, c: 3, r: 2 });
+  const vm = new ScriptVm(res([prog(0, rows)], rosters), c, host);
+  vm.run(0, 'begin');
+  return { host, c, vm };
+};
+
+describe('ScriptVm: units and sprites', () => {
+  it('SET_POS/SET_DIR/FACE_UNIT move and turn units; SET_DIR 4 keeps the facing', () => {
+    const { c, vm } = start(['begin', ['SET_POS', 1, 5, 2], ['SET_DIR', 1, 3], ['SET_DIR', 2, 4], ['FACE_UNIT', 1, 2], ['END']]);
+    vm.step(0);
+    expect(c.units[0]).toMatchObject({ c: 5, r: 2, dir: 3 });
+    expect(c.units[1]!.dir).toBe(1);                                      // unit 2 at (3,2) faces unit 1 at (5,2): east
+  });
+  it('an instruction whose unit is 0 is skipped without reading the rest', () => {
+    const { c, vm, host } = start(['begin', ['SET_DIR', 0], ['SET_POS', 0], ['FLAG_SET', 0, 1], ['END']]);
+    expect(vm.step(0)).toBe('ended');
+    expect(c.flags[0]).toBe(1);
+    expect(host.calls.filter((x) => x[0] === 'log')).toHaveLength(0);
+  });
+  it('LOAD_SPRITE/SPRITE_REUSE/ATTACH_SPRITE create object units with the named APD; RESPRITE_UNIT swaps a letter file', () => {
+    const { c, vm } = start(['begin', ['LOAD_SPRITE', 'npc_02', 15, 20, 30], ['SPRITE_REUSE', 16, 1, 1], ['ATTACH_SPRITE', 100], ['ATTACH_SPRITE', 1], ['RESPRITE_UNIT', 2, 'c'], ['END']]);
+    vm.step(0);
+    const u15 = c.units.find((u) => u?.id === 15)!, u16 = c.units.find((u) => u?.id === 16)!, u100 = c.units.find((u) => u?.id === 100)!;
+    expect(u15).toMatchObject({ side: 1, c: 20, r: 30, sprite: { apd: 'npc_02', layer: 3 } });
+    expect(u16.sprite?.apd).toBe('npc_02');
+    expect(u100).toMatchObject({ race: 7, side: 1, sprite: { apd: 'npc_02' } });
+    expect(c.units[0]!.sprite?.apd).toBe('npc_02');
+    expect(c.units[1]!.sprite?.apd).toBe('char_00c');
+    expect(c.lastSprite).toBe('char_00c');
+  });
+  it('ANIM, MOVE_PATH and WAIT_UNIT go through the host; MOVE_PATH updates the position and the last direction', () => {
+    const { c, vm, host } = start(['begin', ['ANIM', 1, '*f.event01', 1], ['MOVE_PATH', 1, 'run', 'sseN'], ['WAIT_UNIT', 1], ['END']]);
+    host.busyUnits.add(0);
+    expect(vm.step(0)).toBe('waiting');
+    expect(host.calls).toContainEqual(['anim', 0, 'f.event01', false, true]);
+    expect(host.calls).toContainEqual(['moveUnit', 0, [0, 0, 1, 3], 'run']);
+    expect(c.units[0]).toMatchObject({ c: 3, r: 3, dir: 3 });
+    host.busyUnits.clear();
+    expect(vm.step(1)).toBe('ended');
+  });
+  it('REMOVE_UNIT, SET_VISIBLE and KILL/REVIVE change the unit; SET_VISIBLE on a hidden unit clears status 9', () => {
+    const { c, vm, host } = start(['begin', ['KILL', 1], ['REVIVE', 1], ['SET_VISIBLE', 2, 1], ['REMOVE_UNIT', 2], ['END']]);
+    c.units[1]!.status = 9;
+    vm.step(0);
+    expect(c.units[0]).toMatchObject({ status: 0, hp: 30 });
+    expect(host.calls).toContainEqual(['setVisible', 1, true]);
+    expect(c.units[1]).toBeNull();
+  });
+  it('REMOVE_SCRIPT_UNITS and HEAL_ALL: script units go, everyone but the hidden is healed', () => {
+    const { c, vm } = start(['begin', ['LOAD_SPRITE', 'x', 15, 1, 1], ['REMOVE_SCRIPT_UNITS'], ['HEAL_ALL'], ['END']]);
+    c.units[0]!.hp = 1; c.units[0]!.mp = 0; c.units[1]!.status = 9;
+    vm.step(0);
+    expect(c.units.find((u) => u?.id === 15)).toBeUndefined();
+    expect(c.units[0]).toMatchObject({ hp: 30, mp: 10, status: 0 });
+    expect(c.units[1]!.status).toBe(9);
+  });
+});
+
+describe('ScriptVm: map, items and battle', () => {
+  it('LOAD_MAP waits for the host; LOAD_UNITS fills slots 10.. from the roster; BATTLE_START_HEAL resets the party and enters battle', () => {
+    const roster = [{ unit_id: 8, race: 1, level: 1, dir: 0, c: 6, r: 4, status: 0, side: 4, weapon: 1, armor: 0, drop_item: 0, drop_gold: 0 }];
+    const { c, vm, host } = start(['begin', ['LOAD_MAP', 49], ['LOAD_UNITS', 49], ['BATTLE_START_HEAL'], ['END']], { 49: roster });
+    host.loading = true;
+    expect(vm.step(0)).toBe('waiting');
+    host.loading = false;
+    c.units[0]!.hp = 3; c.units[0]!.moved = true;
+    expect(vm.step(1)).toBe('ended');
+    expect(c.units[10]).toMatchObject({ id: 8, side: 4, c: 6, r: 4 });
+    expect(c.units[0]).toMatchObject({ hp: 30, mp: 10, moved: false, acted: false });
+    expect(c.turn).toBe(0);
+    expect(host.calls).toContainEqual(['enterBattle']);
+    expect(host.calls.at(-1)).toEqual(['scriptEnded', 'battle']);
+  });
+  it('GIVE_ITEM/TAKE_ITEM/ADD_GOLD/GIVE_ITEM_TO touch the inventory and report through result', () => {
+    const { c, vm } = start(['begin', ['GIVE_ITEM', 7, 3], ['TAKE_ITEM', 7, 1], ['ADD_GOLD', 150], ['GIVE_ITEM_TO', 2, 1], ['JUMP_IF_RESULT', 1, 'ok'], ['END'], 'ok', ['FLAG_SET', 0, 1], ['END']]);
+    vm.step(0);
+    expect(c.inventory).toMatchObject({ gold: 350, items: [{ id: 7, count: 2 }] });
+    expect(c.units[1]!.bag[0]).toBe(1);
+    expect(c.flags[0]).toBe(1);
+  });
+  it('TEST_ACTIVE and TEST_IS_ACTOR set result from the units', () => {
+    const { c, vm } = start(['begin', ['TEST_ACTIVE', 2], ['JUMP_IF_RESULT', 0, 'dead'], ['TEST_IS_ACTOR', 1], ['JUMP_IF_RESULT', 1, 'actor'], ['END'], 'dead', ['FLAG_SET', 0, 1], ['END'], 'actor', ['FLAG_SET', 0, 2], ['END']]);
+    c.units[1]!.status = 1; c.actor = 0;
+    vm.step(0);
+    expect(c.flags[0]).toBe(1);
+  });
+  it('BATTLE_RESULT adds gold, opens the result modal and levels up party members with enough EXP', () => {
+    const { c, vm, host } = start(['begin', ['BATTLE_RESULT', 100, 1], ['END']]);
+    c.units[0]!.exp = 250; c.units[0]!.level = 1;
+    host.modal = null;
+    expect(vm.step(0)).toBe('waiting');
+    expect(c.inventory.gold).toBe(300);
+    expect(host.calls).toContainEqual(['openModal', 'result', { gold: 100, param: 1, levelUps: [{ slot: 0, from: 1, to: 3 }] }]);
+    expect(c.units[0]!.level).toBe(3);
+    host.modal = 1;
+    expect(vm.step(1)).toBe('ended');
+  });
+  it('MOVE_TO and EXT99 are logged and skipped', () => {
+    const { vm, host } = start(['begin', ['MOVE_TO', 1, 'f.event04'], ['EXT99_4', 1, 'x'], ['END']]);
+    expect(vm.step(0)).toBe('ended');
+    expect(host.calls.filter((x) => x[0] === 'log' && x[1] === 'warn')).toHaveLength(2);
+  });
+});
