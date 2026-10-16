@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ApdData } from '../src/assets/types';
-import { bodyAnim, bodyApd, iconAnim, LAYER, pickTimeline, shadowAnim } from '../src/field/unitSprites';
+import { animApd, bodyAnim, bodyApd, facing, iconAnim, LAYER, pickTimeline, shadowAnim } from '../src/field/unitSprites';
 import { ApdModel } from '../src/sprite/apdModel';
 import { ITEM, RACE, unit } from './helpers/battleFixtures';
 
@@ -30,6 +30,24 @@ describe('bodyApd / bodyAnim (FUN_0041e350)', () => {
     expect(bodyAnim(unit({ slot: 10, side: 7, status: 9 }), items)!.name).toBe('F.HIDE');
     expect(bodyAnim(unit({ slot: 0, status: 2 }), items)!.name).toBe('F.DOWN_DAMAGE');
     expect(bodyAnim(unit({ slot: 0, status: 6 }), items)!.name).toBe('F.STAND');
+  });
+});
+
+describe('animApd / facing (char_<race><letter>.apd, string pool 0x44a3e0)', () => {
+  it('idle and reaction tokens live in the "a" file, moves and attacks in "b", spell casting in "e"', () => {
+    for (const t of ['STAND', 'COMPLETE', 'DEAD', 'DEFENSE', 'MIDDLE_DAMAGE', 'UP_DAMAGE', 'DOWN_DAMAGE', 'S/DAMAGE', 'A/DAMAGE', 'LEVITATE', 'HIDE']) expect(animApd(0, t)).toBe('char_00a');
+    for (const t of ['RUN1', 'RUN2', 'WALK1', 'ATTACK1', 'DASH_ATTACK1', 'JUMP1', 'DOWN1', 'DOWN2', 'FLY1', 'TAKE_OFF1', 'TOUCH_DOWN2']) expect(animApd(10, t)).toBe('char_10b');
+    expect(animApd(3, 'CAST1A')).toBe('char_03e');
+    expect(animApd(3, 'CAST1B')).toBe('char_03e');
+    expect(bodyApd(3)).toBe(animApd(3, 'STAND'));
+  });
+  it('facing: F. for south/east, B. for west/north; east and west are mirrored except races 0x17 and 0x49', () => {
+    expect(facing(0, 0)).toEqual({ prefix: 'F.', flipH: false });
+    expect(facing(1, 0)).toEqual({ prefix: 'F.', flipH: true });
+    expect(facing(2, 0)).toEqual({ prefix: 'B.', flipH: true });
+    expect(facing(3, 0)).toEqual({ prefix: 'B.', flipH: false });
+    expect(facing(1, 0x17)).toEqual({ prefix: 'F.', flipH: false });
+    expect(facing(2, 0x49)).toEqual({ prefix: 'B.', flipH: false });
   });
 });
 

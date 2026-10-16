@@ -101,7 +101,9 @@ FUN_0041e9e0(unit)  → 스프라이트 생성 (§2)
 
 - `FUN_0041e9e0`: 문자 `'a'`(0x61)로 `FUN_0041e350(unit, letter)`를 부른다. 예외: 스크립트 모드(4)에서 이름 있는 파티 유닛(id ≠ 8, id < 30, 종족 ∉ {0x17, 0x48, 0x49})이면 `'v'`.
 - `FUN_0041e350`: 포맷 11 `sprite\char_%02d%c.apd` = (**종족 번호**, 문자). 종족별로 한 번만 로드해 `DAT_00456378[종족]`에 캐시한다(문자가 달라도 첫 로드가 남는다). 종족 7(NPC)과 종족 수 이상은 스프라이트를 만들지 않는다.
-- 따라서 전투 중 유닛 그림은 `char_<종족 2자리>a.apd`다. 블루슬라임(종족 10) → `char_10a.apd`.
+- 따라서 전투 맵 위의 대기 그림은 `char_<종족 2자리>a.apd`다. 블루슬라임(종족 10) → `char_10a.apd`.
+- **문자별 애니 세트** [관찰: 코퍼스 + `FUN_004155f0`]: 애니는 종족마다 여러 문자 파일에 나뉘어 있다. `a` = 대기·피격(§2.2 토큰), `b` = 행동 연출(이동·공격, §2.6), `e` = 마법 시전 `CAST1A/1B`(일부 `CAST2A/2B`, `CAST3A/3B`), 그 밖의 `c d f g k l m n o p v` = 이벤트·마을 연출. 64종족 모두 `a`가 있고, `b`가 없는 종족은 8, 9, 36, 38, 45, 64, `e`가 없는 종족은 22개(슬라임 10, 좀도둑 18 등 마법 없는 종족).
+  행동 연출 모듈은 `FUN_004155f0`(case 0)에서 포맷 11을 다시 불러 `b` 파일을 로드하고 `FUN_00429630(…, 4)`로 레이어 4 스프라이트를 따로 만든다.
 
 ### 2.2 본체 애니 이름
 
@@ -137,11 +139,22 @@ FUN_0041e9e0(unit)  → 스프라이트 생성 (§2)
              위치 = 유닛 화면 좌표, y − 56 (사망은 y − 16)
 ```
 
-### 2.4 애니 어휘 [관찰: 코퍼스]
+### 2.4 애니 어휘 [관찰: 코퍼스, 문자 파일별]
 
-`char_*a` 64개 파일에 가장 흔한 이름: `STAND`(64), `RUN1/RUN2`(60), `DOWN_DAMAGE`(59), `ATTACK1`(58), `MIDDLE_DAMAGE`·`UP_DAMAGE`(58), `DEFENSE`(56), `A/DAMAGE`·`S/DAMAGE`(51), `SET`(49), `DOWN1/2`(46), `JUMP1/2`(45), `CAST1A/1B`(42), `WALK1/2`(27), `FLY1/2`(24), `TOUCH_DOWN1/2`(23). 파티 종족(0~6)에는 `COMPLETE`, `DEAD`, `FALL`, `LIFT`, `LEVITATE`가 더 있다. 슬라임(종족 10)·좀도둑(18)·그레믈린(44)에는 `RUN`·`ATTACK`이 **없다**(`STAND`, `DEFENSE`, 피격 4종만).
+- `char_*a` (64개): `STAND`(64), `DOWN_DAMAGE`(59), `MIDDLE_DAMAGE`·`UP_DAMAGE`(58), `DEFENSE`(56), `A/DAMAGE`·`S/DAMAGE`(51), `SET`(25), `COMPLETE`(20), `DEAD`(16), `FALL`(12), `LEVITATE`(8), `LIFT`(7), `HIDE`(2). 이름은 모두 `F.`/`B.` 접두가 붙는다.
+- `char_*b` (58개): `ATTACK1`(58), `RUN1/RUN2`(48), `DOWN1/2`(45), `JUMP1/2`(44), `FLY1/2`·`TAKE_OFF1/2`·`TOUCH_DOWN1/2`(23, 비행 종족), `ATTACK2`(10), `WALK1/2`(9), `DASH_ATTACK1`·`DASH_ATTACK1C`(7), `ATTACK3~6`(3~4), `DASH_ATTACK1A/1B`(2). `RUN`이 없는 `b` 파일(종족 4, 23, 47, 50, 66~69, 72, 73)은 모두 `FLY1/2`를 가진다.
+- `char_*e` (42개): `CAST1A/1B`(42), `CAST2A/2B`(7), `CAST3A/3B`(1), `HEART`(2).
 
 `system.apd`(31개): `CURSOR`, `ENEMY`, `FRIEND`(커서 3종), `MOVE`, `ATTACK`(범위 표시 타일), `WAIT`, `TURN_NORTH/EAST/SOUTH/WEST`와 `S.TURN_*`(방향 선택 화살표), `F.SWEAT`/`B.SWEAT`, 그림자 4종(`MDDLE.M` 오타 포함), 크기 이름 4종, 상태 아이콘 `DEAD SLEEP MUTE POISON CHARM SILENCE`. `number.apd`: `POP_0..9`, `B_POP_0..9`(팝업 숫자 두 색).
+
+### 2.6 행동 연출(모드 2·3) [관찰 `FUN_0043af00`, `FUN_0043afd0`, `FUN_00414c80`, `FUN_004163f0`, `FUN_00438100`]
+
+`DAT_00449d4c`는 화면 모드다: 1 = 전투 맵, 2 = 물리 행동 연출, 3 = 마법 연출, 4 = 스크립트. 유닛이 행동을 확정하면 `FUN_0043af00`이 이벤트 파일에서 라벨 `battle%02d`(유닛 id)를 찾아 있으면 스크립트로 연출하고, 없으면 `FUN_0043afd0`이 `FUN_00414c80(공격자, 경로, 대상 목록, 수, 플래그)`(물리, 모드 2) 또는 `FUN_0043e3b0(공격자, 대상, 수, 마법)`(마법, 모드 3)을 부른다. 연출은 **같은 맵 화면 위에서** `b` 파일 스프라이트로 진행된다(별도 전투 화면 없음).
+
+모듈 문자열 풀 0x44a3e0: `F. B. END RUN WAIT USED UNUSE battle%02d Missile Hitmark DASH_ATTACK1C DASH_ATTACK1 DEFENSE HITMARK ATTACK%d ARROW2 ARROW%d RUN1 RUN2 DOWN1 DOWN2 JUMP2 JUMP1 FLY1 FLY2 TAKE_OFF1 TOUCH_DOWN2 TAKE_OFF2 DASH_ATTACK1B DASH_ATTACK1A`.
+`FUN_004163f0`이 `ATTACK%d`(번호 `DAT_0044a2a4`)로 공격 애니 이름을 만들어 `FUN_004161c0`으로 스프라이트에 건다.
+
+이동 애니 규칙은 스크립트용 작업 시스템(`FUN_00437bb0 → FUN_00437e50 → FUN_00438100`)에서 관찰했다: 경로 칸 i마다 `wsprintf("%s%d", 기본이름, i 짝수 → 1, 홀수 → 2)`, 접두는 `FUN_00438330`이 방향 2·3 → `B.`, 그 외 `F.`, 반전 플래그 0x10은 방향 1·2(§2.2와 같은 규칙). 행동 연출의 `RUN1/RUN2`도 같은 짝수/홀수 교대로 본다 [추정]. 작업 시스템은 문자 인자가 0이면 유닛의 기존 스프라이트를, 아니면 `char_%02d%c`를 그 문자로 새로 로드한다(`FUN_00437f60`).
 
 ### 2.5 피격 애니 표 [추정]
 
@@ -287,8 +300,8 @@ hostile(attacker, target) and target.status != 1 and target.side != 7
 
 ## 6. 미확인
 
-- 이동 연출: 작업 시스템 `FUN_00437bb0 → FUN_00437e50/FUN_00437c00`(GlobalAlloc 작업 테이블, 애니 이름·속도)은 분석하지 않았다. `RUN1/RUN2` 선택 규칙과 칸당 픽셀 속도 미확인. `RUN`이 없는 종족(슬라임 등)의 이동 애니도 미확인.
-- 피격 애니 표(§2.5)의 인덱스 규칙과 `ATTACK%d`의 `%d`(무기별 공격 번호, `battle_rules.md` §8).
+- 이동 연출: 칸당 픽셀 속도(`FUN_00437c00` 작업 진행)와 행동 연출 모듈(`FUN_00414c80` 이후)의 경로 걷기 세부(높이 차의 `JUMP/DOWN`, 비행 종족의 `TAKE_OFF/TOUCH_DOWN` 삽입 시점) 미확인. `RUN1/RUN2` 교대 규칙은 §2.6.
+- 피격 애니 표(§2.5)의 인덱스 규칙과 `ATTACK%d`의 `%d`(`DAT_0044a2a4`, 무기별 공격 번호로 추정, `battle_rules.md` §8).
 - 공격 연출 순서 `FUN_0043afd0` 내부(공격자 애니 → 효과 → 피격 → 팝업 순서와 대기).
 - 진영 3 유닛이 이동하지 않는 이유(`FUN_00439690`의 `side != 3`).
 - `S.TURN_*`와 `TURN_*`의 차이(선택됨/보통으로 추정), `WAIT` 애니 용도.

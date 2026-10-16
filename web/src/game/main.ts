@@ -5,6 +5,7 @@ import type { Unit } from '../battle/unit';
 import { DataError, DataLoader } from '../data/loader';
 import type { BattleEntry, Tables } from '../data/types';
 import { Presenter, type SpriteProvider } from '../field/presenter';
+import { animApd } from '../field/unitSprites';
 import { VIEW_H, VIEW_W } from '../iso/grid';
 import { MapModel } from '../map/mapModel';
 import { Renderer, type Scene } from '../render/renderer';
@@ -82,6 +83,7 @@ async function startBattle(entry: BattleEntry, seed: number): Promise<void> {
     mapModel = new MapModel(map, layers, bg);
     await renderer.prepareMap(mapModel);
     battle = Battle.start(entry, map, roster1, roster, tables, seed);
+    for (const u of battle.state.units) if (u) for (const token of ['STAND', 'RUN1', ...(u.spells.length > 0 ? ['CAST1A'] : [])]) sprites!.apd(animApd(u.race, token));   // start loading the letter files
     presenter = new Presenter(sprites!, tables);
     presenter.sync(battle.state);
     const first = battle.state.units.find((u) => u && u.side === 0);

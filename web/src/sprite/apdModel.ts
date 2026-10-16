@@ -52,24 +52,26 @@ export class ApdModel {
     return out;
   }
 
-  /** Draw commands for one frame, relative to the sprite origin (FUN_0042a610 + FUN_00428620 offsets). */
-  commands(frame: Frame): DrawCommand[] {
+  /** Draw commands for one frame, relative to the sprite origin (FUN_0042a610 + FUN_00428620 offsets).
+   *  `mirrorH` is the sprite's own flip flag (FUN_00429a50 flag 0x10, e.g. a unit facing east/west); it XORs with the frame's "H". */
+  commands(frame: Frame, mirrorH = false): DrawCommand[] {
     const pattern = this.data.patterns[frame.pattern];
     if (!pattern) throw new ApdDataError(`${this.name}: pattern ${frame.pattern} out of range`);
+    const flipH = frame.flipH !== mirrorH;
     return pattern.images.map((idx) => {
       const im = this.data.images[idx]!;
       return {
         sheet: im.sheet, key: this.keys[idx]!, sx: im.x, sy: im.y, w: im.w, h: im.h,
-        dx: frame.flipH ? -(im.ox + im.w) : im.ox,
+        dx: flipH ? -(im.ox + im.w) : im.ox,
         dy: (frame.flipV ? -(im.oy + im.h) : im.oy) - pattern.yOffset,
-        flipH: frame.flipH, flipV: frame.flipV,
+        flipH, flipV: frame.flipV,
       };
     });
   }
 
-  bounds(frame: Frame): Bounds {
+  bounds(frame: Frame, mirrorH = false): Bounds {
     const b = { left: Infinity, top: Infinity, right: -Infinity, bottom: -Infinity };
-    for (const c of this.commands(frame)) {
+    for (const c of this.commands(frame, mirrorH)) {
       b.left = Math.min(b.left, c.dx); b.top = Math.min(b.top, c.dy);
       b.right = Math.max(b.right, c.dx + c.w); b.bottom = Math.max(b.bottom, c.dy + c.h);
     }

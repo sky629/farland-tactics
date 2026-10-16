@@ -5,7 +5,7 @@ import type { AnimPlayer } from '../sprite/animPlayer';
 import type { ApdModel, DrawCommand } from '../sprite/apdModel';
 import { rectVisible } from './culling';
 
-export interface PlacedSprite { model: ApdModel; player: AnimPlayer; c: number; r: number; layer: number; offset?: { x: number; y: number } }
+export interface PlacedSprite { model: ApdModel; player: AnimPlayer; c: number; r: number; layer: number; offset?: { x: number; y: number }; flipH?: boolean }
 export interface Overlay { grid: boolean; height: boolean; land: boolean; blocked: boolean }
 export interface SceneText { x: number; y: number; text: string }   // map pixels, centered
 export interface Scene { map: MapModel | null; sprites: PlacedSprite[]; camera: { x: number; y: number }; overlay: Overlay; seeThrough: boolean; texts?: SceneText[] }
@@ -102,11 +102,11 @@ export class Renderer {
     const cell = map.cellAt(sp.c, sp.r);
     const sheets = this.apdBitmaps.get(sp.model);
     if (!cell || !sheets) return;
-    const frame = sp.player.frame;
+    const frame = sp.player.frame, flip = sp.flipH ?? false;
     const ox = cell.x + sp.player.offset.x + (sp.offset?.x ?? 0) - cam.x, oy = cell.y + sp.player.offset.y + (sp.offset?.y ?? 0) - cam.y;
-    const b = sp.model.bounds(frame);
+    const b = sp.model.bounds(frame, flip);
     if (!rectVisible(ox + b.left, oy + b.top, b.right - b.left, b.bottom - b.top, 0, 0)) return;
-    for (const c of sp.model.commands(frame)) this.drawCommand(sheets[c.sheet]!.get(c.key), c, ox + c.dx, oy + c.dy);
+    for (const c of sp.model.commands(frame, flip)) this.drawCommand(sheets[c.sheet]!.get(c.key), c, ox + c.dx, oy + c.dy);
   }
 
   private drawCommand(bmp: ImageBitmap, c: DrawCommand, x: number, y: number): void {

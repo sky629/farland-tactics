@@ -314,13 +314,15 @@ unit.side !== 3 && !moved && !행동불능 이면 4방향 재귀:
 
 `UnitSprites.for(unit)` → `{ body: {apd: 'char_%02da', anim, flipH}, shadow: {apd: 'system', anim: 'SMALL.M'…} | null, icon: {apd: 'system', anim} | null }`. 애니 이름 규칙은 §2.2 표 그대로. `#` 변형 우선. 본체 레이어 4(오브젝트 3), 그림자 2, 아이콘 5(유닛 위 56px, 사망 16px). 종족 7과 존재하지 않는 APD는 스프라이트 없음 + 로그.
 
+애니는 토큰 그룹에 따라 다른 문자 파일에서 찾는다(`field_mode.md` §2.1, §2.4): 대기·피격(`STAND`, `*_DAMAGE`, `DEFENSE`, `DEAD`…) = `char_%02da`, 이동·공격(`RUN`, `WALK`, `FLY`, `JUMP`, `DOWN1/2`, `TAKE_OFF`, `TOUCH_DOWN`, `ATTACK*`, `DASH_ATTACK*`) = `char_%02db`, 마법 시전(`CAST*`) = `char_%02de`. `flipH`(동·서 방향)는 본체 스프라이트 전체를 좌우 반전한다(프레임의 `H`와 XOR, 이동 오프셋도 반전). 전투 시작 때 유닛마다 `a`·`b`(마법이 있으면 `e`) 파일을 미리 요청한다.
+
 ### 9.3 행동 애니
 
 | 순간 | 본체 애니 | 비고 |
 |---|---|---|
-| 이동 한 칸 | `RUN1`, `RUN2` 번갈아 (없으면 `WALK1/2`, 없으면 `STAND`) | 칸마다 방향 갱신 [추정: 원작 작업 시스템 미분석] |
-| 물리 공격 | `ATTACK1` (없으면 `STAND` 1회 길이 400 ms) | 대상 쪽으로 방향 전환 먼저 |
-| 마법 시전 | `CAST1A` → `CAST1B` (없으면 `STAND`) + 효과 APD `magic.effect` 소문자 (`burst` 등)를 대상 셀에 1회 | 효과 APD 없으면 생략 |
+| 이동 한 칸 | `b` 파일의 `RUN1`(짝수 칸)·`RUN2`(홀수 칸) 교대; `RUN`이 없으면 `WALK1/2`, 없으면 `FLY1/2`, 없으면 `a`의 `STAND` | 칸마다 방향·반전 갱신 [관찰: `FUN_00438100` "%s%d" 교대, `field_mode.md` §2.6] |
+| 물리 공격 | `b` 파일의 `ATTACK1` (없으면 `a`의 `STAND` 1회 길이 400 ms) | 대상 쪽으로 방향 전환 먼저 |
+| 마법 시전 | `e` 파일의 `CAST1A` → `CAST1B` (없으면 `STAND`) + 효과 APD `magic.effect` 소문자 (`burst` 등)를 대상 셀에 1회 | 효과 APD 없으면 생략 |
 | 빗나감 | 대상 `DEFENSE` | |
 | 피격 | 대상 `MIDDLE_DAMAGE`; 크리티컬 `UP_DAMAGE`; 사망 `DOWN_DAMAGE` 후 `DEAD`(아군)/`DOWN_DAMAGE` 유지(적) | [추정: 0x44a098 표 인덱스 미확인] |
 | 회복·버프·상태 | 대상 `STAND` 유지 + 팝업 | |

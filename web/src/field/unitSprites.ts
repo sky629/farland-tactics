@@ -1,3 +1,4 @@
+import type { Dir } from '../battle/grid';
 import type { Unit } from '../battle/unit';
 import type { ItemData, RaceData } from '../data/types';
 import type { Timeline } from '../sprite/animScript';
@@ -8,12 +9,27 @@ export const LAYER = { ground: 1, shadow: 2, object: 3, unit: 4, icon: 5 } as co
 
 const NO_FLIP_RACES = new Set([0x17, 0x49]);
 
-export const bodyApd = (race: number): string => `char_${String(race).padStart(2, '0')}a`;
+/** Tokens of the action scene (string pool 0x44a3e0: RUN/JUMP/DOWN/FLY/TAKE_OFF/TOUCH_DOWN/ATTACK%d/DASH_ATTACK*) and WALK live in the "b" file. */
+const ACTION_TOKEN = /^(RUN|WALK|ATTACK|DASH_ATTACK|JUMP|DOWN[12]|FLY|TAKE_OFF|TOUCH_DOWN)/;
 
-/** FUN_0041e350 in battle mode: "F."/"B." by facing, flip for east/west, state token. null = no body sprite. */
+/** `sprite\char_%02d%c.apd` (format 0x44bf24): the letter is chosen per animation group —
+ *  "a" idle and reactions (FUN_0041e350), "b" moves and attacks (action scene, FUN_004155f0), "e" spell casting. */
+export function animApd(race: number, token: string): string {
+  const letter = token.startsWith('CAST') ? 'e' : ACTION_TOKEN.test(token) ? 'b' : 'a';
+  return `char_${String(race).padStart(2, '0')}${letter}`;
+}
+
+/** The idle body file. */
+export const bodyApd = (race: number): string => animApd(race, 'STAND');
+
+/** FUN_00438330 / FUN_0041e350: "F." for south/east, "B." for west/north; east and west are drawn mirrored (flag 0x10) except races 0x17 and 0x49. */
+export function facing(dir: Dir, race: number): { prefix: string; flipH: boolean } {
+  return { prefix: dir === 0 || dir === 1 ? 'F.' : 'B.', flipH: (dir === 1 || dir === 2) && !NO_FLIP_RACES.has(race) };
+}
+
+/** FUN_0041e350 in battle mode: facing prefix + state token, with the facing's flip. null = no body sprite. */
 export function bodyAnim(u: Unit, items: ItemData[]): { name: string; flipH: boolean } | null {
-  const prefix = u.dir === 0 || u.dir === 1 ? 'F.' : 'B.';
-  const flipH = (u.dir === 1 || u.dir === 2) && !NO_FLIP_RACES.has(u.race);
+  const { prefix, flipH } = facing(u.dir, u.race);
   const levitateItem = [u.weapon, u.armor, u.acc[0], u.acc[1]].some((i) => items[i]?.status_code === 11);
   const status = u.status === 0 && levitateItem ? 11 : u.status;
   let token: string | null;

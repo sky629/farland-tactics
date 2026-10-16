@@ -39,6 +39,16 @@ describe('ApdModel', () => {
     const [c] = m.commands(frame(0, true, true));
     expect(c).toMatchObject({ dx: -(-32 + 64), dy: -(-56 + 64), flipH: true, flipV: true });
   });
+  it('mirrors a whole frame for a flipped sprite; a flipped frame inside a flipped sprite cancels out', () => {
+    const m = new ApdModel('x', data(), [sheet(), sheet()]);
+    expect(m.commands(frame(1), true)).toEqual([
+      { sheet: 0, key: 253, sx: 0, sy: 0, w: 64, h: 64, dx: -(-32 + 64), dy: -56 - 32, flipH: true, flipV: false },
+      { sheet: 1, key: 255, sx: 64, sy: 0, w: 16, h: 8, dx: -(4 + 16), dy: -70 - 32, flipH: true, flipV: false },
+    ]);
+    expect(m.commands(frame(0, true), true)[0]).toMatchObject({ dx: -32, flipH: false });
+    expect(m.bounds(frame(1), true)).toEqual({ left: -32, top: -102, right: 32, bottom: -24 });
+    expect(m.bounds(frame(1))).toEqual(m.bounds(frame(1), false));
+  });
   it('bounds is the union of the image rects', () => {
     const m = new ApdModel('x', data(), [sheet(), sheet()]);
     expect(m.bounds(frame(1))).toEqual({ left: -32, top: -102, right: 32, bottom: -24 });

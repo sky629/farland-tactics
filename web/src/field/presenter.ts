@@ -9,7 +9,7 @@ import { AnimPlayer } from '../sprite/animPlayer';
 import type { Timeline } from '../sprite/animScript';
 import type { ApdModel } from '../sprite/apdModel';
 import { overlaySprites } from './overlay';
-import { bodyAnim, bodyApd, iconAnim, LAYER, pickTimeline, shadowAnim } from './unitSprites';
+import { animApd, bodyAnim, bodyApd, facing, iconAnim, LAYER, pickTimeline, shadowAnim } from './unitSprites';
 
 export interface SpriteProvider { apd(name: string): ApdModel | null }
 
@@ -19,14 +19,15 @@ export const FALLBACK_MS = 400;
 const WAIT_MS = 300;
 
 type Item =
-  | { kind: 'move'; slot: number; path: Dir[]; from: [number, number] | null }
-  | { kind: 'anim'; slot: number; name: string; ms: number; player: AnimPlayer | null }
+  | { kind: 'move'; slot: number; path: Dir[]; from: [number, number] | null; step: number }
+  | { kind: 'anim'; slot: number; name: string; ms: number; model: ApdModel | null; player: AnimPlayer | null }
   | { kind: 'popup'; slot: number; text: string; digits: boolean }
   | { kind: 'wait'; ms: number }
   | { kind: 'apply'; fn: () => void };
 interface Step { items: Item[]; start: number | null }
 
 interface Visual { c: number; r: number; dir: Dir; offset: { x: number; y: number } }
+interface Playing { model: ApdModel; player: AnimPlayer }
 
 const clone = (u: Unit): Unit => ({ ...u, acc: [...u.acc], buff: { ...u.buff }, elem: [...u.elem], spells: [...u.spells] });
 const timelineMs = (t: Timeline) => t.steps.reduce((n, s) => n + s.totalMs, 0);
@@ -60,7 +61,7 @@ export class Presenter {
 
   private stepsFor(e: BattleEvent): Step[] {
     switch (e.type) {
-      case 'moved': return [step({ kind: 'move', slot: e.slot, path: e.path, from: null })];
+      case 'moved': return [step({ kind: 'move', slot: e.slot, path: e.path, from: null, step: 0 })];
       case 'faced': return [step({ kind: 'apply', fn: () => this.setDir(e.slot, e.dir) })];
       case 'action': {
         const steps: Step[] = [step({ kind: 'apply', fn: () => { const v = this.visuals.get(e.slot); if (v && (v.c !== e.cell[0] || v.r !== e.cell[1])) this.setDir(e.slot, dirTo(v.c, v.r, e.cell[0], e.cell[1])); } })];
@@ -69,7 +70,7 @@ export class Presenter {
           steps.push(step(this.anim(e.slot, 'CAST1A')), step(this.anim(e.slot, 'CAST1B')));
           const effect = this.tables.magic[e.action]?.effect.toLowerCase();
           const fx = effect ? this.provider.apd(effect) : null;
-          if (fx && fx.animNames().length > 0) steps.push(step({ kind: 'anim', slot: -1, name: `${effect}:${fx.animNames()[0]!}:${e.cell[0]},${e.cell[1]}`, ms: 0, player: null }));
+          if (fx && fx.animNames().length > 0) steps.push(step({ kind: 'anim', slot: -1, name: `${effect}:${fx.animNames()[0]!}:${e.cell[0]},${e.cell[1]}`, ms: 0, model: null, player: null }));
         }
         for (const h of e.hits) {
           const reaction = h.kind === 'miss' ? 'DEFENSE' : h.kind === 'damage' ? (h.statusAfter === 1 ? 'DOWN_DAMAGE' : h.crit ? 'UP_DAMAGE' : 'MIDDLE_DAMAGE') : null;
@@ -95,7 +96,7 @@ export class Presenter {
     }
   }
 
-  private anim(slot: number, token: string): Item { return { kind: 'anim', slot, name: token, ms: 0, player: null }; }
+  private anim(slot: number, token: string): Item { return { kind: 'anim', slot, name: token, ms: 0, model: null, player: null }; }
 
   private setDir(slot: number, dir: Dir): void {
     const v = this.visuals.get(slot), u = this.snapshot[slot];
@@ -140,9 +141,10 @@ export class Presenter {
       if (item.kind === 'apply') item.fn();
       else if (item.kind === 'move') { const v = this.visuals.get(item.slot); item.from = v ? [v.c, v.r] : null; }
       else if (item.kind === 'anim') {
-        const tl = this.resolveAnim(item);
-        item.ms = tl ? Math.max(timelineMs(tl), 1) : FALLBACK_MS;
-        item.player = tl ? new AnimPlayer(tl, { loop: false }) : null;
+        const r = this.resolveAnim(item);
+        item.ms = r ? Math.max(timelineMs(r.tl), 1) : FALLBACK_MS;
+        item.model = r?.model ?? null;
+        item.player = r ? new AnimPlayer(r.tl, { loop: false, mirrorH: r.flipH }) : null;
         if (item.slot >= 0) { const v = this.visuals.get(item.slot); if (v) this.focus = [v.c, v.r]; }
       }
     }
@@ -169,6 +171,7 @@ export class Presenter {
       if (!v) continue;
       const elapsed = now - start;
       const done = Math.min(Math.floor(elapsed / STEP_MS), item.path.length);
+      item.step = done;
       let [c, r] = item.from;
       for (let i = 0; i < done; i++) [c, r] = stepCell(c, r, item.path[i]!);
       v.c = c; v.r = r;
@@ -199,24 +202,40 @@ export class Presenter {
     }
   }
 
-  /** "ATTACK1" → "<F.|B.>ATTACK1" of the unit's body APD (with "#" preference); effects are "<apd>:<anim>:<c>,<r>". */
-  private resolveAnim(item: Extract<Item, { kind: 'anim' }>): Timeline | null {
+  /** "ATTACK1" → "<F.|B.>ATTACK1" from the letter file that holds the token (with "#" preference), else the idle STAND;
+   *  effects are "<apd>:<anim>:<c>,<r>". */
+  private resolveAnim(item: Extract<Item, { kind: 'anim' }>): { model: ApdModel; tl: Timeline; flipH: boolean } | null {
     if (item.slot < 0) {
       const [apdName, anim] = item.name.split(':');
       const model = this.provider.apd(apdName!);
-      return model ? pickTimeline(model, anim!) ?? null : null;
+      const tl = model ? pickTimeline(model, anim!) : undefined;
+      return model && tl ? { model, tl, flipH: false } : null;
     }
     const u = this.snapshot[item.slot], v = this.visuals.get(item.slot);
     if (!u || !v) return null;
-    const model = this.provider.apd(bodyApd(u.race));
-    if (!model) return null;
-    const prefix = v.dir === 0 || v.dir === 1 ? 'F.' : 'B.';
-    return pickTimeline(model, prefix + item.name) ?? pickTimeline(model, `${prefix}STAND`) ?? null;
+    const f = facing(v.dir, u.race);
+    const model = this.provider.apd(animApd(u.race, item.name));
+    const tl = model ? pickTimeline(model, f.prefix + item.name) : undefined;
+    if (model && tl) return { model, tl, flipH: f.flipH };
+    const idle = this.provider.apd(bodyApd(u.race));
+    const stand = idle ? pickTimeline(idle, `${f.prefix}STAND`) : undefined;
+    return idle && stand ? { model: idle, tl: stand, flipH: f.flipH } : null;
   }
 
-  private player(key: string, tl: Timeline, loop: boolean): AnimPlayer {
+  /** Walking body: RUN1/RUN2 by step parity (FUN_00438100: "%s%d" with 1 on even, 2 on odd steps); races without RUN use WALK or FLY; else null (→ STAND). */
+  private runSprite(u: Unit, prefix: string, flipH: boolean, step: number): Playing | null {
+    const n = step % 2 + 1;
+    for (const base of ['RUN', 'WALK', 'FLY']) {
+      const model = this.provider.apd(animApd(u.race, `${base}${n}`));
+      const tl = model ? pickTimeline(model, `${prefix}${base}${n}`) : undefined;
+      if (model && tl) return { model, player: this.player(`${u.slot}:${tl.name}:${flipH}`, tl, true, flipH) };
+    }
+    return null;
+  }
+
+  private player(key: string, tl: Timeline, loop: boolean, mirrorH = false): AnimPlayer {
     let p = this.players.get(key);
-    if (!p) { p = new AnimPlayer(tl, { loop }); p.update(this.now); this.players.set(key, p); }
+    if (!p) { p = new AnimPlayer(tl, { loop, mirrorH }); p.update(this.now); this.players.set(key, p); }
     return p;
   }
 
@@ -226,8 +245,12 @@ export class Presenter {
     const texts: SceneText[] = [];
     const head = this.queue[0];
     const items = head !== undefined && head.start !== null ? head.items : [];
-    const overrides = new Map<number, AnimPlayer>();
-    for (const item of items) if (item.kind === 'anim' && item.slot >= 0 && item.player) overrides.set(item.slot, item.player);
+    const overrides = new Map<number, Playing>();
+    const moves = new Map<number, number>();
+    for (const item of items) {
+      if (item.kind === 'anim' && item.slot >= 0 && item.player && item.model) overrides.set(item.slot, { model: item.model, player: item.player });
+      if (item.kind === 'move') moves.set(item.slot, item.step);
+    }
     const system = this.provider.apd('system');
     for (const u of this.snapshot) {
       if (!u) continue;
@@ -236,9 +259,11 @@ export class Presenter {
       const body = bodyAnim(shown, this.tables.item);
       const model = this.provider.apd(bodyApd(u.race));
       if (body && model) {
-        const tl = pickTimeline(model, body.name);
-        const player = overrides.get(u.slot) ?? (tl ? this.player(`${u.slot}:${body.name}`, tl, true) : null);
-        if (player) sprites.push({ model, player, c: v.c, r: v.r, layer: u.side === 7 ? LAYER.object : LAYER.unit, offset: v.offset });
+        const step = moves.get(u.slot);
+        const { prefix, flipH } = facing(v.dir, u.race);
+        let playing = overrides.get(u.slot) ?? (step !== undefined ? this.runSprite(u, prefix, flipH, step) : null);
+        if (!playing) { const tl = pickTimeline(model, body.name); if (tl) playing = { model, player: this.player(`${u.slot}:${body.name}:${flipH}`, tl, true, flipH) }; }
+        if (playing) sprites.push({ model: playing.model, player: playing.player, c: v.c, r: v.r, layer: u.side === 7 ? LAYER.object : LAYER.unit, offset: v.offset, flipH });
         if (system) {
           const race = this.tables.race[u.race];
           const shadow = race ? shadowAnim(shown, race) : null;
@@ -258,11 +283,10 @@ export class Presenter {
     }
     const start = head?.start ?? this.now;
     for (const item of items) {
-      if (item.kind === 'anim' && item.slot < 0 && item.player) {
-        const [apdName, , cell] = item.name.split(':');
-        const model = this.provider.apd(apdName!);
-        const [c, r] = cell!.split(',').map(Number) as [number, number];
-        if (model) sprites.push({ model, player: item.player, c, r, layer: LAYER.icon });
+      if (item.kind === 'anim' && item.slot < 0 && item.player && item.model) {
+        const cell = item.name.split(':')[2]!;
+        const [c, r] = cell.split(',').map(Number) as [number, number];
+        sprites.push({ model: item.model, player: item.player, c, r, layer: LAYER.icon });
       }
       if (item.kind === 'popup') this.popup(item, start, map, sprites, texts);
     }
