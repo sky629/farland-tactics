@@ -115,7 +115,7 @@ export class ScriptVm {
       case 'JUMP_IF_LESS': return (this.state.less !== 0) === (idx(0) !== 0) ? this.jump(str(a[1]) ?? '') : 'next';
       case 'CALL': this.state.callReturn = { program: this.state.program!, pc: this.state.pc + 1 }; return this.jump(str(a[0]) ?? '');
       case 'RETURN': { const r = this.state.callReturn; if (!r) return 'end'; this.state.callReturn = null; this.state.program = r.program; this.state.pc = r.pc; return 'jumped'; }
-      case 'LOAD_SCRIPT': { const stage = idx(0); this.c.stage = stage; return this.run(stage, str(a[1]) ?? '') ? 'jumped' : 'end'; }
+      case 'LOAD_SCRIPT': return this.run(idx(0), str(a[1]) ?? '') ? 'jumped' : 'end';   // another file; the stage variable is untouched (town scripts live in EVENT00)
       case 'NEXT_STAGE': f.fill(0); for (let s = 10; s < this.c.units.length; s++) this.c.units[s] = null; this.state.pendingStage = this.c.stage + 1; return 'next';
       case 'FIELD_MODE': this.state.restore = 'battle'; this.host.fieldMode(); return 'next';
       case 'FLAG_SET': f[idx(0)] = idx(1); return 'next';

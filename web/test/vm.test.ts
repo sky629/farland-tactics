@@ -40,7 +40,7 @@ describe('ScriptVm: flow and flags', () => {
     vm.run(0, 'begin');
     expect(vm.step(0)).toBe('ended');
     expect(c.flags[1]).toBe(8);
-    expect(c.stage).toBe(5);
+    expect(c.stage).toBe(0);                                                // LOAD_SCRIPT changes the file, not the stage (STAGE_FROM_FLAG/NEXT_STAGE do)
     expect(host.calls.filter((x) => x[0] === 'log' && x[1] === 'warn')).toHaveLength(1);
   });
   it('run() returns false for an unknown stage or label', () => {
