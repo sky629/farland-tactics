@@ -14,8 +14,8 @@
   canvas { image-rendering: pixelated; image-rendering: crisp-edges; background: #000; }
   .row { display: flex; gap: 6px; flex-wrap: wrap; }
   .mono { font-family: ui-monospace, monospace; white-space: pre-wrap; }
-  #spells { display: flex; flex-direction: column; gap: 4px; }
-  #spells[hidden] { display: none; }
+  #spells, #items { display: flex; flex-direction: column; gap: 4px; }
+  #spells[hidden], #items[hidden] { display: none; }
   #error { color: #ff6b6b; }
   #result { font-size: 16px; font-weight: 600; }
 </style>
@@ -27,10 +27,12 @@
   <div id="objective"></div>
   <div id="turn" class="mono"></div>
   <div class="row">
-    <button id="move">이동</button><button id="attack">공격</button><button id="magic">마법</button><button id="wait">대기</button><button id="endTurn">턴 종료</button>
+    <button id="move">이동</button><button id="attack">공격</button><button id="magic">마법</button><button id="item">아이템</button><button id="wait">대기</button><button id="endTurn">턴 종료</button>
   </div>
   <div id="spells" hidden></div>
+  <div id="items" hidden></div>
   <div id="unit" class="mono"></div>
+  <div id="inventory" class="mono"></div>
   <div>셀 클릭: 선택/이동/대상 · 오른쪽 클릭·Esc: 취소 · 방향키/드래그: 스크롤 · Shift: 투시</div>
   <div id="result"></div>
   <div id="log" class="mono"></div>

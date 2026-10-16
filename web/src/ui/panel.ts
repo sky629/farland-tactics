@@ -1,20 +1,21 @@
+import { usableItems } from '../battle/inventory';
 import { hasMoveTarget } from '../battle/moveRange';
 import type { Hit } from '../battle/resolve';
 import type { BattleEvent, BattleState, Command } from '../battle/types';
 import type { Unit } from '../battle/unit';
-import type { BattleEntry, Tables } from '../data/types';
+import type { BattleEntry, ItemData, Tables } from '../data/types';
 
-export interface MenuEnabled { move: boolean; attack: boolean; magic: boolean; wait: boolean; endTurn: boolean }
+export interface MenuEnabled { move: boolean; attack: boolean; magic: boolean; item: boolean; wait: boolean; endTurn: boolean }
 
 /** Which buttons the rules would accept right now (spec §10.2). */
-export function menuEnabled(state: BattleState): MenuEnabled {
-  const none = { move: false, attack: false, magic: false, wait: false, endTurn: false };
+export function menuEnabled(state: BattleState, items: ItemData[] = []): MenuEnabled {
+  const none = { move: false, attack: false, magic: false, item: false, wait: false, endTurn: false };
   if (state.phase.kind !== 'player') return none;
   const sel = state.phase.sel;
   if (sel.mode !== 'menu') return { ...none, endTurn: true };
   const u = state.units[sel.slot];
   if (!u) return { ...none, endTurn: true };
-  return { move: !u.moved && hasMoveTarget(sel.range, state.units, u), attack: !u.acted, magic: !u.acted && u.spells.length > 0 && u.status !== 6, wait: true, endTurn: true };
+  return { move: !u.moved && hasMoveTarget(sel.range, state.units, u), attack: !u.acted, magic: !u.acted && u.spells.length > 0 && u.status !== 6, item: !u.acted && usableItems(state.inventory, items).length > 0, wait: true, endTurn: true };
 }
 
 /** event_script_format.md §6 speaker names for the named characters (id 1..29). */
@@ -24,6 +25,8 @@ export const SPEAKER_NAMES: Record<number, string> = {
   25: '앨비스', 26: '손.바이스', 27: '히드라', 28: '코카트리스', 29: '길드 마스터',
 };
 export const STATUS_NAMES: Record<number, string> = { 0: '정상', 1: '사망', 2: '독', 3: '수면', 4: '석화', 5: '동결', 6: '침묵', 7: '매혹', 8: '홀드', 9: '은신', 11: '부유' };
+
+export const itemName = (item: ItemData): string => item.name.replace(/_/g, ' ');
 
 export function unitName(u: Unit, tables: Tables): string {
   return (u.id !== 8 && u.id < 30 && SPEAKER_NAMES[u.id]) || tables.race[u.race]?.name.replace(/_/g, ' ') || `종족 ${u.race}`;
@@ -51,7 +54,7 @@ const $ = <T extends HTMLElement>(doc: Document, id: string): T => {
   return el as T;
 };
 
-type PanelId = 'battle' | 'seed' | 'start' | 'turn' | 'unit' | 'move' | 'attack' | 'magic' | 'wait' | 'endTurn' | 'spells' | 'log' | 'result' | 'error' | 'objective';
+type PanelId = 'battle' | 'seed' | 'start' | 'turn' | 'unit' | 'move' | 'attack' | 'magic' | 'wait' | 'endTurn' | 'spells' | 'log' | 'result' | 'error' | 'objective' | 'item' | 'items' | 'inventory';
 
 /** DOM panel of game.html. Only DOM glue lives here; decisions are in menuEnabled/describeHit. */
 export class Panel {
@@ -60,9 +63,11 @@ export class Panel {
   private lines: string[] = [];
   private spellsKey = '';
   private spellButtons: { magic: number; button: HTMLButtonElement }[] = [];
+  private itemsKey = '';
+  private itemButtons: { id: number; button: HTMLButtonElement }[] = [];
 
   constructor(private readonly doc: Document, private readonly handlers: PanelHandlers, private readonly tables: Tables) {
-    const ids: PanelId[] = ['battle', 'seed', 'start', 'turn', 'unit', 'move', 'attack', 'magic', 'wait', 'endTurn', 'spells', 'log', 'result', 'error', 'objective'];
+    const ids: PanelId[] = ['battle', 'seed', 'start', 'turn', 'unit', 'move', 'attack', 'magic', 'wait', 'endTurn', 'spells', 'log', 'result', 'error', 'objective', 'item', 'items', 'inventory'];
     this.el = Object.fromEntries(ids.map((id) => [id, $(doc, id)])) as Record<PanelId, HTMLElement>;
     this.el.start.addEventListener('click', () => {
       const entry = this.entries[Number((this.el.battle as HTMLSelectElement).value)];
@@ -73,6 +78,7 @@ export class Panel {
     this.el.wait.addEventListener('click', () => handlers.onCommand({ type: 'wait' }));
     this.el.endTurn.addEventListener('click', () => handlers.onCommand({ type: 'endTurn' }));
     this.el.magic.addEventListener('click', () => { this.el.spells.hidden = !this.el.spells.hidden; });
+    this.el.item.addEventListener('click', () => { this.el.items.hidden = !this.el.items.hidden; });
   }
 
   setBattles(entries: BattleEntry[]): void {
@@ -85,8 +91,9 @@ export class Panel {
   update(state: BattleState, hoverUnit: Unit | null): void {
     this.el.objective.textContent = `${state.entry.episode} — ${state.entry.objective}`;
     this.el.turn.textContent = state.phase.kind === 'end' ? `턴 ${state.turn} · ${state.phase.result === 'victory' ? '승리' : '패배'}` : `턴 ${state.turn} · ${state.phase.kind === 'player' ? '아군 페이즈' : '적 페이즈'}`;
-    const en = menuEnabled(state);
+    const en = menuEnabled(state, this.tables.item);
     (this.el.move as HTMLButtonElement).disabled = !en.move;
+    (this.el.item as HTMLButtonElement).disabled = !en.item;
     (this.el.attack as HTMLButtonElement).disabled = !en.attack;
     (this.el.magic as HTMLButtonElement).disabled = !en.magic;
     (this.el.wait as HTMLButtonElement).disabled = !en.wait;
@@ -94,9 +101,36 @@ export class Panel {
     const sel = state.phase.kind === 'player' ? state.phase.sel : null;
     const selected = sel && sel.mode !== 'idle' ? state.units[sel.slot] ?? null : null;
     if (!en.magic) this.el.spells.hidden = true;
+    if (!en.item) this.el.items.hidden = true;
     this.renderSpells(selected);
+    this.renderItems(state);
+    this.renderInventory(state);
     this.renderUnit(hoverUnit ?? selected);
   }
+
+  /** Rebuilt only when the usable list (ids and counts) changes, like the spell buttons. */
+  private renderItems(state: BattleState): void {
+    const list = usableItems(state.inventory, this.tables.item);
+    const key = list.map((s) => `${s.id}:${s.count}`).join(',');
+    if (key === this.itemsKey) return;
+    this.itemsKey = key;
+    this.itemButtons = list.map((s) => {
+      const button = this.doc.createElement('button');
+      button.textContent = `${itemName(this.tables.item[s.id]!)} ×${s.count}`;
+      button.addEventListener('click', () => { this.el.items.hidden = true; this.handlers.onCommand({ type: 'beginTarget', action: 1000 + s.id }); });
+      return { id: s.id, button };
+    });
+    this.el.items.replaceChildren(...this.itemButtons.map((x) => x.button));
+  }
+
+  private renderInventory(state: BattleState): void {
+    const inv = state.inventory;
+    const stacks = inv.items.map((s) => `${itemName(this.tables.item[s.id]!)} ×${s.count}`).join(', ') || '없음';
+    const bags = state.units.filter((u): u is Unit => u !== null && u.side === 0).map((u) => `${unitName(u, this.tables)}: ${u.bag.map((id) => (id ? itemName(this.tables.item[id]!) : '-')).join(', ')}`);
+    this.el.inventory.textContent = [`골드 ${inv.gold}`, `소모품: ${stacks}`, ...bags].join('\n');
+  }
+
+  private who(state: BattleState, slot: number): string { const u = state.units[slot]; return u ? unitName(u, this.tables) : `슬롯 ${slot}`; }
 
   /** Buttons are rebuilt only when the selected unit's spell list changes: update() runs every frame, and a click needs the same node under the mouse. */
   private renderSpells(u: Unit | null): void {
@@ -127,6 +161,9 @@ export class Panel {
       else if (e.type === 'levelUp') this.log(`레벨 업! Lv${e.level}`);
       else if (e.type === 'statusTick' && e.cured) this.log(`상태 회복 (슬롯 ${e.slot})`);
       else if (e.type === 'rejected') this.log(`불가: ${e.reason}`);
+      else if (e.type === 'pickup') this.log(e.item !== 0 ? `${this.who(state, e.slot)}: ${itemName(this.tables.item[e.item]!)} 획득` : `${e.gold} Gold 획득`);
+      else if (e.type === 'bagFull') this.log(`${this.who(state, e.slot)}: ${itemName(this.tables.item[e.item]!)}을(를) 더 가질 수 없다`);
+      else if (e.type === 'revealed') this.log('보물 찾았다!');
       else if (e.type === 'roundStart') this.log(`— 턴 ${e.turn} —`);
     }
   }

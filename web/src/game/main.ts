@@ -5,7 +5,7 @@ import type { Unit } from '../battle/unit';
 import { DataError, DataLoader } from '../data/loader';
 import type { BattleEntry, Tables } from '../data/types';
 import { Presenter, type SpriteProvider } from '../field/presenter';
-import { usableItems } from '../battle/inventory';
+import { addGold, emptyInventory, giveItem, usableItems } from '../battle/inventory';
 import { animApd } from '../field/unitSprites';
 import { VIEW_H, VIEW_W } from '../iso/grid';
 import { MapModel } from '../map/mapModel';
@@ -13,6 +13,9 @@ import { Renderer, type Scene } from '../render/renderer';
 import { ApdModel } from '../sprite/apdModel';
 import { Panel } from '../ui/panel';
 import { clampCamera, fitScale } from '../viewer/scale';
+
+/** Dev-page convenience: the story scripts give items in the real game. 허브×3, 해독초×2, 깨어나는 약×1. */
+const STARTER_KIT: { gold: number; items: [number, number][] } = { gold: 300, items: [[1, 3], [2, 2], [7, 1]] };
 
 const $ = <T extends HTMLElement>(id: string): T => { const el = document.getElementById(id); if (!el) throw new Error(`missing element #${id}`); return el as T; };
 
@@ -83,7 +86,10 @@ async function startBattle(entry: BattleEntry, seed: number): Promise<void> {
     const bg = map.bg ? await assets.image('map', map.bg).catch((e: unknown) => { showError(e); return null; }) : null;
     mapModel = new MapModel(map, layers, bg);
     await renderer.prepareMap(mapModel);
-    battle = Battle.start(entry, map, roster1, roster, tables, seed);
+    const inventory = emptyInventory();
+    addGold(inventory, STARTER_KIT.gold);
+    for (const [id, n] of STARTER_KIT.items) giveItem(inventory, null, id, n, tables.item);
+    battle = Battle.start(entry, map, roster1, roster, tables, seed, inventory);
     for (const u of battle.state.units) if (u) for (const token of ['STAND', 'RUN1', ...(u.spells.length > 0 ? ['CAST1A'] : [])]) sprites!.apd(animApd(u.race, token));   // start loading the letter files
     const effects = new Set<string>();
     for (const u of battle.state.units) if (u && u.side === 0) for (const sp of u.spells) effects.add(tables.magic[sp]?.effect.toLowerCase() ?? '0');

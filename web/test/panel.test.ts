@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { emptyInventory } from '../src/battle/inventory';
+import { emptyInventory, giveItem } from '../src/battle/inventory';
 import { BattleGrid } from '../src/battle/grid';
 import { RangeTable } from '../src/battle/moveRange';
 import type { BattleState } from '../src/battle/types';
@@ -15,12 +15,13 @@ const base = (phase: BattleState['phase'], us = units(unit({ slot: 0, spells: [1
 
 describe('menuEnabled', () => {
   it('idle: only end turn; menu: move/attack/magic/wait by flags; enemy phase: nothing', () => {
-    expect(menuEnabled(base({ kind: 'player', sel: { mode: 'idle' } }))).toEqual({ move: false, attack: false, magic: false, wait: false, endTurn: true });
+    const items = tables().item;
+    expect(menuEnabled(base({ kind: 'player', sel: { mode: 'idle' } }), items)).toEqual({ move: false, attack: false, magic: false, item: false, wait: false, endTurn: true });
     const range = new RangeTable(0, 0); range.setMove(0, 0, 30); range.setMove(1, 0, 25);
-    expect(menuEnabled(base({ kind: 'player', sel: { mode: 'menu', slot: 0, range } }))).toEqual({ move: true, attack: true, magic: true, wait: true, endTurn: true });
+    expect(menuEnabled(base({ kind: 'player', sel: { mode: 'menu', slot: 0, range } }), items)).toEqual({ move: true, attack: true, magic: true, item: false, wait: true, endTurn: true });
     const moved = units(unit({ slot: 0, moved: true, acted: true, spells: [] }));
-    expect(menuEnabled(base({ kind: 'player', sel: { mode: 'menu', slot: 0, range } }, moved))).toEqual({ move: false, attack: false, magic: false, wait: true, endTurn: true });
-    expect(menuEnabled(base({ kind: 'enemy', queue: [] }))).toEqual({ move: false, attack: false, magic: false, wait: false, endTurn: false });
+    expect(menuEnabled(base({ kind: 'player', sel: { mode: 'menu', slot: 0, range } }, moved), items)).toEqual({ move: false, attack: false, magic: false, item: false, wait: true, endTurn: true });
+    expect(menuEnabled(base({ kind: 'enemy', queue: [] }), items)).toEqual({ move: false, attack: false, magic: false, item: false, wait: false, endTurn: false });
   });
 });
 
@@ -36,7 +37,7 @@ describe('menuEnabled: move needs somewhere to go', () => {
 });
 
 describe('Panel spell list', () => {
-  const ids = ['battle', 'seed', 'start', 'turn', 'unit', 'move', 'attack', 'magic', 'wait', 'endTurn', 'spells', 'log', 'result', 'error', 'objective'];
+  const ids = ['battle', 'seed', 'start', 'turn', 'unit', 'move', 'attack', 'magic', 'wait', 'endTurn', 'spells', 'log', 'result', 'error', 'objective', 'item', 'items', 'inventory'];
   it('keeps the same spell buttons across frames so a click can land, and refreshes only their enabled state', () => {
     const doc = fakeDocument(ids);
     const sent: unknown[] = [];
@@ -60,6 +61,43 @@ describe('Panel spell list', () => {
     panel.update(s, null);
     expect(spells.children).toHaveLength(1);
     expect(spells.children[0]).not.toBe(first[1]);
+  });
+});
+
+describe('menuEnabled.item and the item list', () => {
+  const ids = ['battle', 'seed', 'start', 'turn', 'unit', 'move', 'attack', 'magic', 'wait', 'endTurn', 'spells', 'log', 'result', 'error', 'objective', 'item', 'items', 'inventory'];
+  it('item is enabled only while a usable consumable is held and the unit has not acted', () => {
+    const range = new RangeTable(0, 0); range.setMove(0, 0, 30);
+    const s = base({ kind: 'player', sel: { mode: 'menu', slot: 0, range } });
+    expect(menuEnabled(s, tables().item).item).toBe(false);
+    giveItem(s.inventory, null, 9, 1, tables().item);                            // no use effect
+    expect(menuEnabled(s, tables().item).item).toBe(false);
+    giveItem(s.inventory, null, 7, 1, tables().item);
+    expect(menuEnabled(s, tables().item).item).toBe(true);
+    s.units[0]!.acted = true;
+    expect(menuEnabled(s, tables().item).item).toBe(false);
+  });
+  it('item buttons keep their identity across frames, send beginTarget 1000+id, and the inventory text lists gold, stacks and bags', () => {
+    const doc = fakeDocument(ids);
+    const sent: unknown[] = [];
+    const panel = new Panel(doc, { onStart: () => {}, onCommand: (c) => sent.push(c) }, tables());
+    const range = new RangeTable(0, 0); range.setMove(0, 0, 30);
+    const s = base({ kind: 'player', sel: { mode: 'menu', slot: 0, range } });
+    s.inventory.gold = 300; giveItem(s.inventory, null, 7, 3, tables().item); giveItem(s.inventory, s.units[0]!, 1, 1, tables().item);
+    panel.update(s, null);
+    const list = doc.getElementById('items') as unknown as FakeElement;
+    expect(list.children.map((b) => b.textContent)).toEqual(['herb ×3']);
+    const first = list.children[0]!;
+    panel.update(s, null);
+    expect(list.children[0]).toBe(first);
+    first.click();
+    expect(sent).toEqual([{ type: 'beginTarget', action: 1007 }]);
+    const inv = doc.getElementById('inventory') as unknown as FakeElement;
+    expect(inv.textContent).toBe('골드 300\n소모품: herb ×3\n카린: sword, -, -, -');
+    s.inventory.items[0]!.count = 2;
+    panel.update(s, null);
+    expect(list.children[0]).not.toBe(first);
+    expect(list.children[0]!.textContent).toBe('herb ×2');
   });
 });
 
