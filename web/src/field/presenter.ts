@@ -19,7 +19,7 @@ export const FALLBACK_MS = 400;
 const WAIT_MS = 300;
 
 type Item =
-  | { kind: 'move'; slot: number; path: Dir[]; from: [number, number] | null; step: number }
+  | { kind: 'move'; slot: number; path: Dir[]; from: [number, number] | null; step: number; base: string }
   | { kind: 'anim'; slot: number; name: string; ms: number; model: ApdModel | null; player: AnimPlayer | null }
   | { kind: 'popup'; slot: number; text: string; digits: boolean }
   | { kind: 'wait'; ms: number }
@@ -49,7 +49,7 @@ export class Presenter {
   get busy(): boolean { return this.queue.length > 0; }
 
   /** Replace the snapshot with the rules' units (call when a battle starts and whenever the queue drains). */
-  sync(state: BattleState): void {
+  sync(state: Pick<BattleState, 'units'>): void {
     this.snapshot = state.units.map((u) => (u ? clone(u) : null));
     this.visuals.clear();
     for (const u of this.snapshot) if (u) this.visuals.set(u.slot, { c: u.c, r: u.r, dir: u.dir, offset: { x: 0, y: 0 } });
@@ -61,7 +61,7 @@ export class Presenter {
 
   private stepsFor(e: BattleEvent): Step[] {
     switch (e.type) {
-      case 'moved': return [step({ kind: 'move', slot: e.slot, path: e.path, from: null, step: 0 })];
+      case 'moved': return [step({ kind: 'move', slot: e.slot, path: e.path, from: null, step: 0, base: 'RUN' })];
       case 'faced': return [step({ kind: 'apply', fn: () => this.setDir(e.slot, e.dir) })];
       case 'action': {
         const steps: Step[] = [step({ kind: 'apply', fn: () => { const v = this.visuals.get(e.slot); if (v && (v.c !== e.cell[0] || v.r !== e.cell[1])) this.setDir(e.slot, dirTo(v.c, v.r, e.cell[0], e.cell[1])); } })];
@@ -98,6 +98,23 @@ export class Presenter {
   }
 
   private anim(slot: number, token: string): Item { return { kind: 'anim', slot, name: token, ms: 0, model: null, player: null }; }
+
+  /** MOVE_PATH: walk `dirs` with the script's base anim ("run", "walk", "fly"); the rules position is already updated. */
+  moveUnit(slot: number, dirs: Dir[], base: string): void {
+    if (dirs.length === 0) return;
+    this.queue.push(step({ kind: 'move', slot, path: dirs, from: null, step: 0, base: base.toUpperCase() }));
+  }
+
+  /** WAIT_UNIT: anything queued for this unit (a walk, a one-shot anim, a popup). */
+  unitBusy(slot: number): boolean {
+    return this.queue.some((s) => s.items.some((it) => (it.kind === 'move' || it.kind === 'anim' || it.kind === 'popup') && it.slot === slot));
+  }
+
+  /** EXT SWEAT: the system "F.SWEAT" effect over the unit, once. */
+  sweat(slot: number): void {
+    const v = this.visuals.get(slot);
+    if (v) this.queue.push(step({ kind: 'anim', slot: -1, name: `system:F.SWEAT:${v.c},${v.r}`, ms: 0, model: null, player: null }));
+  }
 
   /** Effect APD name (lower-case `magic.effect`) of a spell, or of a consumable's use_effect magic; null when there is none ("0"). */
   private effectOf(action: number): string | null {
@@ -231,10 +248,10 @@ export class Presenter {
     return idle && stand ? { model: idle, tl: stand, flipH: f.flipH } : null;
   }
 
-  /** Walking body: RUN1/RUN2 by step parity (FUN_00438100: "%s%d" with 1 on even, 2 on odd steps); races without RUN use WALK or FLY; else null (→ STAND). */
-  private runSprite(u: Unit, prefix: string, flipH: boolean, step: number): Playing | null {
+  /** Walking body: <base>1/<base>2 by step parity (FUN_00438100: "%s%d" with 1 on even, 2 on odd steps); the script's base first, then RUN, WALK, FLY; else null (→ STAND). */
+  private runSprite(u: Unit, prefix: string, flipH: boolean, step: number, first: string): Playing | null {
     const n = step % 2 + 1;
-    for (const base of ['RUN', 'WALK', 'FLY']) {
+    for (const base of [...new Set([first, 'RUN', 'WALK', 'FLY'])]) {
       const model = this.provider.apd(animApd(u.race, `${base}${n}`));
       const tl = model ? pickTimeline(model, `${prefix}${base}${n}`) : undefined;
       if (model && tl) return { model, player: this.player(`${u.slot}:${tl.name}:${flipH}`, tl, true, flipH) };
@@ -249,30 +266,39 @@ export class Presenter {
   }
 
   /** Units (snapshot), overlays (rules' selection), active one-shot anims, effects and popups. */
-  scene(map: MapModel, state: BattleState): { sprites: PlacedSprite[]; texts: SceneText[] } {
+  scene(map: MapModel, state: Pick<BattleState, 'units' | 'phase'>): { sprites: PlacedSprite[]; texts: SceneText[] } {
     const sprites: PlacedSprite[] = [];
     const texts: SceneText[] = [];
     const head = this.queue[0];
     const items = head !== undefined && head.start !== null ? head.items : [];
     const overrides = new Map<number, Playing>();
-    const moves = new Map<number, number>();
+    const moves = new Map<number, { step: number; base: string }>();
     for (const item of items) {
       if (item.kind === 'anim' && item.slot >= 0 && item.player && item.model) overrides.set(item.slot, { model: item.model, player: item.player });
-      if (item.kind === 'move') moves.set(item.slot, item.step);
+      if (item.kind === 'move') moves.set(item.slot, { step: item.step, base: item.base });
     }
     const system = this.provider.apd('system');
     for (const u of this.snapshot) {
-      if (!u) continue;
+      if (!u || u.sprite?.hidden) continue;
       const v = this.visuals.get(u.slot)!;
       const shown = { ...u, dir: v.dir };
+      const scripted = u.sprite?.apd ? this.provider.apd(u.sprite.apd) : null;          // LOAD_SPRITE / RESPRITE_UNIT body file
       const body = bodyAnim(shown, this.tables.item);
-      const model = this.provider.apd(bodyApd(u.race));
-      if (body && model) {
-        const step = moves.get(u.slot);
+      const model = scripted ?? this.provider.apd(bodyApd(u.race));
+      if (model && (body || scripted)) {
+        const move = moves.get(u.slot);
         const { prefix, flipH } = facing(v.dir, u.race);
-        let playing = overrides.get(u.slot) ?? (step !== undefined ? this.runSprite(u, prefix, flipH, step) : null);
-        if (!playing) { const tl = pickTimeline(model, body.name); if (tl) playing = { model, player: this.player(`${u.slot}:${body.name}:${flipH}`, tl, true, flipH) }; }
-        if (playing) sprites.push({ model: playing.model, player: playing.player, c: v.c, r: v.r, layer: u.side === 7 ? LAYER.object : LAYER.unit, offset: v.offset, flipH });
+        let playing = overrides.get(u.slot) ?? (move ? this.runSprite(u, prefix, flipH, move.step, move.base) : null);
+        const scriptAnim = u.sprite?.anim;
+        if (!playing && scriptAnim) { const tl = pickTimeline(model, scriptAnim.name.toUpperCase()); if (tl) playing = { model, player: this.player(`${u.slot}:${tl.name}:${flipH}:${scriptAnim.loop}`, tl, scriptAnim.loop, flipH) }; }
+        if (!playing) {
+          const tl = (body ? pickTimeline(model, body.name) : undefined) ?? pickTimeline(model, `${prefix}STAND`) ?? (scripted ? model.anim(model.animNames()[0] ?? '') : undefined);
+          if (tl) playing = { model, player: this.player(`${u.slot}:${tl.name}:${flipH}`, tl, true, flipH) };
+        }
+        const layer = u.sprite?.layer ?? (u.side === 7 ? LAYER.object : LAYER.unit);
+        const offset = { x: v.offset.x + (u.sprite?.offset?.x ?? 0), y: v.offset.y + (u.sprite?.offset?.y ?? 0) };
+        if (playing) sprites.push({ model: playing.model, player: playing.player, c: v.c, r: v.r, layer, offset, flipH });
+        if (system && u.sprite?.marker) { const tl = pickTimeline(system, 'LARGE.M'); if (tl) sprites.push({ model: system, player: this.player('marker:LARGE.M', tl, true), c: v.c, r: v.r, layer: LAYER.shadow, offset: v.offset }); }
         if (system) {
           const race = this.tables.race[u.race];
           const shadow = race ? shadowAnim(shown, race) : null;
