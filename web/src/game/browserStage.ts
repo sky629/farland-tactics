@@ -1,5 +1,9 @@
 import type { AssetLoader } from '../assets/loader';
 import { BitmapCache } from '../assets/bitmaps';
+import { MusicPlayer } from '../audio/music';
+import { SoundPlayer } from '../audio/sound';
+import { SpessaSynth } from '../audio/spessa';
+import { WebAudioOut } from '../audio/webAudio';
 import type { MapData } from '../assets/types';
 import type { Selection } from '../battle/types';
 import type { Unit } from '../battle/unit';
@@ -36,10 +40,18 @@ export interface StageHooks {
  * The real Stage: canvas + renderer for the field and the town picture, the Dialogue overlay for text and modals,
  * asset loading for maps and bitmaps. Mode-specific routing of clicks is decided by the page through `cellMode`.
  */
+/** The audio side exists only after the first user gesture (browser autoplay policy). */
+interface Audio { out: WebAudioOut; sounds: SoundPlayer; synth: SpessaSynth; music: MusicPlayer }
+
 export class BrowserStage implements Stage {
   readonly presenter: Presenter;
   readonly effects = new Effects();
   camera = { x: 0, y: 0 };
+  private audio: Audio | null = null;
+  private unlocking: Promise<void> | null = null;
+  private pendingMusic: number | null = null;
+  private lastNow = 0;
+  volumes = { music: 1, sound: 1 };
   /** true while the battle owns clicks (cells); false while a script may be waiting for a click. */
   cellMode = false;
   seeThrough = false;
@@ -51,7 +63,8 @@ export class BrowserStage implements Stage {
   private drag: { x: number; y: number; cx: number; cy: number } | null = null;
 
   constructor(private readonly canvas: HTMLCanvasElement, private readonly renderer: Renderer, private readonly assets: AssetLoader,
-    private readonly bitmaps: BitmapCache, private readonly dialogue: Dialogue, sprites: SpriteCache, tables: Tables, private readonly hooks: StageHooks) {
+    private readonly bitmaps: BitmapCache, private readonly dialogue: Dialogue, sprites: SpriteCache, tables: Tables, private readonly hooks: StageHooks,
+    private readonly audioAssets: { wave: Set<string>; midi: Set<number> } = { wave: new Set(), midi: new Set() }) {
     this.presenter = new Presenter(sprites, tables);
     this.bind();
   }
@@ -59,6 +72,8 @@ export class BrowserStage implements Stage {
   // ---- drawing ----
   /** One frame: town layers, or the field with the presenter's sprites; the script effects on top. */
   draw(now: number, units: (Unit | null)[], phase: Phase): void {
+    this.lastNow = now;
+    this.audio?.music.update(now);
     const fx = this.effects.snapshot(now);
     if (this.town) { this.renderer.draw({ map: null, sprites: [], camera: { x: 0, y: 0 }, overlay: OVERLAY_OFF, seeThrough: false, fx, backdrop: this.townBackdrop(now) }); return; }
     if (!this.mapModel) { this.renderer.draw({ map: null, sprites: [], camera: this.camera, overlay: OVERLAY_OFF, seeThrough: false, fx }); return; }
@@ -192,6 +207,39 @@ export class BrowserStage implements Stage {
   closeAll(): void { this.dialogue.closeAll(); }
   showEpisode(title: string): void { this.dialogue.showEpisode(title); }
   takeClick(): boolean { return this.dialogue.takeClick(); }
+
+  // ---- Stage: sound ----
+  /** First user gesture: create the AudioContext, the effects bus and the MIDI synthesizer; start the music a script asked for meanwhile. */
+  unlockAudio(): Promise<void> {
+    if (this.audio) return Promise.resolve();
+    this.unlocking ??= (async () => {
+      try {
+        const ctx = new AudioContext();
+        await ctx.resume();
+        const out = new WebAudioOut(ctx);
+        const synth = new SpessaSynth(ctx, 'assets', (k, t) => this.hooks.log(k, t));
+        await synth.init(this.audioAssets.midi);
+        const audio: Audio = { out, sounds: new SoundPlayer(out, this.audioAssets.wave, (k, t) => this.hooks.log(k, t)), synth, music: new MusicPlayer(synth, (k, t) => this.hooks.log(k, t)) };
+        audio.sounds.volume = this.volumes.sound; audio.music.volume = this.volumes.music;
+        this.audio = audio;
+        if (this.pendingMusic !== null) { audio.music.play(this.pendingMusic); this.pendingMusic = null; }
+      } catch (e) { this.hooks.log('warn', `소리를 켤 수 없다: ${e instanceof Error ? e.message : String(e)}`); }
+    })();
+    return this.unlocking;
+  }
+  /** The browser tab came back: resume a suspended context. */
+  resumeAudio(): void { void this.audio?.out.ctx.resume(); }
+  setVolumes(music: number, sound: number): void {
+    this.volumes = { music, sound };
+    if (this.audio) { this.audio.music.volume = music; this.audio.sounds.volume = sound; }
+  }
+  get musicReady(): boolean { return this.audio?.synth.ready ?? false; }
+  get currentMusic(): number { return this.audio?.music.current ?? this.pendingMusic ?? -1; }
+  playSound(name: string): void { this.audio?.sounds.play(name); }
+  playMusic(n: number): void { if (this.audio) this.audio.music.play(n); else this.pendingMusic = n; }
+  stopMusic(): void { this.pendingMusic = null; this.audio?.music.stop(); }
+  fadeMusic(ms: number, on: boolean): void { this.audio?.music.fade(ms, on, this.lastNow); }
+  musicFadeBusy(): boolean { return this.audio?.music.fadeBusy() ?? false; }
 
   // ---- Stage: pictures and town ----
   bitmap(name: string): CanvasImageSource | null { return this.bitmaps.get(name); }

@@ -59,6 +59,21 @@ describe('GameCore', () => {
     const body = stage.presenter.scene(mm, { units: core.campaign.units, phase: { kind: 'player', sel: { mode: 'idle' } } }).sprites.find((sp) => sp.layer === 4 && sp.c === 2 && sp.r === 4);
     expect(body?.flipH).toBe(true);                                            // dir 1 (east) is drawn mirrored
   });
+  it('MUSIC, MUSIC_FADE, WAIT_MUSIC_FADE and SOUND reach the stage; the fade wait holds while the stage says it is fading', () => {
+    const stage = new FakeStage();
+    const core = new GameCore(res([prog(0, ['begin', ['MUSIC', 6], ['SOUND', 'hit'], ['SOUND', '*door'], ['MUSIC_FADE', 500, 0], ['WAIT_MUSIC_FADE'], ['MUSIC', -1], ['END']])]), stage);
+    stage.fading = true;
+    core.newGame(); core.frame(0);
+    expect(stage.calls).toContainEqual(['playMusic', 6]);
+    expect(stage.calls).toContainEqual(['playSound', 'hit']);
+    expect(stage.calls).toContainEqual(['playSound', '*door']);
+    expect(stage.calls).toContainEqual(['fadeMusic', 500, false]);
+    expect(stage.calls.some((x) => x[0] === 'stopMusic')).toBe(false);          // WAIT_MUSIC_FADE still waiting
+    stage.fading = false;
+    core.frame(16);
+    expect(stage.calls).toContainEqual(['stopMusic']);
+    expect(core.campaign.bgm).toBe(-1);
+  });
   it('LOAD_MAP waits for the stage; BATTLE_START + END creates a Battle over the campaign units and inventory', () => {
     const stage = new FakeStage(); stage.ready = false;
     const core = new GameCore(res([prog(0, ['begin', ['LOAD_UNITS', 5], ['LOAD_MAP', 49], ['BATTLE_START_HEAL'], ['END']])], { 5: [...party, slime] }), stage);

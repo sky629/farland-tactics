@@ -25,6 +25,7 @@ export interface Stage {
   showTown(set: 1 | 2 | 3, extra: boolean, flags: number[]): void; hideTown(): void;
   takeClick(): boolean;
   writeSave(slot: number, bytes: Uint8Array): void;   // the page stores it (IndexedDB) and refreshes its slot list
+  playSound(name: string): void; playMusic(n: number): void; stopMusic(): void; fadeMusic(ms: number, on: boolean): void; musicFadeBusy(): boolean;
   log(kind: 'warn' | 'info', text: string): void;
 }
 
@@ -273,10 +274,10 @@ export class GameCore implements Host {
   loadMap(n: number): void { this.lastMap = n; this.stage.loadMap(n); }
   mapBusy(): boolean { return !this.stage.mapReady(); }
   unitsChanged(): void { this.syncUnits(); }
-  music(n: number): void { this.stage.log('info', `music ${n}`); }
-  musicFade(ms: number, on: boolean): void { this.stage.log('info', `music fade ${on ? 'in' : 'out'} ${ms}`); }
-  musicFadeBusy(): boolean { return false; }
-  sound(name: string): void { this.stage.log('info', `sound ${name}`); }
+  music(n: number): void { if (n < 0) this.stage.stopMusic(); else this.stage.playMusic(n); }
+  musicFade(ms: number, on: boolean): void { this.stage.fadeMusic(ms, on); }
+  musicFadeBusy(): boolean { return this.stage.musicFadeBusy(); }
+  sound(name: string): void { this.stage.playSound(name); }
   playVisual(n: number): void { this.stage.log('info', `visual scene ${n} skipped`); }
   save(slot: number): void { if (slot < 0) return; this.stage.writeSave(slot, this.saveBytes()); this.stage.log('info', `save ${String(slot).padStart(2, '0')}`); }
   quitComplete(): void { this.mode = 'ended'; this.stage.log('info', 'game complete'); }

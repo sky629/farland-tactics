@@ -58,7 +58,7 @@ describe('GameCore save and load (spec §6)', () => {
     expect(a.core.campaign.inventory.gold).toBe(777);
     expect(a.core.campaign.units[0]).toMatchObject({ id: 1, level: 2 });
     expect(a.core.campaign.episode).toBe('첫업무');
-    expect(a.stage.calls).toContainEqual(['log', 'info', 'music 6']);
+    expect(a.stage.calls).toContainEqual(['playMusic', 6]);
     c.turn = -1;
     const b = make(['begin', ['END'], 'Restart', ['FLAG_SET', 9, 5], ['TOWN']], ['Restart', ['FLAG_SET', 9, 1], ['TOWN']]);
     expect(b.core.loadGame(encodeSave(c, new Date()))).toBe(true);

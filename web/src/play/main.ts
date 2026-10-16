@@ -103,13 +103,14 @@ async function boot(): Promise<void> {
       modalContext: () => ({ tables, inventory: core!.campaign.inventory, party: core!.campaign.units.slice(0, PARTY_SLOTS), saves: saveList }),
       writeSave: (slot, bytes) => { void saves?.write(slot, bytes).then(refreshSaves).catch(showError); },
       log,
-    });
+    }, { wave: new Set(index.wave ?? []), midi: new Set(index.midi ?? []) });
     core = new GameCore(res, stage);
     panel = new Panel(document, { onStart: () => {}, onCommand: (cmd) => core?.dispatch(cmd) }, tables);
-    $('newGame').addEventListener('click', () => { $('title').hidden = true; $('error').textContent = ''; core!.newGame(); });
+    $('newGame').addEventListener('click', () => { void stage!.unlockAudio(); $('title').hidden = true; $('error').textContent = ''; core!.newGame(); });
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) stage?.resumeAudio(); });
     await refreshSaves();
     const loadHandlers = {
-      onPick: async (slot: number) => { const bytes = await saves!.read(slot); if (bytes && core!.loadGame(bytes)) { $('title').hidden = true; $('error').textContent = ''; } },
+      onPick: async (slot: number) => { void stage!.unlockAudio(); const bytes = await saves!.read(slot); if (bytes && core!.loadGame(bytes)) { $('title').hidden = true; $('error').textContent = ''; } },
       onExport: async (slot: number) => {
         const bytes = await saves!.read(slot);
         if (!bytes) return;
@@ -139,6 +140,6 @@ async function boot(): Promise<void> {
 }
 
 /** Debug hook for scripted browser checks: window.__ft2().core.mode, .campaign.flags, .vm.state … */
-(window as unknown as { __ft2: () => unknown }).__ft2 = () => ({ core, campaign: core?.campaign, vm: core?.vm, battle: core?.battle, stage, mode: core?.mode, saves, saveList });
+(window as unknown as { __ft2: () => unknown }).__ft2 = () => ({ core, campaign: core?.campaign, vm: core?.vm, battle: core?.battle, stage, mode: core?.mode, saves, saveList, music: stage ? { ready: stage.musicReady, current: stage.currentMusic } : null });
 
 void boot();
