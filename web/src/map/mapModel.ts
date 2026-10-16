@@ -1,6 +1,6 @@
 import type { IndexedImage } from '../assets/png';
 import type { MapCell, MapData } from '../assets/types';
-import { cellAnchor, gridSize, inDiamond, rowCells, type GridGeometry } from '../iso/grid';
+import { VIEW_H, VIEW_W, cellAnchor, gridSize, inDiamond, rowCells, type GridGeometry } from '../iso/grid';
 
 export class MapDataError extends Error {
   override name = 'MapDataError';
@@ -12,6 +12,18 @@ export const DEFAULT_LAYER_KEY = 249;
 export function layerKey(img: IndexedImage): number {
   const p = img.indices[0] ?? DEFAULT_LAYER_KEY;
   return p >= 10 && p <= 245 ? DEFAULT_LAYER_KEY : p;
+}
+
+/**
+ * Screen position of the background (FUN_00431900): its map-pixel origin, scrolled by (−half screen − camera) / divisor
+ * with C integer division; a divisor of 0 pins it to the screen (parallax skies).
+ */
+export function bgPosition(d: MapData, cam: { x: number; y: number }): { x: number; y: number } {
+  const [ox, oy] = d.bgOrigin, [dx, dy] = d.bgParallax;
+  return {
+    x: ox + VIEW_W / 2 + (dx !== 0 ? Math.trunc((-VIEW_W / 2 - cam.x) / dx) : 0),
+    y: oy + VIEW_H / 2 + (dy !== 0 ? Math.trunc((-VIEW_H / 2 - cam.y) / dy) : 0),
+  };
 }
 
 export interface PlacedCell { c: number; r: number; index: number; cell: MapCell; x: number; y: number }

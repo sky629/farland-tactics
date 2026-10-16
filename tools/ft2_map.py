@@ -6,8 +6,8 @@ Decompressed layout (little-endian), as read by FT2.exe FUN_0042d5d0 / FUN_00431
   0x04 u32 w, 0x08 u32 h          : logical grid size; the map holds w*h + (w-1)*(h-1) diamond cells
   0x0C u32 n_layers               : number of object image layers
   0x10 char bg[16]                : background BMP name (map\\), may be empty
-  0x20 i32 ×2 unknown (1, 1)
-  0x28 i32 start_c, 0x2C i32 start_r : initial camera/cursor cell (×32, ×16 → pixels)
+  0x20 i32 ×2 parallax divisors   : background scroll = (−320 − camera) / divisor; 0 pins it to the screen (FUN_00431900)
+  0x28 i32 ×2 bg_offset           : background position in cells (×32, ×16 → map pixels) (FUN_00431460 `<< 5`, `<< 4`; FUN_00431900)
   0x30 RECT view (left, top, right, bottom) in diagonal cell units:
          origin_x = (top - left) * 32,  origin_y = -(top + left) * 16
          pixel_w  = max(640, (right - bottom - left + top) * 32)
@@ -53,8 +53,8 @@ def parse(data: bytes) -> dict:
         raise ValueError('not an FM2 map')
     w, h, n_layers = struct.unpack_from('<III', data, 4)
     bg = data[0x10:0x20].split(b'\0')[0].decode('ascii', 'replace')
-    unknown = struct.unpack_from('<2i', data, 0x20)
-    start_c, start_r = struct.unpack_from('<2i', data, 0x28)
+    parallax = struct.unpack_from('<2i', data, 0x20)
+    bg_offset = struct.unpack_from('<2i', data, 0x28)
     left, top, right, bottom = struct.unpack_from('<4i', data, 0x30)
     layers = [data[0x40 + 16 * i:0x50 + 16 * i].split(b'\0')[0].decode('ascii', 'replace')
               for i in range(n_layers)]
@@ -77,7 +77,7 @@ def parse(data: bytes) -> dict:
             if idx:
                 grid[f'{c},{r}'] = idx - 1
     return dict(
-        w=w, h=h, bg=bg, layers=layers, unknown=unknown, start=(start_c, start_r),
+        w=w, h=h, bg=bg, layers=layers, parallax=parallax, bg_offset=bg_offset,
         view=dict(left=left, top=top, right=right, bottom=bottom),
         origin=((top - left) * 32, -(top + left) * 16),
         pixel_size=(max(640, (right - bottom - left + top) * 32), max(480, (bottom - top - left + right) * 16)),

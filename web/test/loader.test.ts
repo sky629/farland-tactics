@@ -17,7 +17,7 @@ afterEach(() => vi.unstubAllGlobals());
 
 describe('AssetLoader', () => {
   it('loads and validates map JSON', async () => {
-    stubFetch({ 'assets/map/stage02.json': json({ w: 1, h: 1, bg: null, layers: [], start: [0, 0], origin: [0, 0], pixelSize: [640, 480], cells: [], cellAt: [] }) });
+    stubFetch({ 'assets/map/stage02.json': json({ w: 1, h: 1, bg: null, layers: [], bgOrigin: [0, 0], bgParallax: [1, 1], origin: [0, 0], pixelSize: [640, 480], cells: [], cellAt: [] }) });
     const m = await new AssetLoader().map('stage02');
     expect(m.pixelSize).toEqual([640, 480]);
   });

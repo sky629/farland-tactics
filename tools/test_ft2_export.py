@@ -16,7 +16,7 @@ class NormalizeName(unittest.TestCase):
 
 class MapJson(unittest.TestCase):
     def test_cell_at_table_and_fields(self):
-        m = dict(w=2, h=2, bg='', layers=['St02B.bmp'], start=(0, -1), origin=(32, -16), pixel_size=(640, 480),
+        m = dict(w=2, h=2, bg='', layers=['St02B.bmp'], bg_offset=(0, -1), parallax=(2, 0), origin=(32, -16), pixel_size=(640, 480),
                  cells=[dict(height=1, blocked=0, flag2=0, land=3,
                              objects=[dict(layer=0, front=1, left=0, top=0, right=64, bottom=32, ox=-32, oy=-16)]),
                         dict(height=0, blocked=1, flag2=0, land=0, objects=[])],
@@ -25,7 +25,8 @@ class MapJson(unittest.TestCase):
         self.assertEqual(j['w'], 2)
         self.assertIsNone(j['bg'])
         self.assertEqual(j['layers'], ['st02b'])
-        self.assertEqual(j['start'], [0, -1])
+        self.assertEqual(j['bgOrigin'], [0, -16])      # cells × (32, 16)
+        self.assertEqual(j['bgParallax'], [2, 0])
         self.assertEqual(j['pixelSize'], [640, 480])
         # N = 3 → cellAt[c*3 + r]
         self.assertEqual(j['cellAt'], [-1, 1, -1, 0, -1, -1, -1, -1, -1])

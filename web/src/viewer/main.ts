@@ -42,8 +42,7 @@ async function loadMap(name: string): Promise<void> {
   await renderer.prepareMap(model);
   scene.map = model;
   scene.sprites = [];
-  // Spec §13: the meaning of `start` is unresolved; (start*32, start*16) clamps to (0, 0) on most maps and
-  // shows an empty corner (stage02), so the viewer centers the map instead.
+  // The viewer starts at the map center (the game places the camera on the party).
   scene.camera = clampCamera(data.pixelSize[0] / 2 - VIEW_W / 2, data.pixelSize[1] / 2 - VIEW_H / 2, data.pixelSize[0], data.pixelSize[1]);
 }
 

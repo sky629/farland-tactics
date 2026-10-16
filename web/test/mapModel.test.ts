@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { bgPosition } from '../src/map/mapModel';
 import type { IndexedImage } from '../src/assets/png';
 import type { MapData } from '../src/assets/types';
 import { layerKey, MapDataError, MapModel } from '../src/map/mapModel';
@@ -17,7 +18,7 @@ function map(overrides: Partial<MapData> = {}): MapData {
   place(1, 0, 0); place(0, 1, 1); place(1, 1, 2); place(2, 1, 3); place(1, 2, 4);
   const empty = { blocked: 0, flag2: 0, land: 1, objs: [] };
   return {
-    w: 2, h: 2, bg: null, layers: ['l0'], start: [0, 0], origin: [64, 0], pixelSize: [640, 480],
+    w: 2, h: 2, bg: null, layers: ['l0'], bgOrigin: [0, 0], bgParallax: [1, 1], origin: [64, 0], pixelSize: [640, 480],
     cells: [
       { h: 0, ...empty, objs: [{ layer: 0, front: 0, left: 0, top: 0, right: 64, bottom: 32, ox: -32, oy: -16 }] },
       { h: 0, ...empty }, { h: 0, ...empty }, { h: 0, ...empty }, { h: 2, ...empty },
@@ -72,5 +73,18 @@ describe('MapModel', () => {
     const data = map();
     data.cells[0]!.objs[0]!.bottom = 999;
     expect(() => new MapModel(data, [sheet(249)], null)).toThrow(/outside layer/);
+  });
+});
+
+describe('bgPosition (FUN_00431900)', () => {
+  it('the background sits at its map-pixel origin and scrolls with the camera when the divisors are 1', () => {
+    const m = map({ bgOrigin: [128, 96], bgParallax: [1, 1] });
+    expect(bgPosition(m, { x: 0, y: 0 })).toEqual({ x: 128, y: 96 });
+    expect(bgPosition(m, { x: 50, y: 20 })).toEqual({ x: 78, y: 76 });
+  });
+  it('a divisor of 0 pins the background to the screen; larger divisors scroll it slower (integer division toward zero)', () => {
+    expect(bgPosition(map({ bgOrigin: [-320, 64], bgParallax: [0, 0] }), { x: 400, y: 100 })).toEqual({ x: 0, y: 304 });
+    expect(bgPosition(map({ bgOrigin: [0, 0], bgParallax: [2, 1] }), { x: 100, y: 0 })).toEqual({ x: 110, y: 0 });   // 320 + trunc(−420 / 2)
+    expect(bgPosition(map({ bgOrigin: [0, 0], bgParallax: [2, 1] }), { x: -321, y: 0 })).toEqual({ x: 320, y: 0 });  // trunc(1 / 2) = 0
   });
 });

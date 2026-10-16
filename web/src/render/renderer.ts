@@ -1,7 +1,7 @@
 import type { FxSnapshot } from '../field/effects';
 import { IndexedBitmaps } from '../gfx/indexed';
 import { TILE_H, TILE_W, VIEW_H, VIEW_W } from '../iso/grid';
-import type { MapModel, PlacedCell } from '../map/mapModel';
+import { bgPosition, type MapModel, type PlacedCell } from '../map/mapModel';
 import type { AnimPlayer } from '../sprite/animPlayer';
 import type { ApdModel, DrawCommand } from '../sprite/apdModel';
 import { rectVisible } from './culling';
@@ -70,7 +70,7 @@ export class Renderer {
       const gfx = this.mapBitmaps.get(map);
       if (!gfx) throw new Error('map bitmaps not prepared; call prepareMap first');
       const cam = scene.camera;
-      if (gfx.bg) ctx.drawImage(gfx.bg.get(null), -cam.x, -cam.y);
+      if (gfx.bg) { const p = bgPosition(map.data, cam); ctx.drawImage(gfx.bg.get(null), p.x, p.y); }
 
       const spritesByRow = new Map<number, PlacedSprite[]>();
       for (const sp of scene.sprites) {

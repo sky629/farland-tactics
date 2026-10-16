@@ -46,7 +46,7 @@ def map_json(m: dict) -> dict:
                              right=o['right'], bottom=o['bottom'], ox=o['ox'], oy=o['oy']) for o in c['objects']])
              for c in m['cells']]
     return dict(w=m['w'], h=m['h'], bg=normalize_name(m['bg']) if m['bg'] else None,
-                layers=[normalize_name(s) for s in m['layers']], start=list(m['start']), origin=list(m['origin']),
+                layers=[normalize_name(s) for s in m['layers']], bgOrigin=[m['bg_offset'][0] * 32, m['bg_offset'][1] * 16], bgParallax=list(m['parallax']), origin=list(m['origin']),
                 pixelSize=list(m['pixel_size']), cells=cells, cellAt=cell_at)
 
 

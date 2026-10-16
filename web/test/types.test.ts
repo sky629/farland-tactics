@@ -3,7 +3,7 @@ import { assertApdData, assertMapData } from '../src/assets/types';
 
 describe('assertMapData', () => {
   it('accepts a complete map', () => {
-    const m = { w: 1, h: 1, bg: null, layers: [], start: [0, 0], origin: [0, 0], pixelSize: [640, 480], cells: [], cellAt: [] };
+    const m = { w: 1, h: 1, bg: null, layers: [], bgOrigin: [0, 0], bgParallax: [1, 1], origin: [0, 0], pixelSize: [640, 480], cells: [], cellAt: [] };
     expect(() => assertMapData(m, 'stage00')).not.toThrow();
   });
   it('names the missing field', () => {

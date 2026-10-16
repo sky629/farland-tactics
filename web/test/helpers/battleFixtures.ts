@@ -68,5 +68,5 @@ export function flatMap(N: number, edit: (c: number, r: number) => Partial<MapCe
       cells.push({ h: 0, blocked: 0, flag2: 0, land: 1, objs: [], ...edit(c, r) });
     }
   }
-  return { w: N, h: 1, bg: null, layers: [], start: [0, 0], origin: [N * 32, 0], pixelSize: [Math.max(640, N * 64), Math.max(480, N * 32)], cells, cellAt };
+  return { w: N, h: 1, bg: null, layers: [], bgOrigin: [0, 0], bgParallax: [1, 1], origin: [N * 32, 0], pixelSize: [Math.max(640, N * 64), Math.max(480, N * 32)], cells, cellAt };
 }

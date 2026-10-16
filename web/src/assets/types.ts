@@ -6,7 +6,8 @@ export interface MapData {
   w: number; h: number;
   bg: string | null;
   layers: string[];
-  start: [number, number];
+  bgOrigin: [number, number];     // where the background bitmap sits in map pixels (FUN_00431900)
+  bgParallax: [number, number];   // background scroll divisors; 0 = pinned to the screen
   origin: [number, number];
   pixelSize: [number, number];
   cells: MapCell[];
@@ -21,7 +22,7 @@ export interface ApdData { version: number; sheets: string[]; images: ApdImage[]
 /** Minimal shape check for JSON that came over the network. Throws TypeError with the failing field. */
 export function assertMapData(x: unknown, name: string): asserts x is MapData {
   const o = x as Record<string, unknown>;
-  for (const k of ['w', 'h', 'layers', 'start', 'origin', 'pixelSize', 'cells', 'cellAt']) {
+  for (const k of ['w', 'h', 'layers', 'bgOrigin', 'bgParallax', 'origin', 'pixelSize', 'cells', 'cellAt']) {
     if (!(k in o)) throw new TypeError(`${name}: missing field "${k}"`);
   }
   if (!Array.isArray(o['cellAt'])) throw new TypeError(`${name}: cellAt is not an array`);
