@@ -28,6 +28,7 @@
 
 - 내보내기(`tools/ft2_export.py`): `data/event%02d.json` = `{ symbols: {name: offset}, code: [{ at, op, name, args }] }` (`ft2_event_disasm.py` 의 디코더를 재사용; 문자열은 UTF-8 로 변환, `_` 는 그대로 둔다); `bmp/<name>.png` 전부 + `index.json` 에 `bmp: string[]`, `events: number[]`.
 - 디코드 규칙은 `event_script_format.md` §2 그대로(유닛 id 0 뒤 피연산자 생략 포함). 디코드 결과가 디스어셈블러와 같은지 Python 테스트로 고정한다.
+- 내보낸 결과(2026-10-16 실측): event 20개(JSON), bmp 397개(PNG). 코퍼스 테스트가 모든 점프·CALL·LOAD_SCRIPT 라벨의 존재를 확인했고, `EVENT00 begin` 은 가짜 호스트로 `TOWN` 까지 경고 없이(MOVE_TO 1회 제외) 실행된다.
 
 ## 5. 모듈
 
