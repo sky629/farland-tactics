@@ -1,6 +1,6 @@
 # 하위 프로젝트 5 — 세이브·소리·비주얼 씬 설계
 
-날짜: 2026-10-16 · 상태: 승인(목표 지시 "완전한 게임 완성까지 계획대로 쭉 진행해") · 선행: 하위 프로젝트 4 (main `0c807eb`)
+날짜: 2026-10-16 · 상태: 계획 A(세이브) 구현 완료 — main `769b3ed`(리뷰 Critical 1·Important 5 수정) · 계획 B(소리)·C(비주얼 씬) 진행 중 · 선행: 하위 프로젝트 4 (main `0c807eb`)
 
 ## 1. 목표와 완료 기준
 
@@ -84,7 +84,7 @@ tools/ft2_soundfont.py       사운드폰트 내려받기(sha256 확인)
 
 ## 11. 테스트
 
-- `save/format.test.ts`: 새 게임 캠페인 라운드트립(바이트 → 캠페인 → 바이트 동일), 헤더 필드 위치(468/4/6/38/40/90/106/108/112/436), 유닛 워드 맵, 실제 세이브(`extracted/.../save/save09.dat` 가 있으면 읽어 제목 "첫업무"·소지금 200·유닛 0 레벨 2 확인, 없으면 건너뜀).
+- `save/format.test.ts`: 새 게임 캠페인 라운드트립(캠페인 → 바이트 → 캠페인, 필드 단위 — 원본 파일의 미지 필드는 0 으로 쓰므로 바이트 동일성은 요구하지 않는다), 헤더 필드 위치(468/4/6/38/40/90/106/108/112/436), 유닛 워드 맵, 실제 세이브(`extracted/.../save/save09.dat` 가 있으면 읽어 제목 "첫업무"·소지금 200·유닛 0 레벨 2 확인, 없으면 건너뜀).
 - `save/store.test.ts`: 가짜 IndexedDB(메모리) 로 list/write/read/delete, 가져오기 길이 검사.
 - `audio/sound.test.ts`: 가짜 AudioContext 로 채널 선택 규칙, `*`, 빈 이름, 캐시. `audio/music.test.ts`: 가짜 신디사이저로 play/stop/fade 타이밍·`fadeBusy`.
 - `gameCore` 추가: SAVE_GAME 30 → store 에 6848 B; loadGame → `Restart` 실행과 bgm; 자동 저장 슬롯 30·31.
