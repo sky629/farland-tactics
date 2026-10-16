@@ -4,6 +4,9 @@ import type { RandomSource } from './rng';
 export const PARTY_SLOTS = 10;
 export const MAX_SLOTS = 50;
 
+/** Presentation state the story scripts set on a unit (the original keeps sprite handles in the unit record too). */
+export interface SpriteOverride { apd?: string; layer?: number; anim?: { name: string; loop: boolean; force: boolean }; hidden?: boolean; offset?: { x: number; y: number }; marker?: boolean }
+
 /** The battle-relevant fields of the original 124-byte unit record (battle_rules.md §7). */
 export interface Unit {
   slot: number;
@@ -12,6 +15,7 @@ export interface Unit {
   weapon: number; armor: number; acc: [number, number];
   dropItem: number; dropGold: number;
   bag: number[];                       // 4 equipment slots of a party unit (words 0xe..0x11; battle_rules.md §4.3)
+  sprite?: SpriteOverride;             // script-driven sprite state (story_flow.md); absent for plain battle units
   hpMax: number; hp: number; mpMax: number; mp: number; exp: number;
   str: number; def: number; wis: number; mgr: number; agi: number;
   spells: number[];
