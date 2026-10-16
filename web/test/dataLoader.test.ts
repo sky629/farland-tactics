@@ -43,12 +43,12 @@ describe('DataLoader', () => {
   });
   it('rejects a table with the wrong record shape', async () => {
     mockFetch({ 'assets/data/race.json': [{ name: 'x' }], 'assets/data/item.json': tables.item, 'assets/data/magic.json': tables.magic });
-    await expect(new DataLoader().tables()).rejects.toThrow(/race.json: record 0 missing "hp"/);
+    await expect(new DataLoader().tables()).rejects.toThrow(/race.json: record 0 missing "exp_value"/);
   });
   it('loads the battle catalog and checks its fields', async () => {
     mockFetch({ 'assets/data/battles.json': [{ event: 1, label: 'outfield', map: 'stage49', roster: 49, episode: '첫업무', objective: '!', heal: true }] });
     expect((await new DataLoader().battles())[0]!.roster).toBe(49);
     mockFetch({ 'assets/data/battles.json': [{ event: 1 }] });
-    await expect(new DataLoader().battles()).rejects.toThrow(/battles.json: entry 0 missing "map"/);
+    await expect(new DataLoader().battles()).rejects.toThrow(/battles.json: entry 0 missing "label"/);
   });
 });
