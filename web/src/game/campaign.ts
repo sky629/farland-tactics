@@ -1,7 +1,7 @@
 import { emptyInventory, type Inventory } from '../battle/inventory';
 import { MAX_SLOTS, PARTY_SLOTS, type Unit } from '../battle/unit';
 
-export const FLAG_COUNT = 100;
+export const FLAG_COUNT = 24;          // u16[24] in the save header (file_formats.md §6); the scripts use 0..4 and 10
 export const TOWN_FLAG_COUNT = 16;
 export const BATTLE_TARGET_ID = 24;
 
@@ -21,6 +21,7 @@ export interface Campaign {
   lastSprite: string | null;
   battleTarget: number | null;   // slot of the unit scripts address as id 24
   actor: number | null;          // slot of the acting unit during battle hooks
+  bgm: number;                   // current MUSIC number, −1 none (saved in the header)
 }
 
 /** FUN_004239b0 new game: empty units, 200 gold, town turn. */
@@ -29,7 +30,7 @@ export function newCampaign(): Campaign {
   inventory.gold = 200;
   return {
     units: new Array<Unit | null>(MAX_SLOTS).fill(null), inventory, flags: new Array<number>(FLAG_COUNT).fill(0), townFlags: new Array<number>(TOWN_FLAG_COUNT).fill(0),
-    stage: 0, turn: -1, episode: '', message: '', speakerName: '', townSet: 1, townExtra: false, lastSprite: null, battleTarget: null, actor: null,
+    stage: 0, turn: -1, episode: '', message: '', speakerName: '', townSet: 1, townExtra: false, lastSprite: null, battleTarget: null, actor: null, bgm: -1,
   };
 }
 

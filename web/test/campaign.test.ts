@@ -7,7 +7,7 @@ describe('campaign', () => {
     const c = newCampaign();
     expect(c.inventory).toEqual({ items: [], gold: 200 });
     expect(c).toMatchObject({ turn: -1, stage: 0, townSet: 1, townExtra: false, battleTarget: null });
-    expect(c.flags).toHaveLength(100);
+    expect(c.flags).toHaveLength(24);                                           // u16[24] in the save header
     expect(c.flags.every((f) => f === 0)).toBe(true);
     expect(c.townFlags).toHaveLength(16);
     expect(c.units.filter(Boolean)).toHaveLength(0);
