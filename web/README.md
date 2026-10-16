@@ -6,7 +6,7 @@
 | 명령 | 하는 일 |
 |---|---|
 | `npm install` | 개발 의존성 설치 (typescript, vite, vitest) |
-| `npm run dev` | 개발 서버. http://localhost:5173 |
+| `npm run dev` | 개발 서버. 뷰어 http://localhost:5173 · 전투 페이지 http://localhost:5173/game.html |
 | `npm run check` | `tsc --noEmit && vitest run` |
 | `npm test` | Vitest만 실행 |
 | `npm run build` | 타입 검사 후 `dist/`에 정적 빌드 |
