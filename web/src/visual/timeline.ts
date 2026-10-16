@@ -4,7 +4,7 @@
  * others color-keyed 249); image slots are vsllst records of the scene.
  */
 /** One animation frame: image slot, source rect, how long it stays (FUN_0041a970 particle record). */
-export interface Frame { slot: number; sx: number; sy: number; w: number; h: number; ms: number }
+export interface Frame { slot: number; sx: number; sy: number; w: number; h: number; ms: number; x?: number; y?: number }   // x/y override the anim's position
 /** FUN_0041aac0 / FUN_0041aa20: effect `fx` (0..7) animates object `obj` at (x, y) through `frames`; loop = repeat 0 (until `effect off`), else once. */
 export type AnimCmd = { op: 'anim'; fx: number; obj: number; x: number; y: number; frames: Frame[]; loop: boolean };
 export type Cmd =
@@ -14,12 +14,13 @@ export type Cmd =
   | { op: 'pos'; obj: number; x: number; y: number }                                               // FUN_00419ec0: base position added to the shown offset
   | { op: 'key'; obj: number; key: number | null }                                                 // FUN_00419da0: color key (null = opaque); reset gives object 0 null, the others 249
   | { op: 'clip'; obj: number; x: number; y: number; w: number; h: number }                        // FUN_00419f10: screen-space window [추정]
-  | { op: 'move'; obj: number; from: [number, number]; to: [number, number]; ms: number }         // FUN_0041a2b0 / FUN_0041a380
+  | { op: 'move'; obj: number; from?: [number, number]; by: [number, number]; ms: number }        // FUN_0041a2b0 / FUN_0041a380: from `from` (slot given) or where it is (slot −1), by a delta; images larger than the screen pan their source window
   | { op: 'waitMove'; obj: number }                                                                // FUN_0041a270
   | { op: 'fade'; dir: 'in' | 'out'; steps: number }                                               // FUN_00419a20(steps, 1) in; (steps, 2|4) out [추정: to black]
   | { op: 'waitFade' }                                                                             // FUN_00419aa0 / thunk_FUN_004184d0
   | { op: 'wait'; ms: number }                                                                     // FUN_004024f0: part clock ≥ ms (DAT_00449688)
   | { op: 'resetClock' }                                                                           // DAT_00449674 = now
+  | { op: 'deadline'; ms: number; outro: Cmd[] }                                                   // FUN_00402050(part): at scene clock ≥ ms the part stops and runs `outro` (its fade), whatever it was doing
   | { op: 'waitUntil'; ms: number }                                                                // FUN_0041dbc0 / FUN_00402050: scene clock ≥ ms
   | AnimCmd
   | { op: 'effect'; fx: number; on: boolean }                                                      // FUN_0041a890

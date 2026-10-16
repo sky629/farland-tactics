@@ -27,20 +27,55 @@ describe('VisualPlayer', () => {
   });
   it('pos adds a base position to the shown offset and to moves (FUN_00419ec0)', () => {
     const p = new VisualPlayer();
-    p.start(scene([{ op: 'pos', obj: 3, x: 0, y: 72 }, { op: 'show', obj: 3, slot: 1, sx: 0, sy: 0, w: 400, h: 408, dx: -108, dy: 0 }, { op: 'wait', ms: 10 }, { op: 'move', obj: 3, from: [-192, 0], to: [-48, 0], ms: 1000 }, { op: 'waitMove', obj: 3 }, { op: 'end' }]), 0, images({ 1: [400, 408] }), 0);
+    p.start(scene([{ op: 'pos', obj: 3, x: 0, y: 72 }, { op: 'show', obj: 3, slot: 1, sx: 0, sy: 0, w: 400, h: 408, dx: -108, dy: 0 }, { op: 'wait', ms: 10 }, { op: 'move', obj: 3, from: [-192, 0], by: [144, 0], ms: 1000 }, { op: 'waitMove', obj: 3 }, { op: 'end' }]), 0, images({ 1: [400, 408] }), 0);
     expect(p.update(0).backdrop[0]).toMatchObject({ dx: -108, dy: 72 });
     p.update(10);
     expect(p.update(510).backdrop[0]).toMatchObject({ dx: -120, dy: 72 });
   });
   it('move interpolates and waitMove holds until the end', () => {
     const p = new VisualPlayer();
-    p.start(scene([{ op: 'show', obj: 3, slot: 1, sx: 0, sy: 0, w: 10, h: 10, dx: 0, dy: 0 }, { op: 'move', obj: 3, from: [0, 0], to: [100, 50], ms: 1000 }, { op: 'waitMove', obj: 3 }, { op: 'end' }]), 0, images({ 1: [10, 10] }), 0);
+    p.start(scene([{ op: 'show', obj: 3, slot: 1, sx: 0, sy: 0, w: 10, h: 10, dx: 0, dy: 0 }, { op: 'move', obj: 3, from: [0, 0], by: [100, 50], ms: 1000 }, { op: 'waitMove', obj: 3 }, { op: 'end' }]), 0, images({ 1: [10, 10] }), 0);
     p.update(0);                                                               // the move starts in the frame that runs it
     expect(p.update(500).backdrop[0]).toMatchObject({ dx: 50, dy: 25 });
     expect(p.update(500).done).toBe(false);
     const f = p.update(1000);
     expect(f.backdrop[0]).toMatchObject({ dx: 100, dy: 50 });
     expect(f.done).toBe(true);
+  });
+  it('a move without from is relative to where the object is (FUN_0041a2b0 with slot −1)', () => {
+    const p = new VisualPlayer();
+    p.start(scene([{ op: 'show', obj: 3, slot: 1, sx: 0, sy: 0, w: 10, h: 10, dx: 10, dy: 20 }, { op: 'move', obj: 3, by: [40, -10], ms: 1000 }, { op: 'waitMove', obj: 3 }, { op: 'end' }]), 0, images({ 1: [10, 10] }), 0);
+    p.update(0);
+    expect(p.update(500).backdrop[0]).toMatchObject({ dx: 30, dy: 15 });
+    expect(p.update(1000).backdrop[0]).toMatchObject({ dx: 50, dy: 10 });
+  });
+  it('on an image larger than the screen a move pans the source window; a window past the edge leaves a gap', () => {
+    const p = new VisualPlayer();
+    p.start(scene([{ op: 'show', obj: 0, slot: 0, sx: 1160, sy: 400, w: 640, h: 480, dx: 0, dy: 0 }, { op: 'move', obj: 0, from: [1160, 400], by: [-1160, -400], ms: 1000 }, { op: 'waitMove', obj: 0 }, { op: 'move', obj: 0, by: [-100, 0], ms: 100 }, { op: 'waitMove', obj: 0 }, { op: 'end' }]), 0, images({ 0: [1800, 899] }), 0);
+    expect(p.update(0).backdrop[0]).toMatchObject({ sx: 1160, sy: 400, w: 640, h: 480, dx: 0, dy: 0 });
+    expect(p.update(500).backdrop[0]).toMatchObject({ sx: 580, sy: 200, dx: 0, dy: 0 });
+    expect(p.update(1000).backdrop[0]).toMatchObject({ sx: 0, sy: 0 });
+    p.update(1000);
+    expect(p.update(1100).backdrop[0]).toMatchObject({ sx: 0, w: 540, dx: 100 });                   // window at −100: the image sits 100 px to the right
+  });
+  it('a deadline ends the part early with its outro, and the next part starts from a clean slate', () => {
+    const p = new VisualPlayer();
+    p.start(scene(
+      [{ op: 'deadline', ms: 500, outro: [{ op: 'fade', dir: 'out', steps: 0 }] }, { op: 'show', obj: 0, slot: 0, sx: 0, sy: 0, w: 10, h: 10, dx: 0, dy: 0 }, { op: 'wait', ms: 5000 }],
+      [{ op: 'wait', ms: 100 }, { op: 'end' }],
+    ), 0, images({ 0: [10, 10] }), 0);
+    expect(p.update(400).backdrop).toHaveLength(1);
+    const f = p.update(500);
+    expect(f.done).toBe(false);
+    expect(f.backdrop).toEqual([]);                                            // part 1: objects reset
+    expect(f.fade).toEqual({ color: 'black', alpha: 1 });                      // the outro's fade-out stays
+    expect(p.update(600).done).toBe(true);
+  });
+  it('a frame may carry its own position (FUN_0041a970 lists)', () => {
+    const p = new VisualPlayer();
+    p.start(scene([{ op: 'anim', fx: 0, obj: 3, x: 0, y: 0, frames: [{ slot: 1, sx: 0, sy: 0, w: 10, h: 10, ms: 100, x: 160, y: 386 }, { slot: 1, sx: 0, sy: 0, w: 10, h: 10, ms: 100 }], loop: false }, { op: 'effect', fx: 0, on: true }, { op: 'waitEffect', fx: 0 }, { op: 'end' }]), 0, images({ 1: [10, 10] }), 0);
+    expect(p.update(0).backdrop[0]).toMatchObject({ dx: 160, dy: 386 });
+    expect(p.update(150).backdrop[0]).toMatchObject({ dx: 0, dy: 0 });
   });
   it('fade in goes from black to clear in steps × 30 ms', () => {
     const p = new VisualPlayer();
@@ -117,7 +152,7 @@ describe('VisualPlayer', () => {
   });
   it('clip limits a piece and hide removes it', () => {
     const p = new VisualPlayer();
-    p.start(scene([{ op: 'show', obj: 3, slot: 1, sx: 0, sy: 0, w: 640, h: 480, dx: 0, dy: 0 }, { op: 'clip', obj: 3, x: 0, y: 0, w: 320, h: 480 }, { op: 'move', obj: 3, from: [-320, 0], to: [-320, 0], ms: 300 }, { op: 'wait', ms: 10 }, { op: 'hide', obj: 3 }, { op: 'wait', ms: 10 }]), 0, images({ 1: [640, 480] }), 0);
+    p.start(scene([{ op: 'show', obj: 3, slot: 1, sx: 0, sy: 0, w: 640, h: 480, dx: 0, dy: 0 }, { op: 'clip', obj: 3, x: 0, y: 0, w: 320, h: 480 }, { op: 'move', obj: 3, from: [-320, 0], by: [0, 0], ms: 300 }, { op: 'wait', ms: 10 }, { op: 'hide', obj: 3 }, { op: 'wait', ms: 10 }]), 0, images({ 1: [640, 480] }), 0);
     const f = p.update(0);
     expect(f.backdrop[0]).toMatchObject({ dx: 0, dy: 0, sx: 320, sy: 0, w: 320, h: 480 });   // the right half shows in the clip window
     expect(p.update(10).backdrop).toHaveLength(0);

@@ -106,6 +106,12 @@ describe('visual scenes (PLAY_VISUAL)', () => {
     expect(stage.calls).toContainEqual(['playSound', 'tumble']);
     expect(core.mode).toBe('script');
   });
+  it('PLAY_VISUAL 0 starts the opening at part 0 and PLAY_VISUAL 3 at part 3', () => {
+    const stage = new FakeStage();
+    const core = new GameCore(res([prog(0, ['begin', ['PLAY_VISUAL', 3], ['END']])]), stage);
+    core.newGame(); core.frame(0);
+    expect(stage.calls).toContainEqual(['startVisual', 0, 3]);
+  });
   it('an unknown scene number logs and the script continues at once', () => {
     const stage = new FakeStage();
     const core = new GameCore(res([prog(0, ['begin', ['PLAY_VISUAL', 40], ['SOUND', 'tumble'], ['WAIT_CLICK', 0], ['END']])]), stage);
