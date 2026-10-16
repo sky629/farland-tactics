@@ -163,7 +163,7 @@ export class VisualPlayer {
 }
 ```
 
-재생 규칙: 명령은 순서대로 즉시 실행하고, `wait*` 명령은 조건이 참이 될 때까지 그 명령에 머문다(한 `update` 에서 여러 명령 소비 가능). 부가 끝나면 다음 부로; `end` 또는 마지막 명령 뒤 → `done`. `wait` 의 기준은 직전 wait 가 끝난 시각(처음엔 start). 이동은 선형 보간, 끝나면 `to` 에 고정. 페이드: in = alpha 1→0, out = 0→1, `steps×30 ms`, steps 0 = 즉시; 페이드아웃 뒤 alpha 1 유지. 타일: `tiles` 는 효과를 정의만 하고 `effect on` 이 시작; kind 3 = 시작 뒤 `t/ms` 비율만큼의 셀(행 우선)이 보임; kind 4 = 반대로 사라짐; kind 0 = `slots` 를 `ms` 간격으로 순서대로 바꿔 보임(마지막에서 멈춤). `waitEffect` 는 효과 끝까지. `show` 의 조각은 이미지 크기로 클립(원작과 같음). `skip()` → `done`, 이후 `update` 는 빈 backdrop + 같은 done.
+재생 규칙: 명령은 순서대로 즉시 실행하고, `wait*` 명령은 조건이 참이 될 때까지 그 명령에 머문다(한 `update` 에서 여러 명령 소비 가능). 부가 끝나면 다음 부로; `end` 또는 마지막 명령 뒤 → `done`. 시계는 둘: **부 시계**(부 시작과 `resetClock` 에서 0; `wait ms` = 부 시계 ≥ ms — 원작 `DAT_00449688`/`DAT_00449674`, 하위 단계 사이에 리셋되지 않는다 [관찰 FUN_004052a0, FUN_00406a60]) 와 **장면 시계**(`waitUntil ms` — `FUN_0041dbc0`). 오브젝트는 show 조각과 타일 효과를 둘 다 가질 수 있다(장면 1 은 obj 0 에 배경과 효과를 함께 건다). 이동은 선형 보간, 끝나면 `to` 에 고정. 페이드: in = alpha 1→0, out = 0→1, `steps×30 ms`, steps 0 = 즉시; 페이드아웃 뒤 alpha 1 유지. 타일: `tiles` 는 효과를 정의만 하고 `effect on` 이 시작; kind 3 = 시작 뒤 `t/ms` 비율만큼의 셀(행 우선)이 보임; kind 4 = 반대로 사라짐; kind 0 = `slots` 를 `ms` 간격으로 순서대로 바꿔 보임(마지막에서 멈춤). `waitEffect` 는 효과 끝까지. `show` 의 조각은 이미지 크기로 클립(원작과 같음). `skip()` → `done`, 이후 `update` 는 빈 backdrop + 같은 done.
 
 - [ ] **Step 1: 실패하는 테스트**
 
@@ -213,12 +213,12 @@ describe('VisualPlayer', () => {
     expect(f.fade).toBeNull();
     expect(f.done).toBe(true);
   });
-  it('wait counts from the end of the previous wait', () => {
+  it('wait reads the part clock, which resetClock restarts', () => {
     const p = new VisualPlayer();
-    p.start(scene([{ op: 'wait', ms: 100 }, { op: 'wait', ms: 100 }, { op: 'end' }]), 0, images({}), 0);
+    p.start(scene([{ op: 'wait', ms: 100 }, { op: 'wait', ms: 150 }, { op: 'resetClock' }, { op: 'wait', ms: 100 }, { op: 'end' }]), 0, images({}), 0);
+    expect(p.update(149).done).toBe(false);
     expect(p.update(150).done).toBe(false);
-    expect(p.update(199).done).toBe(false);
-    expect(p.update(200).done).toBe(true);
+    expect(p.update(250).done).toBe(true);
   });
   it('waitUntil uses the scene clock', () => {
     const p = new VisualPlayer();
@@ -353,13 +353,13 @@ import type { SceneDef } from '../timeline';
 export const scene01: SceneDef = { id: 1, parts: [[
   { op: 'order', ids: [0, 3] },
   { op: 'show', obj: 0, slot: 0, sx: 0, sy: 0, w: 640, h: 480, dx: 0, dy: 0 },
-  { op: 'tiles', obj: 3, kind: 3, x: 336, y: 48, cw: 144, ch: 176, slots: [1], ms: 100 * 1 },
+  { op: 'tiles', obj: 0, kind: 3, x: 336, y: 48, cw: 144, ch: 176, slots: [1], ms: 100 * cells },
   { op: 'fade', dir: 'in', steps: 8 }, { op: 'waitFade' }, { op: 'wait', ms: 3000 },
-  { op: 'effect', obj: 3, on: true }, { op: 'waitEffect', obj: 3 }, { op: 'wait', ms: 6000 },
-  { op: 'fade', dir: 'out', steps: 8 }, { op: 'waitFade' }, { op: 'end' },
+  { op: 'effect', obj: 0, on: true }, { op: 'waitEffect', obj: 0 }, { op: 'waitUntil', ms: 6000 },
+  { op: 'end' },
 ]] };
 ```
-(원작은 효과를 obj 0 에 걸지만 obj 0 은 배경 전체 이미지이므로, 타일 효과를 별도 오브젝트 3 에 두는 것이 웹 모델의 표현 — 머리말에 [추정] 로 적는다.) 나머지 장면도 같은 식.
+(obj 0 은 배경 전체 이미지와 타일 효과를 함께 가진다 — 원작 그대로. `FUN_00402070(0)` 뒤의 화면 전환은 스크립트의 FADE 가 맡는다.) 나머지 장면도 같은 식.
 
 - [ ] **Step 4: GREEN** — 코퍼스 테스트 PASS; `npm run check`.
 - [ ] **Step 5: 커밋** — `git add web/src/visual/scenes web/test/visualScenes.test.ts && git commit -m "feat(web): visual scenes 1, 3, 4, 6, 7, 9, 10, 11 transcribed"`
