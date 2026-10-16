@@ -20,6 +20,9 @@
   #error { color: #ff6b6b; }
   #result { font-size: 16px; font-weight: 600; }
   #battleRow { display: none; }
+  #audio label { display: inline-flex; align-items: center; gap: 4px; }
+  #audio input[type=range] { width: 70px; }
+  #audioNote { color: #d8c9a0; }
   /* title layer */
   #title { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 12px; padding-bottom: 8%; background: #000 url(assets/bmp/title.png) center / contain no-repeat; }
   #title[hidden] { display: none; }
@@ -71,6 +74,12 @@
   <div id="items" hidden></div>
   <div id="unit" class="mono"></div>
   <div id="inventory" class="mono"></div>
+  <div id="audio" class="row">
+    <label>음악 <input id="volMusic" type="range" min="0" max="100" value="80"></label>
+    <label>효과음 <input id="volSound" type="range" min="0" max="100" value="80"></label>
+    <label><input id="mute" type="checkbox"> 음소거</label>
+  </div>
+  <div id="audioNote" class="mono" hidden></div>
   <div>대사: 클릭/Enter 진행 · 마을: 시설 클릭 · 전투: 셀 클릭, 오른쪽 클릭·Esc 취소, 방향키/드래그 스크롤, Shift 투시</div>
   <div id="result"></div>
   <div id="log" class="mono"></div>

@@ -234,6 +234,8 @@ export class BrowserStage implements Stage {
     if (this.audio) { this.audio.music.volume = music; this.audio.sounds.volume = sound; }
   }
   get musicReady(): boolean { return this.audio?.synth.ready ?? false; }
+  /** true once unlockAudio has finished (so the page can show the soundfont notice exactly once). */
+  get audioTried(): boolean { return this.audio !== null; }
   get currentMusic(): number { return this.audio?.music.current ?? this.pendingMusic ?? -1; }
   playSound(name: string): void { this.audio?.sounds.play(name); }
   playMusic(n: number): void { if (this.audio) this.audio.music.play(n); else this.pendingMusic = n; }

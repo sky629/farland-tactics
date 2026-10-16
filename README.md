@@ -10,7 +10,7 @@
 | 2 전투 1판 | 유닛·이동·공격·마법·적 AI·승패 (33개 전투 선택) | 완료 |
 | 3 아이템·소지품 | 전투 중 아이템 사용, 보물 습득, 파티 소지품·장비 가방 | 완료 (상점·장비 화면은 4에서) |
 | 4 스크립트 VM | 이벤트 스크립트 실행 — 오프닝·대화·마을·상점·전투 훅 (`play.html`) | 완료 (비주얼 씬·세이브·소리는 5에서) |
-| 5 세이브·소리·비주얼 씬 | 원작 세이브 호환(32슬롯·내보내기/가져오기·자동 저장), MIDI/WAV, 비주얼 씬 | 진행 중 — 세이브(계획 A) 완료, 소리·비주얼 씬 예정 |
+| 5 세이브·소리·비주얼 씬 | 원작 세이브 호환(32슬롯·내보내기/가져오기·자동 저장), 효과음 WAV·음악 MIDI(브라우저 합성), 비주얼 씬 | 진행 중 — 세이브·소리 완료, 비주얼 씬 예정 |
 
 ## 빠른 시작
 
@@ -21,8 +21,9 @@
 python3 -I tools/ft2_unegg.py 파랜드택틱스2.vol1.egg extracted
 mv extracted/FarlandTactics2_Package.vol1 extracted/FarlandTactics2
 
-# 2. 웹 자산 변환 (약 20초)
+# 2. 웹 자산 변환 (약 20초) + 음악용 GM 사운드폰트 (약 14 MB, 1회)
 python3 -I tools/ft2_export.py extracted/FarlandTactics2 web/public/assets
+python3 -I tools/ft2_soundfont.py web/public/assets
 
 # 3. 뷰어 실행
 cd web && npm install && npm run dev      # 게임 http://localhost:5173/play.html · 전투 테스트 /game.html · 뷰어 /

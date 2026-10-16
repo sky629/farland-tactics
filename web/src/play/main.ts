@@ -46,10 +46,25 @@ function resize(): void {
 }
 
 let lastFrameError = '';
+/** Volume controls: 0..100 sliders and a mute box, remembered per browser. */
+function bindAudioControls(): void {
+  const music = $<HTMLInputElement>('volMusic'), sound = $<HTMLInputElement>('volSound'), mute = $<HTMLInputElement>('mute');
+  try { const saved = JSON.parse(localStorage.getItem('ft2.audio') ?? 'null') as { music?: number; sound?: number; mute?: boolean } | null; if (saved) { music.value = String(saved.music ?? 80); sound.value = String(saved.sound ?? 80); mute.checked = saved.mute ?? false; } } catch { /* storage unavailable */ }
+  const apply = () => {
+    const m = mute.checked ? 0 : Number(music.value) / 100, sn = mute.checked ? 0 : Number(sound.value) / 100;
+    stage?.setVolumes(m, sn);
+    try { localStorage.setItem('ft2.audio', JSON.stringify({ music: Number(music.value), sound: Number(sound.value), mute: mute.checked })); } catch { /* storage unavailable */ }
+  };
+  for (const el of [music, sound, mute]) el.addEventListener('input', apply);
+  apply();
+}
+
+let audioNoted = false;
 function frame(now: number): void {
   try {
     if (core && stage && panel) {
       core.frame(now);
+      if (!audioNoted && stage.audioTried) { audioNoted = true; const note = $('audioNote'); note.hidden = stage.musicReady; note.textContent = '음악 없음: 사운드폰트가 없다. python3 -I tools/ft2_soundfont.py web/public/assets 를 실행한 뒤 새로고침.'; }
       stage.cellMode = core.mode === 'battle';
       const b = core.battle;
       stage.draw(now, core.campaign.units, b?.state.phase ?? IDLE);
@@ -106,6 +121,7 @@ async function boot(): Promise<void> {
     }, { wave: new Set(index.wave ?? []), midi: new Set(index.midi ?? []) });
     core = new GameCore(res, stage);
     panel = new Panel(document, { onStart: () => {}, onCommand: (cmd) => core?.dispatch(cmd) }, tables);
+    bindAudioControls();
     $('newGame').addEventListener('click', () => { void stage!.unlockAudio(); $('title').hidden = true; $('error').textContent = ''; core!.newGame(); });
     document.addEventListener('visibilitychange', () => { if (!document.hidden) stage?.resumeAudio(); });
     await refreshSaves();
