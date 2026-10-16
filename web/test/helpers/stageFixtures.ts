@@ -33,5 +33,7 @@ export class FakeStage implements Stage {
   showTown(set: 1 | 2 | 3, extra: boolean, flags: number[]): void { this.rec('showTown', set, extra, [...flags]); }
   hideTown(): void { this.rec('hideTown'); }
   takeClick(): boolean { if (this.clicks > 0) { this.clicks--; return true; } return false; }
+  saves = new Map<number, Uint8Array>();
+  writeSave(slot: number, bytes: Uint8Array): void { this.rec('writeSave', slot, bytes.length); this.saves.set(slot, bytes); }
   log(kind: 'warn' | 'info', text: string): void { this.rec('log', kind, text); }
 }

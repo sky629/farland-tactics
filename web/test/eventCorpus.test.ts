@@ -37,6 +37,9 @@ describe.skipIf(!available)('event corpus', () => {
     }
     expect(missing).toEqual([]);
   });
+  it('every story file has a Restart label (a loaded save continues from it); the debug files 98/99 need none', () => {
+    for (const p of programs.values()) if (p.stage < 98) expect(findLabel(p, 'Restart'), `event${p.stage}`).not.toBeNull();
+  });
   it('every runtime label the game asks for exists where the game looks', () => {
     expect(findLabel(programs.get(0)!, 'begin')).not.toBeNull();
     expect(findLabel(programs.get(0)!, 'GAMEOVER')).not.toBeNull();

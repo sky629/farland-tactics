@@ -28,6 +28,7 @@ export interface StageHooks {
   onTownMenu(): void;                          // town mode: right click → party menu (spec §9)
   onCancel(): void;                            // right click / Escape
   modalContext(): ModalContext;
+  writeSave(slot: number, bytes: Uint8Array): void;
   log(kind: 'warn' | 'info', text: string): void;
 }
 
@@ -199,5 +200,6 @@ export class BrowserStage implements Stage {
     townLayers(set, extra).forEach((name, i) => this.sheet(name, i));          // start loading
   }
   hideTown(): void { this.town = null; this.canvas.style.cursor = 'default'; }
+  writeSave(slot: number, bytes: Uint8Array): void { this.hooks.writeSave(slot, bytes); }
   log(kind: 'warn' | 'info', text: string): void { this.hooks.log(kind, text); }
 }

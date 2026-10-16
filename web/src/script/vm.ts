@@ -171,7 +171,7 @@ export class ScriptVm {
       case 'CAMERA_TILE': this.host.cameraTile(idx(0), idx(1)); return 'next';
       case 'CAMERA_SCROLL': this.host.cameraScroll(idx(0), idx(1), idx(2), idx(3), idx(4)); return 'next';
       // sound (the page stubs these until sub-project 5)
-      case 'MUSIC': this.host.music(i(0) ?? -1); return 'next';
+      case 'MUSIC': { const n = i(0) ?? -1; this.c.bgm = n; this.host.music(n); return 'next'; }   // the current song is saved in the header
       case 'MUSIC_FADE': this.host.musicFade(idx(0), idx(1) !== 0); return 'next';
       case 'SOUND': this.host.sound((str(a[0]) ?? '').toLowerCase()); return 'next';
       case 'PLAY_VISUAL': this.host.playVisual(idx(0)); return 'next';
@@ -195,7 +195,14 @@ export class ScriptVm {
       case 'MESSAGE': { this.c.message = scriptText(str(a[0]) ?? ''); return this.modal('message', this.c.message).done ? 'next' : 'wait'; }
       case 'ASK': { const m = this.modal('ask', str(a[0]) ?? ''); if (!m.done) return 'wait'; this.state.result = m.result !== 0 ? 1 : 0; return 'next'; }
       case 'SHOP': return this.modal('shop', list(a[0])).done ? 'next' : 'wait';
-      case 'SAVE_GAME': { const m = this.modal('save', i(0) ?? -1); if (!m.done) return 'wait'; this.host.save(m.result); return 'next'; }
+      case 'SAVE_GAME': {                                                    // FUN_00423820: a slot ≥ 0 writes at once, < 0 asks (dialog 0x8F)
+        const n = i(0) ?? -1;
+        if (n >= 0) { this.host.save(n); return 'next'; }
+        const m = this.modal('save', n);
+        if (!m.done) return 'wait';
+        if (m.result >= 0) this.host.save(m.result);
+        return 'next';
+      }
       case 'GAME_COMPLETE_QUIT': this.host.quitComplete(); return 'end';
       case 'WRITE_COMPLETE_FLAG': this.host.writeCompleteFlag(); return 'next';
       case 'TOWN': this.c.turn = -1; this.state.restore = 'town'; this.host.enterTown(); return 'end';

@@ -11,6 +11,7 @@ import { GameCore } from '../game/gameCore';
 import { SpriteCache } from '../game/spriteCache';
 import { VIEW_H, VIEW_W } from '../iso/grid';
 import { Renderer } from '../render/renderer';
+import { IdbBackend, MemoryBackend, SaveStore } from '../save/store';
 import type { Resources } from '../script/host';
 import type { Program } from '../script/program';
 import { Dialogue } from '../ui/dialogue';
@@ -29,6 +30,7 @@ let core: GameCore | null = null;
 let stage: BrowserStage | null = null;
 let panel: Panel | null = null;
 let shownEvents: BattleEvent[] | null = null;
+let saves: SaveStore | null = null;
 
 const showError = (e: unknown) => { const msg = e instanceof AssetError || e instanceof DataError ? e.message : e instanceof Error ? `${e.name}: ${e.message}` : String(e); $('error').textContent = msg; console.error(e); };
 const log = (kind: 'warn' | 'info', text: string) => { panel?.log(kind === 'warn' ? `⚠ ${text}` : text); if (kind === 'warn') console.warn(text); else console.info(text); };
@@ -82,6 +84,7 @@ async function boot(): Promise<void> {
     await Promise.all(rosterIds(programs).map(async (n) => { try { rosters.set(n, await data.roster(n)); } catch (e) { showError(e); } }));
     const byStage = new Map(programs.map((p) => [p.stage, p]));
     const res: Resources = { program: (n) => byStage.get(n) ?? null, roster: (n) => rosters.get(n) ?? null, tables, rng: Rng.fromSeed(Date.now() % 1_000_000) };
+    saves = new SaveStore(await IdbBackend.open().catch((e: unknown) => { log('warn', `IndexedDB 를 열 수 없어 세이브는 이 페이지에만 남는다 (${e instanceof Error ? e.message : String(e)})`); return new MemoryBackend(); }));
     const bmpSet = new Set(index.bmp);
     const bitmaps = new BitmapCache('assets', bmpSet, (name) => log('warn', `bitmap ${name} failed to load`));
     const dialogue = new Dialogue(document, $('dialogue'), (spk, letter) => { const name = `face${nn(spk)}${letter}`; return bmpSet.has(name) ? `assets/bmp/${name}.png` : null; });
@@ -92,6 +95,7 @@ async function boot(): Promise<void> {
       onTownMenu: () => dialogue.openParty({ tables, inventory: core!.campaign.inventory, party: core!.campaign.units.slice(0, PARTY_SLOTS) }),
       onCancel: () => core?.dispatch({ type: 'cancel' }),
       modalContext: () => ({ tables, inventory: core!.campaign.inventory, party: core!.campaign.units.slice(0, PARTY_SLOTS) }),
+      writeSave: (slot, bytes) => { void saves?.write(slot, bytes).catch(showError); },
       log,
     });
     core = new GameCore(res, stage);

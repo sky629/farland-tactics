@@ -11,6 +11,7 @@ import { findLabel } from '../script/program';
 import { ScriptVm } from '../script/vm';
 import { townLabel } from '../town/town';
 import { clampCamera } from '../viewer/scale';
+import { decodeSave, encodeSave, SaveError } from '../save/format';
 import { newCampaign, type Campaign } from './campaign';
 
 /** What the game needs from the screen, without the DOM: the field presenter, overlay effects, the map, dialogue and the town picture. */
@@ -23,6 +24,7 @@ export interface Stage {
   bitmap(name: string): CanvasImageSource | null;
   showTown(set: 1 | 2 | 3, extra: boolean, flags: number[]): void; hideTown(): void;
   takeClick(): boolean;
+  writeSave(slot: number, bytes: Uint8Array): void;   // the page stores it (IndexedDB) and refreshes its slot list
   log(kind: 'warn' | 'info', text: string): void;
 }
 
@@ -65,6 +67,28 @@ export class GameCore implements Host {
     this.battle = null; this.result = null; this.prevMode = 'title'; this.pendingBattle = false; this.hooks = [];
     this.stage.presenter.sync(this.campaign);
     if (!this.startScript(0, 'begin')) this.mode = 'ended';
+  }
+
+  /** The campaign as the original save file (file_formats.md §6). */
+  saveBytes(): Uint8Array {
+    if (this.battle) this.campaign.turn = this.battle.state.turn - 1;         // the header counts finished rounds (0 at BATTLE_START); the Battle counts the current one
+    return encodeSave(this.campaign, new Date(), (w) => this.stage.log('warn', w));
+  }
+
+  /** FUN_004239b0 load: replace the campaign, drop battle and screens, run `Restart` (EVENT00 while in town, else the stage file), resume the music. */
+  loadGame(bytes: Uint8Array): boolean {
+    let c: Campaign;
+    try { c = decodeSave(bytes); } catch (e) { this.stage.log('warn', e instanceof SaveError ? e.message : String(e)); return false; }
+    this.campaign = c;
+    this.vm = new ScriptVm(this.res, c, this);
+    this.battle = null; this.result = null; this.hooks = []; this.pendingBattle = false;
+    this.stage.closeAll(); this.stage.hideTown();
+    this.mode = 'title'; this.prevMode = 'title';
+    this.stage.presenter.sync(c);
+    const stage = c.turn < 0 ? 0 : c.stage;
+    if (!this.startScript(stage, 'Restart')) { this.stage.log('warn', `세이브를 이어갈 Restart 라벨이 event${String(stage).padStart(2, '0')} 에 없다`); this.mode = 'title'; return false; }
+    if (c.bgm > 0) this.music(c.bgm);
+    return true;
   }
 
   /** Run a label; remembers where to return when the script ends with nothing else to say. */
@@ -169,6 +193,7 @@ export class GameCore implements Host {
     this.stage.presenter.enqueue(events);
     this.lastEvents = events;
     this.queueHooks(events);
+    if (events.some((e) => e.type === 'roundStart')) this.save(31);          // turn-end autosave (story_flow.md §4)
   }
 
   /** A click on facility `i` of the town screen (FUN_0042b080 WM_COMMAND 0..14). */
@@ -193,6 +218,7 @@ export class GameCore implements Host {
     this.stage.presenter.sync(this.battle.state);
     const first = this.campaign.units.find((u) => u && u.side === 0);
     if (first) this.cameraUnit(first);
+    this.save(30);                                                             // FUN_00423820(30): autosave at battle start
   }
 
   private setCamera(x: number, y: number): void {
@@ -247,7 +273,7 @@ export class GameCore implements Host {
   musicFadeBusy(): boolean { return false; }
   sound(name: string): void { this.stage.log('info', `sound ${name}`); }
   playVisual(n: number): void { this.stage.log('info', `visual scene ${n} skipped`); }
-  save(slot: number): void { this.stage.log('info', `save ${slot} (not yet)`); }
+  save(slot: number): void { if (slot < 0) return; this.stage.writeSave(slot, this.saveBytes()); this.stage.log('info', `save ${String(slot).padStart(2, '0')}`); }
   quitComplete(): void { this.mode = 'ended'; this.stage.log('info', 'game complete'); }
   writeCompleteFlag(): void { this.stage.log('info', 'complete flag'); }
   enterBattle(): void { this.pendingBattle = true; }

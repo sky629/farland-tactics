@@ -17,6 +17,28 @@ describe('ScriptVm: flow and flags', () => {
     expect(vm.state.result).toBe(1);
     expect(host.calls.at(-1)).toEqual(['scriptEnded', 'previous']);
   });
+  it('MUSIC remembers the current song in the campaign (saved in the header)', () => {
+    const { c, vm, host } = setup([prog(0, ['begin', ['MUSIC', 6], ['MUSIC', -1], ['END']])]);
+    vm.run(0, 'begin'); vm.step(0);
+    expect(c.bgm).toBe(-1);
+    expect(host.calls).toContainEqual(['music', 6]);
+    const { c: c2, vm: vm2 } = setup([prog(0, ['begin', ['MUSIC', 6], ['END']])]);
+    vm2.run(0, 'begin'); vm2.step(0);
+    expect(c2.bgm).toBe(6);
+  });
+  it('SAVE_GAME n ≥ 0 saves at once; n < 0 asks for a slot and saves only when one was chosen', () => {
+    const a = setup([prog(0, ['begin', ['SAVE_GAME', 30], ['END']])]);
+    a.vm.run(0, 'begin'); expect(a.vm.step(0)).toBe('ended');
+    expect(a.host.calls).toContainEqual(['save', 30]);
+    expect(a.host.calls.some((x) => x[0] === 'openModal')).toBe(false);
+    const b = setup([prog(0, ['begin', ['SAVE_GAME', -1], ['END']])]);
+    b.host.modal = 5; b.vm.run(0, 'begin'); expect(b.vm.step(0)).toBe('ended');
+    expect(b.host.calls).toContainEqual(['openModal', 'save', -1]);
+    expect(b.host.calls).toContainEqual(['save', 5]);
+    const d = setup([prog(0, ['begin', ['SAVE_GAME', -1], ['END']])]);
+    d.host.modal = -1; d.vm.run(0, 'begin'); expect(d.vm.step(0)).toBe('ended');
+    expect(d.host.calls.some((x) => x[0] === 'save')).toBe(false);
+  });
   it('WAIT_CLICK drops clicks that arrived before it started, so a double click releases one wait, not two', () => {
     const { host, c, vm } = setup([prog(0, ['begin', ['WAIT_CLICK', 0], ['FLAG_SET', 1, 1], ['WAIT_CLICK', 0], ['FLAG_SET', 1, 2], ['END']])]);
     host.clicks = 2;                                                           // banked during the logos
