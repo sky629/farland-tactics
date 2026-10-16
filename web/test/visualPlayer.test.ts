@@ -71,6 +71,19 @@ describe('VisualPlayer', () => {
     expect(f.fade).toEqual({ color: 'black', alpha: 1 });                      // the outro's fade-out stays
     expect(p.update(600).done).toBe(true);
   });
+  it('a part with a deadline and no trailing wait holds its picture until the deadline (the original idles in its last sub-step)', () => {
+    const p = new VisualPlayer();
+    p.start(scene(
+      [{ op: 'deadline', ms: 500, outro: [{ op: 'fade', dir: 'out', steps: 0 }] }, { op: 'show', obj: 0, slot: 0, sx: 0, sy: 0, w: 10, h: 10, dx: 0, dy: 0 }],
+      [{ op: 'end' }],
+    ), 0, images({ 0: [10, 10] }), 0);
+    expect(p.update(0).backdrop).toHaveLength(1);
+    expect(p.part).toBe(0);
+    const f = p.update(400);
+    expect(f.done).toBe(false);
+    expect(f.backdrop).toHaveLength(1);
+    expect(p.update(500).done).toBe(true);
+  });
   it('a frame may carry its own position (FUN_0041a970 lists)', () => {
     const p = new VisualPlayer();
     p.start(scene([{ op: 'anim', fx: 0, obj: 3, x: 0, y: 0, frames: [{ slot: 1, sx: 0, sy: 0, w: 10, h: 10, ms: 100, x: 160, y: 386 }, { slot: 1, sx: 0, sy: 0, w: 10, h: 10, ms: 100 }], loop: false }, { op: 'effect', fx: 0, on: true }, { op: 'waitEffect', fx: 0 }, { op: 'end' }]), 0, images({ 1: [10, 10] }), 0);

@@ -2,6 +2,8 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { scenes } from '../src/visual/scenes';
+import { VisualPlayer } from '../src/visual/player';
+import type { VisualImages } from '../src/visual/timeline';
 import { OPENING_PART_END_MS, dispatch, type Cmd } from '../src/visual/timeline';
 
 const ASSETS = join(__dirname, '../public/assets');
@@ -51,6 +53,53 @@ describe('visual scenes (corpus)', () => {
         }
       }
     }
+  });
+  /** Fake images with the real PNG sizes of the scene's slots: the player's size-based decisions (source pans) stay real. */
+  function sceneImages(sceneId: number): VisualImages {
+    const sizes = new Map<number, [number, number]>();
+    for (const r of list) if (r.scene === sceneId) sizes.set(r.slot, pngSize(r.name));
+    return { get: (slot) => { const s = sizes.get(slot); return s ? { image: {} as CanvasImageSource, w: s[0], h: s[1] } : null; } };
+  }
+  function trace(sceneId: number, untilMs: number, stepMs = 100): { starts: number[]; frames: { t: number; pieces: number; fade: number | null }[]; doneAt: number | null } {
+    const p = new VisualPlayer(); p.start(scenes[sceneId]!, 0, sceneImages(sceneId), 0);
+    const starts = [0]; const frames: { t: number; pieces: number; fade: number | null }[] = []; let doneAt: number | null = null;
+    for (let t = 0; t <= untilMs; t += stepMs) {
+      const f = p.update(t);
+      if (p.part >= starts.length) starts.push(t);
+      frames.push({ t, pieces: f.backdrop.length, fade: f.fade?.alpha ?? null });
+      if (f.done) { doneAt = t; break; }
+    }
+    return { starts, frames, doneAt };
+  }
+  it('the opening parts start when the table says, within the fade of the part before, and the whole movie ends after the last entry', () => {
+    const { starts, doneAt } = trace(0, 200000);
+    expect(starts).toHaveLength(18);
+    for (let k = 1; k < 18; k++) {
+      expect(starts[k]!, `part ${k} start`).toBeGreaterThanOrEqual(OPENING_PART_END_MS[k - 1]!);
+      expect(starts[k]!, `part ${k} start`).toBeLessThanOrEqual(OPENING_PART_END_MS[k - 1]! + 16 * 30 + 200);
+    }
+    expect(doneAt).not.toBeNull();
+    expect(doneAt!).toBeGreaterThan(OPENING_PART_END_MS[16]!);
+  });
+  it('the opening shows a picture in every part (the logo first)', () => {
+    const { frames } = trace(0, 140000, 500);
+    const at = (t: number) => frames.find((f) => f.t >= t)!;
+    expect(at(3000).pieces).toBeGreaterThan(0);                                 // part 0: VOP01
+    expect(at(15000).pieces).toBeGreaterThanOrEqual(4);                         // part 1: four layers
+    expect(at(60000).pieces).toBeGreaterThan(0);                                // part 5
+    expect(at(130000).pieces).toBeGreaterThan(0);                               // part 16 panorama
+  });
+  it('ending 1 keeps a credit picture on screen through the staff roll and ends on the closing pictures', () => {
+    const { frames, doneAt } = trace(12, 210000, 500);
+    const at = (t: number) => frames.find((f) => f.t >= t)!;
+    for (const t of [40000, 80000, 120000, 150000, 175000]) { expect(at(t).pieces, `t ${t}`).toBe(1); expect(at(t).fade ?? 0, `fade at ${t}`).toBeLessThan(1); }
+    expect(at(185000).pieces).toBe(2);
+    expect(doneAt).toBe(200000);
+  });
+  it('ending 2 plays its six parts on the scene clock', () => {
+    const { starts, doneAt } = trace(13, 70000);
+    expect(starts.map((s) => Math.round(s / 1000))).toEqual([0, 10, 23, 29, 45, 53]);
+    expect(doneAt).toBeGreaterThanOrEqual(60000);
   });
   it('every PLAY_VISUAL number the scripts use resolves to a transcribed scene', () => {
     for (const n of SCRIPT_USES) {

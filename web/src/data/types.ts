@@ -28,8 +28,8 @@ export const RACE_FIELDS = ['name', 'exp_value', 'hp', 'hp_up', 'mp', 'mp_up', '
 export const ITEM_FIELDS = ['name', 'price', 'hp_heal', 'mp_heal', 'atk', 'def', 'wis', 'mgr', 'agi', 'elem0', 'elem1', 'elem2', 'range_min', 'range_max', 'slot', 'use_effect', 'weapon_type', 'status_code', 'race_mask'] as const;
 export const MAGIC_FIELDS = ['name', 'learn_level', 'mp_cost', 'elem0', 'elem1', 'elem2', 'range_min', 'range_max', 'effect', 'effect_no', 'target', 'shape', 'learn_mask', 'short'] as const;
 /** One vsllst.dat record (assets/data/visual.json): the bitmap a visual scene slot holds. */
-export interface VisualRecord { scene: number; step: number; slot: number; name: string; pal: number[] }
-export const VISUAL_FIELDS = ['scene', 'step', 'slot', 'name'];
+export interface VisualRecord { scene: number; step: number; slot: number; name: string }
+export const VISUAL_FIELDS = ['scene', 'step', 'slot', 'name'] as const;
 export const ROSTER_FIELDS = ['unit_id', 'race', 'level', 'dir', 'c', 'r', 'status', 'side', 'weapon', 'armor', 'drop_item', 'drop_gold'] as const;
 export const BATTLE_FIELDS = ['event', 'label', 'map', 'roster', 'episode', 'objective', 'heal'] as const;
 

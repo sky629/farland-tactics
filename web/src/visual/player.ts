@@ -24,7 +24,7 @@ export class VisualPlayer {
   onSound?: (name: string) => void;
   private def: SceneDef | null = null;
   private images: VisualImages = { get: () => null };
-  private part = 0;
+  private partIndex = 0;
   private i = 0;
   private list: Cmd[] = [];
   private deadline: { ms: number; outro: Cmd[] } | null = null;
@@ -32,7 +32,7 @@ export class VisualPlayer {
   private sceneStart = 0;
   private partStart = 0;
   private finished = false;
-  private skipped = false;
+  private wasSkipped = false;
   private order: number[] = [];
   private readonly objs = new Map<number, Obj>();
   private readonly moves = new Map<number, Move>();
@@ -41,30 +41,34 @@ export class VisualPlayer {
   private fadeLevel = 0;                                                       // 0 clear … 1 black when no fade runs
 
   get playing(): boolean { return this.def !== null && !this.finished; }
+  /** Index of the part being played (tests, debugging). */
+  get part(): number { return this.partIndex; }
+  /** true when the scene ended by skip() rather than by itself. */
+  get skipped(): boolean { return this.wasSkipped; }
 
   start(def: SceneDef, part: number, images: VisualImages, now: number): void {
     this.def = def; this.images = images;
     this.sceneStart = now;
-    this.finished = part >= def.parts.length; this.skipped = false;
+    this.finished = part >= def.parts.length; this.wasSkipped = false;
     this.fadeState = null; this.fadeLevel = 0;
     this.beginPart(part, now);
   }
 
   /** Every part's setup starts with FUN_00402190 + FUN_00401880: part clock, objects, effects and moves start over. */
   private beginPart(part: number, now: number): void {
-    this.part = part; this.i = 0; this.partStart = now;
+    this.partIndex = part; this.i = 0; this.partStart = now;
     this.list = this.def?.parts[part] ?? []; this.deadline = null; this.inOutro = false;
     this.order = Array.from({ length: OBJECTS }, (_, k) => k);
     this.objs.clear(); this.moves.clear(); this.effects.clear();
   }
 
   /** A click or Enter: the scene ends now (the original's cancel flag DAT_0044a63c). */
-  skip(): void { if (this.def && !this.finished) { this.finished = true; this.skipped = true; } }
+  skip(): void { if (this.def && !this.finished) { this.finished = true; this.wasSkipped = true; } }
 
   update(now: number): VisualFrame {
     if (!this.def) return { backdrop: [], fade: null, done: true };
     if (!this.finished) this.run(now);
-    if (this.skipped) return { backdrop: [], fade: null, done: true };
+    if (this.wasSkipped) return { backdrop: [], fade: null, done: true };
     return { backdrop: this.compose(now), fade: this.fadeAt(now), done: this.finished };
   }
 
@@ -74,8 +78,9 @@ export class VisualPlayer {
     while (!this.finished) {
       if (this.deadline && !this.inOutro && now - this.sceneStart >= this.deadline.ms) { this.inOutro = true; this.list = this.deadline.outro; this.i = 0; }
       if (this.i >= this.list.length) {
-        if (this.part + 1 >= def.parts.length) { this.finished = true; break; }
-        this.beginPart(this.part + 1, now);
+        if (this.deadline && !this.inOutro) return;                            // the original idles in its last sub-step until FUN_00402050 fires
+        if (this.partIndex + 1 >= def.parts.length) { this.finished = true; break; }
+        this.beginPart(this.partIndex + 1, now);
         continue;
       }
       if (!this.exec(this.list[this.i]!, now)) return;

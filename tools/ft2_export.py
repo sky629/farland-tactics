@@ -333,7 +333,7 @@ def main(argv: list[str]) -> int:
     audio = export_audio(game, out, report)
     visual = export_visual(game, out, report)
     out.mkdir(parents=True, exist_ok=True)
-    (out / 'index.json').write_text(json.dumps(dict(format=FORMAT, maps=maps, sprites=sprites, data=True, events=events, bmp=bmps, wave=audio['wave'], midi=audio['midi'], visual=visual > 0)), encoding='utf-8')
+    (out / 'index.json').write_text(json.dumps(dict(format=FORMAT, maps=maps, sprites=sprites, data=True, events=events, bmp=bmps, wave=audio['wave'], midi=audio['midi'])), encoding='utf-8')
     pngs = sum(1 for d in ('map', 'sprite', 'bmp') for _ in (out / d).glob('*.png'))
     print(f'maps {len(maps)}, sprites {len(sprites)}, events {len(events)}, bmp {len(bmps)}, pngs {pngs}, wave {len(audio["wave"])}, midi {len(audio["midi"])}, visual {visual}, warnings {len(report.warnings)}, errors {len(report.errors)}')
     print(f'tables race {counts["race"]}, item {counts["item"]}, magic {counts["magic"]}, rosters {counts["rosters"]}, battles {counts["battles"]}')

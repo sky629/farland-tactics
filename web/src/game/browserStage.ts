@@ -23,6 +23,7 @@ import type { Stage } from './gameCore';
 import type { VisualRecord } from '../data/types';
 import { VisualPlayer } from '../visual/player';
 import type { SceneDef, VisualImage } from '../visual/timeline';
+import type { VisualFrame } from '../visual/player';
 import type { SpriteCache } from './spriteCache';
 
 type Phase = { kind: 'player'; sel: Selection } | { kind: 'enemy'; queue: number[] } | { kind: 'end'; result: 'victory' | 'defeat' };
@@ -87,6 +88,7 @@ export class BrowserStage implements Stage {
     if (this.player.playing) {                                                 // the scene owns the screen; the script's fade state waits underneath
       const f = this.player.update(now);
       this.renderer.draw({ map: null, sprites: [], camera: { x: 0, y: 0 }, overlay: OVERLAY_OFF, seeThrough: false, fx: { fade: f.fade, tint: null, image: null, shake: null }, backdrop: f.backdrop });
+      if (f.done) this.endVisual(f, now);
       return;
     }
     if (this.town) { this.renderer.draw({ map: null, sprites: [], camera: { x: 0, y: 0 }, overlay: OVERLAY_OFF, seeThrough: false, fx, backdrop: this.townBackdrop(now) }); return; }
@@ -256,8 +258,26 @@ export class BrowserStage implements Stage {
 
   // ---- Stage: visual scenes ----
   startVisual(def: SceneDef, part: number): void {
+    if (!this.visualNames.has(def.id)) { this.hooks.log('warn', `비주얼 씬 ${def.id}: 장면 목록(visual.json)에 그림이 없다 — 변환기를 다시 돌린다`); return; }   // without it the scene would be minutes of black
     this.visualScene = def.id;
+    this.visualImages.clear();                                                 // the original frees each part's images (FUN_00401000)
     this.player.start(def, part, { get: (slot, key) => this.visualImage(slot, key) }, this.lastNow);
+  }
+  /**
+   * The scene is over: its last picture stays as the script's SHOW_IMAGE picture until HIDE_IMAGE (every PLAY_VISUAL is
+   * followed by one), and the script's fade matches the scene's end — black after a fade-out or a skip, clear otherwise.
+   */
+  private endVisual(f: VisualFrame, now: number): void {
+    const black = this.player.skipped || (f.fade?.alpha ?? 0) >= 1;
+    if (!black && f.backdrop.length > 0) {
+      const snap = document.createElement('canvas'); snap.width = VIEW_W; snap.height = VIEW_H;
+      const g = snap.getContext('2d')!;
+      for (const b of f.backdrop) g.drawImage(b.image, b.sx, b.sy, b.w, b.h, b.dx, b.dy, b.w, b.h);
+      this.effects.showImage(snap, 0, now);                                   // also ends the fade the script left before the scene
+    } else {
+      this.effects.hideImage();
+      this.effects.fade('out', 0, now);
+    }
   }
   visualDone(): boolean { return !this.player.playing; }
   get visualPlaying(): boolean { return this.player.playing; }
