@@ -33,6 +33,25 @@ export function checkEnd(state: BattleState): 'victory' | 'defeat' | null {
   return enemies.length === 0 ? 'victory' : null;
 }
 
+/** A fallen non-party unit turns into a drop object (item → race 8, gold → race 9) or leaves its slot (FUN_0043a2e0 case 9). */
+export function removeFallen(state: BattleState, t: Unit, events: BattleEvent[]): void {
+  if (t.slot < PARTY_SLOTS) return;
+  if (t.dropItem !== 0 || t.dropGold !== 0) {
+    t.side = 7; t.race = t.dropItem !== 0 ? 8 : 9; t.status = 0; t.id = 8;
+  } else {
+    state.units[t.slot] = null;
+    events.push({ type: 'removed', slot: t.slot });
+  }
+}
+
+/** Ends the battle when checkEnd says so; returns the `end` event (empty while the battle goes on). */
+export function endIfOver(state: BattleState): BattleEvent[] {
+  const end = checkEnd(state);
+  if (!end) return [];
+  state.phase = { kind: 'end', result: end };
+  return [{ type: 'end', result: end }];
+}
+
 /** FUN_0043a2e0 cases 4, 7, 8, 9, 10 after one action: deaths → EXP (before removal) → drops/removal → level-ups → end check. */
 export function applyOutcome(state: BattleState, actor: Unit, hits: Hit[], tables: Tables): BattleEvent[] {
   const events: BattleEvent[] = [];
@@ -49,15 +68,7 @@ export function applyOutcome(state: BattleState, actor: Unit, hits: Hit[], table
       if (t) total += expGain(actor, t, h, tables, k);
     }
   }
-  for (const t of dead) {
-    if (t.slot < PARTY_SLOTS) continue;
-    if (t.dropItem !== 0 || t.dropGold !== 0) {
-      t.side = 7; t.race = t.dropItem !== 0 ? 8 : 9; t.status = 0; t.id = 8;
-    } else {
-      state.units[t.slot] = null;
-      events.push({ type: 'removed', slot: t.slot });
-    }
-  }
+  for (const t of dead) removeFallen(state, t, events);
   if (actor.side === 0) {
     actor.exp = Math.min(actor.exp + total, EXP_CAP);
     events.push({ type: 'exp', slot: actor.slot, gain: total });
@@ -68,8 +79,7 @@ export function applyOutcome(state: BattleState, actor: Unit, hits: Hit[], table
       events.push({ type: 'levelUp', slot: actor.slot, level: actor.level, learned });
     }
   }
-  const end = checkEnd(state);
-  if (end) { state.phase = { kind: 'end', result: end }; events.push({ type: 'end', result: end }); }
+  events.push(...endIfOver(state));
   return events;
 }
 
@@ -84,7 +94,7 @@ export function statusTick(state: BattleState, pick: (u: Unit) => boolean): Batt
       const dmg = Math.min(trunc(u.hpMax / 10) + 1, u.hp);
       u.hp -= dmg;
       events.push({ type: 'statusTick', slot: u.slot, status: 2, value: dmg, cured: false });
-      if (u.hp === 0) { u.status = 1; events.push({ type: 'died', slot: u.slot }); }
+      if (u.hp === 0) { u.status = 1; events.push({ type: 'died', slot: u.slot }); removeFallen(state, u, events); }
       continue;
     }
     const dec = DECAY[u.status];

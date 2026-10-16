@@ -56,11 +56,12 @@ describe('Presenter', () => {
     const mid = p.scene(mapModel(s), s).sprites.find((sp) => sp.layer === 4 && sp.model === heroB)!;   // walking → the "b" file
     expect(mid.c).toBe(2);
     expect(mid.offset!.x).toBe(16);                            // half a cell east = 32 px / 2
+    expect(p.focus).toEqual([3, 4]);                           // the camera follows the step in progress
     p.update(STEP_MS * 3 + 1);
     p.update(STEP_MS * 3 + 2);
     expect(p.busy).toBe(false);
     expect(p.scene(mapModel(s), s).sprites.find((sp) => sp.layer === 4 && sp.model === hero)).toMatchObject({ c: 5, r: 4 });
-    expect(p.focus).toEqual([5, 4]);
+    expect(p.focus).toBeNull();                                // released once the queue drains, so the player can scroll away
   });
   it('body sprites are mirrored for east/west facing', () => {
     const s = state();

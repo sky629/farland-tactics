@@ -16,6 +16,52 @@ const roster = [rec({ unit_id: 1, level: 3, c: 2, r: 4, weapon: 0, armor: 0 }), 
 const start = (seed = 1, map = flatMap(9), ros = roster) => Battle.start(entry, map, roster1, ros, t, seed);
 const types = (events: BattleEvent[]) => events.map((e) => e.type);
 
+describe('deaths outside an action (status ticks)', () => {
+  it('enemies killed by poison at the start of their phase are removed or become drops, and the battle ends', () => {
+    const b = start();
+    const e1 = b.state.units[10]!, e2 = b.state.units[11]!;
+    e1.status = 2; e1.hp = 1; e2.status = 2; e2.hp = 1; e2.dropGold = 5;
+    const ev = b.reduce({ type: 'endTurn' });
+    expect(b.state.units[10]).toBeNull();
+    expect(b.state.units[11]).toMatchObject({ side: 7, race: 9, id: 8 });
+    expect(b.state.phase).toEqual({ kind: 'end', result: 'victory' });
+    expect(types(ev).slice(-1)).toEqual(['end']);
+    expect(types(ev).filter((t) => t === 'died')).toHaveLength(2);
+  });
+  it('a poisoned last party member who dies at the end of the enemy phase loses the battle', () => {
+    const b = start(1, flatMap(9), roster.filter((r) => r.unit_id !== 2));
+    const hero = b.state.units[0]!; hero.status = 2; hero.hp = 1;
+    for (const s of [10, 11]) { b.state.units[s]!.status = 3; b.state.units[s]!.statusCounter = 999; }   // asleep, never cured
+    const ev = b.reduce({ type: 'endTurn' });
+    expect(hero.status).toBe(1);
+    expect(b.state.phase).toEqual({ kind: 'end', result: 'defeat' });
+    expect(types(ev).slice(-1)).toEqual(['end']);
+    expect(types(ev)).not.toContain('roundStart');
+  });
+});
+
+describe('map-wide spells and menu ranges', () => {
+  it('a shape-4 spell is confirmed on the caster\'s cell and hits every enemy on the map', () => {
+    const b = start();
+    const hero = b.state.units[0]!; hero.spells = [6]; hero.mp = 20;
+    b.reduce({ type: 'select', slot: 0 });
+    expect(b.reduce({ type: 'beginTarget', action: 6 })).toEqual([]);
+    const ev = b.reduce({ type: 'act', c: hero.c, r: hero.r });
+    const action = ev.find((e) => e.type === 'action');
+    expect(action && action.type === 'action' ? action.hits.map((h) => h.target).sort() : null).toEqual([10, 11]);
+  });
+  it('cancelling a target selection restores the move range of the menu', () => {
+    const b = start();
+    const hero = b.state.units[0]!; hero.spells = [1]; hero.mp = 20;
+    b.reduce({ type: 'select', slot: 0 });
+    expect(b.reduce({ type: 'beginTarget', action: 1 })).toEqual([]);
+    b.reduce({ type: 'cancel' });
+    const sel = b.state.phase.kind === 'player' ? b.state.phase.sel : null;
+    expect(sel?.mode).toBe('menu');
+    expect(sel && sel.mode === 'menu' ? sel.range.moveAt(hero.c + 1, hero.r) : 0).toBeGreaterThan(0);
+  });
+});
+
 describe('party rules (spec §11)', () => {
   it('createParty builds slots 0.. from roster 1 with equipment; applyRoster keeps stats and moves the party', () => {
     const units = createParty(roster1, t, fixedRng([0]));

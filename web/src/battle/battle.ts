@@ -3,8 +3,8 @@ import { DataError } from '../data/loader';
 import type { BattleEntry, ItemData, RosterUnit, Tables } from '../data/types';
 import { chooseAction } from './ai';
 import { BattleGrid, dirTo, dist, hostile, incap, liveUnits, stepCell, type Dir } from './grid';
-import { canStop, computeMoveRange, markTargets, pathTo, RangeTable } from './moveRange';
-import { applyOutcome, roundStart, statusTick } from './outcome';
+import { canStop, computeMoveRange, hasMoveTarget, markTargets, pathTo, RangeTable } from './moveRange';
+import { applyOutcome, endIfOver, roundStart, statusTick } from './outcome';
 import { resolveAction } from './resolve';
 import { Rng, type RandomSource } from './rng';
 import { targetsOf } from './targets';
@@ -171,7 +171,8 @@ export class Battle {
     if (sel.mode === 'idle') return reject('nothing to cancel');
     if (sel.mode === 'face') return reject('choose a direction');
     if (sel.mode === 'menu') { this.setSel({ mode: 'idle' }); return [{ type: 'deselected' }]; }
-    this.setSel({ mode: 'menu', slot: sel.slot, range: sel.range });
+    const u = this.unitOf(sel)!;
+    this.setSel({ mode: 'menu', slot: sel.slot, range: sel.mode === 'move' ? sel.range : this.rangeFor(u) });   // a target range has no move points
     return [];
   }
 
@@ -180,9 +181,7 @@ export class Battle {
     if (!u || sel.mode !== 'menu') return reject(u ? 'not in menu' : 'no unit selected');
     if (u.moved) return reject('already moved');
     const range = this.rangeFor(u);
-    let any = false;
-    for (const cell of range.cells()) if ((cell.c !== u.c || cell.r !== u.r) && canStop(range, this.state.units, u, cell.c, cell.r)) { any = true; break; }
-    if (!any) return reject('nowhere to move');
+    if (!hasMoveTarget(range, this.state.units, u)) return reject('nowhere to move');
     this.setSel({ mode: 'move', slot: u.slot, range });
     return [];
   }
@@ -266,12 +265,16 @@ export class Battle {
     const queue = liveUnits(s.units).filter((u) => u.slot >= PARTY_SLOTS && u.side !== 1 && u.side !== 7 && u.hp > 0 && !incap(u.status) && party.some((p) => hostile(u, p))).map((u) => u.slot);
     s.phase = { kind: 'enemy', queue };
     const events: BattleEvent[] = [{ type: 'phase', kind: 'enemy' }, ...statusTick(s, (u) => u.slot >= PARTY_SLOTS)];
+    const end = endIfOver(s);                                                   // poison can kill the last enemy here
+    if (end.length > 0) return [...events, ...end];
     return queue.length === 0 ? [...events, ...this.endEnemyPhase()] : events;
   }
 
   private endEnemyPhase(): BattleEvent[] {
     const s = this.state;
     const events = statusTick(s, (u) => u.slot < PARTY_SLOTS);
+    const end = endIfOver(s);                                                   // …or the last party member
+    if (end.length > 0) return [...events, ...end];
     events.push(...roundStart(s));
     s.phase = { kind: 'player', sel: { mode: 'idle' } };
     events.push({ type: 'phase', kind: 'player' });

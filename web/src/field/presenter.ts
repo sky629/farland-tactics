@@ -134,6 +134,7 @@ export class Presenter {
       this.queue.shift();
       cursor = end;
     }
+    this.focus = null;                       // nothing is playing: the player may scroll freely
   }
 
   private begin(s: Step): void {

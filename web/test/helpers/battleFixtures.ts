@@ -18,7 +18,7 @@ export const MAGIC = (over: Partial<MagicData> = {}): MagicData => ({
   effect_no: 1, target: 0, shape: 0, learn_mask: 1, short: '', ...over,
 });
 
-/** race 0 mage-like, 1 slime-like (strong def, low hp), 2 flying. item 0 none, 1 sword, 2 bow, 3 pike (line), 4 halberd (T), 5 armor, 6 poison dagger. magic 0 none, 1 burst (shape 1), 2 heal (shape 1, allies), 3 line (shape 2), 4 self-area (shape 3), 5 sleep (status). */
+/** race 0 mage-like, 1 slime-like (strong def, low hp), 2 flying. item 0 none, 1 sword, 2 bow, 3 pike (line), 4 halberd (T), 5 armor, 6 poison dagger. magic 0 none, 1 burst (shape 1), 2 heal (shape 1, allies), 3 line (shape 2), 4 self-area (shape 3), 5 sleep (status), 6 quake (shape 4, map-wide). */
 export function tables(over: Partial<Tables> = {}): Tables {
   return {
     race: [RACE(), RACE({ name: 'slime', hp: 12, hp_up: 4, str: 20, def: 22, agi: 12, size: 3 }), RACE({ name: 'bird', cost_land0: 4 })],
@@ -28,7 +28,7 @@ export function tables(over: Partial<Tables> = {}): Tables {
     magic: [MAGIC({ name: 'none', mp_cost: 0 }), MAGIC({ name: 'burst', shape: 1, range_min: 2, range_max: 6 }),
       MAGIC({ name: 'heal', shape: 1, target: 1, elem0: 0, elem2: 1, range_min: 0, range_max: 6, learn_mask: 2 }),
       MAGIC({ name: 'line', shape: 2, range_min: 1, range_max: 4 }), MAGIC({ name: 'area', shape: 3, range_min: 1, range_max: 2 }),
-      MAGIC({ name: 'sleep', shape: 0, elem0: 0, elem1: 3, learn_level: 2 })],
+      MAGIC({ name: 'sleep', shape: 0, elem0: 0, elem1: 3, learn_level: 2 }), MAGIC({ name: 'quake', shape: 4, range_min: 0, range_max: 0, learn_mask: 0 })],
     ...over,
   };
 }

@@ -101,6 +101,9 @@ export function markTargets(t: RangeTable, grid: BattleGrid, units: (Unit | null
         if (cell && cell.blocked === 0 && d >= m.range_min && d <= m.range_max) { t.setKind(c, r, kind); n++; }
       }
     }
+  } else if (m.shape === 4) {
+    t.setKind(unit.c, unit.r, kind);          // map-wide: the original shows no range (field_mode.md §3); the caster's cell confirms the spell
+    n++;
   } else if (m.shape === 2 || m.shape === 5) {
     for (let d = 0; d < 4; d++) {
       let c = unit.c, r = unit.r, prev = grid.cell(c, r);
@@ -125,6 +128,12 @@ export function canStop(t: RangeTable, units: (Unit | null)[], unit: Unit, c: nu
   if (t.moveAt(c, r) === 0) return false;
   const v = unitAt(units, c, r);
   return !v || v === unit || (v.side === 7 && v.id === 8);
+}
+
+/** True when the range holds at least one other cell the unit may stop on. */
+export function hasMoveTarget(t: RangeTable, units: (Unit | null)[], unit: Unit): boolean {
+  for (const cell of t.cells()) if ((cell.c !== unit.c || cell.r !== unit.r) && canStop(t, units, unit, cell.c, cell.r)) return true;
+  return false;
 }
 
 /** FUN_00438960: from dest back to the unit, always stepping to a neighbour with more move points (ties keep the previous direction). */

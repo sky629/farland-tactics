@@ -1,3 +1,4 @@
+import { hasMoveTarget } from '../battle/moveRange';
 import type { Hit } from '../battle/resolve';
 import type { BattleEvent, BattleState, Command } from '../battle/types';
 import type { Unit } from '../battle/unit';
@@ -13,7 +14,7 @@ export function menuEnabled(state: BattleState): MenuEnabled {
   if (sel.mode !== 'menu') return { ...none, endTurn: true };
   const u = state.units[sel.slot];
   if (!u) return { ...none, endTurn: true };
-  return { move: !u.moved, attack: !u.acted, magic: !u.acted && u.spells.length > 0 && u.status !== 6, wait: true, endTurn: true };
+  return { move: !u.moved && hasMoveTarget(sel.range, state.units, u), attack: !u.acted, magic: !u.acted && u.spells.length > 0 && u.status !== 6, wait: true, endTurn: true };
 }
 
 /** event_script_format.md §6 speaker names for the named characters (id 1..29). */
@@ -57,6 +58,8 @@ export class Panel {
   private readonly el: Record<PanelId, HTMLElement>;
   private entries: BattleEntry[] = [];
   private lines: string[] = [];
+  private spellsKey = '';
+  private spellButtons: { magic: number; button: HTMLButtonElement }[] = [];
 
   constructor(private readonly doc: Document, private readonly handlers: PanelHandlers, private readonly tables: Tables) {
     const ids: PanelId[] = ['battle', 'seed', 'start', 'turn', 'unit', 'move', 'attack', 'magic', 'wait', 'endTurn', 'spells', 'log', 'result', 'error', 'objective'];
@@ -95,16 +98,21 @@ export class Panel {
     this.renderUnit(hoverUnit ?? selected);
   }
 
+  /** Buttons are rebuilt only when the selected unit's spell list changes: update() runs every frame, and a click needs the same node under the mouse. */
   private renderSpells(u: Unit | null): void {
-    if (!u) { this.el.spells.replaceChildren(); return; }
-    this.el.spells.replaceChildren(...u.spells.map((m) => {
-      const magic = this.tables.magic[m]!;
-      const b = this.doc.createElement('button');
-      b.textContent = `${magic.name} (MP ${Math.abs(magic.mp_cost)}, 사거리 ${magic.range_min}-${magic.range_max})`;
-      b.disabled = u.mp < Math.abs(magic.mp_cost);
-      b.addEventListener('click', () => { this.el.spells.hidden = true; this.handlers.onCommand({ type: 'beginTarget', action: m }); });
-      return b;
-    }));
+    const key = u ? `${u.slot}:${u.spells.join(',')}` : '';
+    if (key !== this.spellsKey) {
+      this.spellsKey = key;
+      this.spellButtons = (u?.spells ?? []).map((m) => {
+        const magic = this.tables.magic[m]!;
+        const button = this.doc.createElement('button');
+        button.textContent = `${magic.name} (MP ${Math.abs(magic.mp_cost)}, 사거리 ${magic.range_min}-${magic.range_max})`;
+        button.addEventListener('click', () => { this.el.spells.hidden = true; this.handlers.onCommand({ type: 'beginTarget', action: m }); });
+        return { magic: m, button };
+      });
+      this.el.spells.replaceChildren(...this.spellButtons.map((x) => x.button));
+    }
+    if (u) for (const { magic, button } of this.spellButtons) button.disabled = u.mp < Math.abs(this.tables.magic[magic]!.mp_cost);
   }
 
   private renderUnit(u: Unit | null): void {

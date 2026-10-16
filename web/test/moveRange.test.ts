@@ -118,6 +118,17 @@ describe('markTargets', () => {
   });
 });
 
+describe('markTargets: map-wide spells', () => {
+  it('shape 4 marks only the caster\'s own cell, which confirms the spell', () => {
+    const grid = new BattleGrid(flatMap(9));
+    const u = unit({ slot: 0, c: 4, r: 4 });
+    const t = new RangeTable(4, 4);
+    expect(markTargets(t, grid, units(u), u, 6, tables())).toBe(1);
+    expect(t.kindAt(4, 4)).toBe(1);
+    expect([...t.cells()]).toHaveLength(1);
+  });
+});
+
 describe('pathTo (FUN_00438960) and canStop', () => {
   it('walks back along increasing move points and prefers the previous direction on ties', () => {
     const grid = new BattleGrid(flatMap(7));

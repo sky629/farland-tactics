@@ -79,11 +79,13 @@ describe('checkEnd, statusTick, roundStart', () => {
     const s = state(units(poisoned, asleep, flying), fixedRng([90]));
     const events = statusTick(s, (u) => u.side !== 0);
     expect(poisoned).toMatchObject({ hp: 0, status: 1 });
+    expect(s.units[10]).toBeNull();
     expect(asleep).toMatchObject({ status: 0, statusCounter: 85 });          // 85 < 90 → cured
     expect(flying).toMatchObject({ status: 0, statusCounter: 0 });
     expect(events).toEqual([
       { type: 'statusTick', slot: 10, status: 2, value: 3, cured: false },
       { type: 'died', slot: 10 },
+      { type: 'removed', slot: 10 },                                             // a poison death leaves the field like any other
       { type: 'statusTick', slot: 11, status: 3, value: 85, cured: true },
       { type: 'statusTick', slot: 12, status: 11, value: 0, cured: true },
     ]);
