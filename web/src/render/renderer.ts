@@ -5,9 +5,15 @@ import type { AnimPlayer } from '../sprite/animPlayer';
 import type { ApdModel, DrawCommand } from '../sprite/apdModel';
 import { rectVisible } from './culling';
 
-export interface PlacedSprite { model: ApdModel; player: AnimPlayer; c: number; r: number }
+export interface PlacedSprite { model: ApdModel; player: AnimPlayer; c: number; r: number; layer: number; offset?: { x: number; y: number } }
 export interface Overlay { grid: boolean; height: boolean; land: boolean; blocked: boolean }
-export interface Scene { map: MapModel | null; sprites: PlacedSprite[]; camera: { x: number; y: number }; overlay: Overlay; seeThrough: boolean }
+export interface SceneText { x: number; y: number; text: string }   // map pixels, centered
+export interface Scene { map: MapModel | null; sprites: PlacedSprite[]; camera: { x: number; y: number }; overlay: Overlay; seeThrough: boolean; texts?: SceneText[] }
+
+/** Within one diagonal row the original sorts by the sprite's layer field (+0x48); equal layers keep placement order. */
+export function sortRow(sprites: PlacedSprite[]): PlacedSprite[] {
+  return sprites.map((s, i) => [s, i] as const).sort((a, b) => a[0].layer - b[0].layer || a[1] - b[1]).map(([s]) => s);
+}
 
 type Camera = { x: number; y: number };
 interface MapGfx { layers: IndexedBitmaps[]; keys: number[]; bg: IndexedBitmaps | null }
@@ -71,9 +77,10 @@ export class Renderer {
     }
     for (const row of map.rows) {
       for (const p of row.cells) this.drawObjects(gfx, p, cam, false, false);
-      for (const sp of spritesByRow.get(row.s) ?? []) this.drawSprite(map, sp, cam);
+      for (const sp of sortRow(spritesByRow.get(row.s) ?? [])) this.drawSprite(map, sp, cam);
       for (const p of row.cells) this.drawObjects(gfx, p, cam, true, scene.seeThrough);
     }
+    this.drawTexts(scene.texts ?? [], cam);
     this.drawOverlay(map, scene.overlay, cam);
   }
 
@@ -96,7 +103,7 @@ export class Renderer {
     const sheets = this.apdBitmaps.get(sp.model);
     if (!cell || !sheets) return;
     const frame = sp.player.frame;
-    const ox = cell.x + sp.player.offset.x - cam.x, oy = cell.y + sp.player.offset.y - cam.y;
+    const ox = cell.x + sp.player.offset.x + (sp.offset?.x ?? 0) - cam.x, oy = cell.y + sp.player.offset.y + (sp.offset?.y ?? 0) - cam.y;
     const b = sp.model.bounds(frame);
     if (!rectVisible(ox + b.left, oy + b.top, b.right - b.left, b.bottom - b.top, 0, 0)) return;
     for (const c of sp.model.commands(frame)) this.drawCommand(sheets[c.sheet]!.get(c.key), c, ox + c.dx, oy + c.dy);
@@ -145,6 +152,19 @@ export class Renderer {
     cg.fillRect(1, 1, 1, 1);          // keep pixels where (u + v) is even
     this.checker = g.createPattern(c, 'repeat')!;
     return this.checker;
+  }
+
+  private drawTexts(texts: SceneText[], cam: Camera): void {
+    if (texts.length === 0) return;
+    const { ctx } = this;
+    ctx.save();
+    ctx.font = 'bold 10px monospace';
+    ctx.textAlign = 'center';
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = '#000';
+    ctx.fillStyle = '#fff';
+    for (const t of texts) { ctx.strokeText(t.text, t.x - cam.x, t.y - cam.y); ctx.fillText(t.text, t.x - cam.x, t.y - cam.y); }
+    ctx.restore();
   }
 
   private drawOverlay(map: MapModel, ov: Overlay, cam: Camera): void {

@@ -63,7 +63,7 @@ function placeSprite(c: number, r: number): void {
   const tl = apd.anim($<HTMLSelectElement>('anim').value);
   if (!tl) return;
   const player = new AnimPlayer(tl, { loop: $<HTMLInputElement>('loop').checked });
-  scene.sprites.push({ model: apd, player, c, r } satisfies PlacedSprite);
+  scene.sprites.push({ model: apd, player, c, r, layer: 4 } satisfies PlacedSprite);
 }
 
 function canvasPoint(ev: MouseEvent): { x: number; y: number } {
