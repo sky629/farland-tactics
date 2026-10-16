@@ -297,6 +297,26 @@ def export_audio(src: Path, dst: Path, report: Report) -> dict:
     return {'wave': sorted(waves), 'midi': sorted(midis)}
 
 
+def export_visual(src: Path, dst: Path, report: Report) -> int:
+    """DATA/vsllst.dat (30-B records: u16 scene, u16 step, u16 slot, char[16] name, u16 loaded, u16[3] palette params)
+    → data/visual.json [{scene, step, slot, name(lower), pal}]. Returns the record count."""
+    data_dir = src / 'DATA'
+    lst = next((p for p in data_dir.iterdir() if p.name.lower() == 'vsllst.dat'), None) if data_dir.is_dir() else None
+    if lst is None:
+        report.error('no DATA/vsllst.dat')
+        return 0
+    raw = lst.read_bytes()
+    records = []
+    for i in range(len(raw) // 30):
+        r = raw[i * 30:(i + 1) * 30]
+        scene, step, slot = struct.unpack_from('<HHH', r, 0)
+        name = r[6:22].split(b'\0')[0].decode('ascii', 'replace').lower()
+        records.append(dict(scene=scene, step=step, slot=slot, name=name, pal=list(struct.unpack_from('<HHH', r, 24))))
+    (dst / 'data').mkdir(parents=True, exist_ok=True)
+    (dst / 'data' / 'visual.json').write_text(json.dumps(records), encoding='utf-8')
+    return len(records)
+
+
 def main(argv: list[str]) -> int:
     if len(argv) != 3:
         raise SystemExit(__doc__)
@@ -311,10 +331,11 @@ def main(argv: list[str]) -> int:
     if bmp_dir is None:
         report.error('no bmp directory')
     audio = export_audio(game, out, report)
+    visual = export_visual(game, out, report)
     out.mkdir(parents=True, exist_ok=True)
-    (out / 'index.json').write_text(json.dumps(dict(format=FORMAT, maps=maps, sprites=sprites, data=True, events=events, bmp=bmps, wave=audio['wave'], midi=audio['midi'])), encoding='utf-8')
+    (out / 'index.json').write_text(json.dumps(dict(format=FORMAT, maps=maps, sprites=sprites, data=True, events=events, bmp=bmps, wave=audio['wave'], midi=audio['midi'], visual=visual > 0)), encoding='utf-8')
     pngs = sum(1 for d in ('map', 'sprite', 'bmp') for _ in (out / d).glob('*.png'))
-    print(f'maps {len(maps)}, sprites {len(sprites)}, events {len(events)}, bmp {len(bmps)}, pngs {pngs}, wave {len(audio["wave"])}, midi {len(audio["midi"])}, warnings {len(report.warnings)}, errors {len(report.errors)}')
+    print(f'maps {len(maps)}, sprites {len(sprites)}, events {len(events)}, bmp {len(bmps)}, pngs {pngs}, wave {len(audio["wave"])}, midi {len(audio["midi"])}, visual {visual}, warnings {len(report.warnings)}, errors {len(report.errors)}')
     print(f'tables race {counts["race"]}, item {counts["item"]}, magic {counts["magic"]}, rosters {counts["rosters"]}, battles {counts["battles"]}')
     for w in report.warnings:
         print('warning:', w)
