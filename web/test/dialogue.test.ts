@@ -94,6 +94,21 @@ describe('Dialogue', () => {
     root.find('닫기')!.click();
     expect(dlg.takeModalResult()).toBe(1);
   });
+  it('party menu lists each member with equipment and bag; 장착 and 해제 move items between them', () => {
+    const { root, dlg, ctx } = setup();
+    const u = ctx.party[0]!; u.weapon = 1; u.armor = 0; u.acc = [0, 0]; u.bag = [3, 0, 0, 0];   // sword equipped, pike in the bag
+    dlg.openParty(ctx);
+    expect(el(dlg.modal).hidden).toBe(false);
+    expect(root.find('무기: sword')).not.toBeNull();
+    root.find('장착 pike')!.click();
+    expect(u.weapon).toBe(3);
+    expect(u.bag[0]).toBe(1);
+    root.find('해제 무기')!.click();
+    expect(u.weapon).toBe(0);
+    expect(u.bag).toContain(3);
+    root.find('닫기')!.click();
+    expect(el(dlg.modal).hidden).toBe(true);
+  });
   it('closeAll hides windows, modal and episode title', () => {
     const { dlg, ctx } = setup();
     dlg.openWindow('top', 1, null); dlg.openModal('message', 'x', ctx); dlg.showEpisode('제1화');

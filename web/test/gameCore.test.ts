@@ -3,6 +3,7 @@ import { GameCore } from '../src/game/gameCore';
 import type { RosterUnit } from '../src/data/types';
 import { prog, res } from './helpers/scriptFixtures';
 import { FakeStage } from './helpers/stageFixtures';
+import { MapModel } from '../src/map/mapModel';
 
 const party: RosterUnit[] = [
   { unit_id: 1, race: 0, level: 2, dir: 0, c: 2, r: 4, status: 0, side: 0, weapon: 1, armor: 0, drop_item: 0, drop_gold: 0 },
@@ -49,6 +50,14 @@ describe('GameCore', () => {
     core.frame(20);
     expect(core.campaign.flags[9]).toBe(2);
     expect(core.mode).toBe('town');
+  });
+  it('in script mode the presenter follows the units every idle frame: SET_DIR with no host call shows before the next click', () => {
+    const stage = new FakeStage();
+    const core = new GameCore(res([prog(0, ['begin', ['LOAD_UNITS', 5], ['LOAD_MAP', 49], ['SET_DIR', 1, 1], ['WAIT_CLICK', 0], ['END']])], { 5: party }), stage);
+    core.newGame(); core.frame(0); core.frame(16);
+    const mm = new MapModel(stage.mapData()!, [], null);
+    const body = stage.presenter.scene(mm, { units: core.campaign.units, phase: { kind: 'player', sel: { mode: 'idle' } } }).sprites.find((sp) => sp.layer === 4 && sp.c === 2 && sp.r === 4);
+    expect(body?.flipH).toBe(true);                                            // dir 1 (east) is drawn mirrored
   });
   it('LOAD_MAP waits for the stage; BATTLE_START + END creates a Battle over the campaign units and inventory', () => {
     const stage = new FakeStage(); stage.ready = false;

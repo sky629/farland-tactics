@@ -79,7 +79,7 @@ export class GameCore implements Host {
     const size = this.stage.pixelSize();
     this.stage.camera = this.stage.effects.update(now, this.stage.camera, (x, y) => (size ? clampCamera(x, y, size[0], size[1]) : { x, y }));
     this.stage.presenter.update(now);
-    if (this.mode === 'script') this.vm.step(now);
+    if (this.mode === 'script') { if (!this.stage.presenter.busy) this.stage.presenter.sync(this.campaign); this.vm.step(now); }   // SET_DIR & co. have no host call
     else if (this.mode === 'battle' && this.battle) this.battleFrame();
     this.followFocus(size);
   }

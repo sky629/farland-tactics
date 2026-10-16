@@ -17,6 +17,20 @@ describe('ScriptVm: flow and flags', () => {
     expect(vm.state.result).toBe(1);
     expect(host.calls.at(-1)).toEqual(['scriptEnded', 'previous']);
   });
+  it('WAIT_CLICK drops clicks that arrived before it started, so a double click releases one wait, not two', () => {
+    const { host, c, vm } = setup([prog(0, ['begin', ['WAIT_CLICK', 0], ['FLAG_SET', 1, 1], ['WAIT_CLICK', 0], ['FLAG_SET', 1, 2], ['END']])]);
+    host.clicks = 2;                                                           // banked during the logos
+    vm.run(0, 'begin');
+    expect(vm.step(0)).toBe('waiting');
+    expect(host.clicks).toBe(0);
+    host.clicks = 2;                                                           // a double click
+    expect(vm.step(1)).toBe('waiting');
+    expect(c.flags[1]).toBe(1);
+    expect(host.clicks).toBe(0);
+    host.clicks = 1;
+    expect(vm.step(2)).toBe('ended');
+    expect(c.flags[1]).toBe(2);
+  });
   it('FLAG_CMP sets result and less; JUMP_IF_RESULT/LESS branch on them', () => {
     const { c, vm } = setup([prog(0, ['begin', ['FLAG_SET', 1, 3], ['FLAG_CMP', 1, 5], ['JUMP_IF_LESS', 1, 'small'], ['FLAG_SET', 9, 1], ['END'], 'small', ['FLAG_CMP', 1, 3], ['JUMP_IF_RESULT', 0, 'never'], ['FLAG_SET', 9, 2], ['END'], 'never', ['FLAG_SET', 9, 3], ['END']])]);
     vm.run(0, 'begin'); vm.step(0);

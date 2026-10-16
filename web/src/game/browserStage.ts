@@ -25,6 +25,7 @@ const nn = (n: number): string => String(n).padStart(2, '0');
 export interface StageHooks {
   onCell(cell: [number, number]): void;        // battle mode: a map cell was clicked
   onTownClick(i: number): void;                // town mode: facility i was clicked
+  onTownMenu(): void;                          // town mode: right click → party menu (spec §9)
   onCancel(): void;                            // right click / Escape
   modalContext(): ModalContext;
   log(kind: 'warn' | 'info', text: string): void;
@@ -61,7 +62,8 @@ export class BrowserStage implements Stage {
     if (this.town) { this.renderer.draw({ map: null, sprites: [], camera: { x: 0, y: 0 }, overlay: OVERLAY_OFF, seeThrough: false, fx, backdrop: this.townBackdrop(now) }); return; }
     if (!this.mapModel) { this.renderer.draw({ map: null, sprites: [], camera: this.camera, overlay: OVERLAY_OFF, seeThrough: false, fx }); return; }
     const { sprites, texts } = this.presenter.scene(this.mapModel, { units, phase });
-    this.renderer.draw({ map: this.mapModel, sprites, camera: this.camera, overlay: OVERLAY_OFF, seeThrough: this.seeThrough, texts, fx });
+    const camera = fx.shake ? this.clampTo(this.camera.x + fx.shake.x, this.camera.y + fx.shake.y) : this.camera;   // shake never touches the logical camera
+    this.renderer.draw({ map: this.mapModel, sprites, camera, overlay: OVERLAY_OFF, seeThrough: this.seeThrough, texts, fx });
   }
 
   private sheet(name: string, layer: number): CanvasImageSource | null {
@@ -115,7 +117,7 @@ export class BrowserStage implements Stage {
 
   private bind(): void {
     const c = this.canvas;
-    c.addEventListener('contextmenu', (e) => { e.preventDefault(); this.hooks.onCancel(); });
+    c.addEventListener('contextmenu', (e) => { e.preventDefault(); if (this.town) this.hooks.onTownMenu(); else this.hooks.onCancel(); });
     c.addEventListener('mousedown', (e) => { if (e.button === 0 && !this.town) this.drag = { x: e.clientX, y: e.clientY, cx: this.camera.x, cy: this.camera.y }; });
     window.addEventListener('mouseup', (e) => {
       if (e.button !== 0) return;

@@ -1,3 +1,4 @@
+import { canEquip, equip, unequip, type EquipSlot } from '../battle/equipment';
 import { countOf, type Inventory } from '../battle/inventory';
 import { buy } from '../battle/shop';
 import type { Unit } from '../battle/unit';
@@ -144,6 +145,39 @@ export class Dialogue {
     };
     refresh();
     box.append(this.el('div', 'title', '상점'), gold, who, list, note, this.button('닫기', done));
+  }
+
+  /** Town right click (spec §9): every party member with level, HP/MP, equipment and bag; 장착/해제 go through equipment.ts. */
+  openParty(ctx: ModalContext): void {
+    this.result = null;
+    const box = this.modal, items = ctx.tables.item;
+    const name = (id: number) => (id === 0 ? '—' : itemName(items[id]!));
+    const render = () => {
+      box.replaceChildren(this.el('div', 'title', '파티'));
+      for (const u of ctx.party) {
+        if (!u) continue;
+        const row = this.el('div', 'member');
+        row.appendChild(this.el('div', 'uname', `${unitName(u, ctx.tables)}  Lv ${u.level}  HP ${u.hp}/${u.hpMax}  MP ${u.mp}/${u.mpMax}`));
+        const eq = this.el('div', 'equip');
+        const slots: [string, EquipSlot, number][] = [['무기', 'weapon', u.weapon], ['방어구', 'armor', u.armor], ['장신구1', 0, u.acc[0]], ['장신구2', 1, u.acc[1]]];
+        for (const [label, where, id] of slots) {
+          eq.appendChild(this.el('span', 'slot', `${label}: ${name(id)}`));
+          if (id !== 0) eq.appendChild(this.button(`해제 ${label}`, () => { unequip(u, where); render(); }));
+        }
+        const bag = this.el('div', 'bag');
+        bag.appendChild(this.el('span', 'slot', '가방:'));
+        u.bag.forEach((id, i) => {
+          if (id === 0) return;
+          bag.appendChild(this.el('span', 'slot', name(id)));
+          if (canEquip(u, id, items)) bag.appendChild(this.button(`장착 ${name(id)}`, () => { equip(u, i, items); render(); }));
+        });
+        row.append(eq, bag);
+        box.appendChild(row);
+      }
+      box.appendChild(this.button('닫기', () => { box.hidden = true; }));
+    };
+    render();
+    box.hidden = false;
   }
 
   takeModalResult(): number | null { const r = this.result; this.result = null; return r; }

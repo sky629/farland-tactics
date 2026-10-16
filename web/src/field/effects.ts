@@ -3,7 +3,7 @@ import type { Tint } from '../script/host';
 
 export const FADE_STEP_MS = 30;   // one palette step of the original ≈ 30 ms [추정, spec §15]
 export type ImageSource = CanvasImageSource | (() => CanvasImageSource | null) | null;
-export interface FxSnapshot { fade: { color: 'black' | 'white'; alpha: number } | null; tint: { color: string; alpha: number } | null; image: CanvasImageSource | null }
+export interface FxSnapshot { fade: { color: 'black' | 'white'; alpha: number } | null; tint: { color: string; alpha: number } | null; image: CanvasImageSource | null; shake: { x: number; y: number } | null }
 type Fade = { color: 'black' | 'white'; from: number; to: number; start: number; ms: number };
 const TINTS: Partial<Record<Tint, { color: string; alpha: number }>> = {
   dim: { color: '#000', alpha: 0.4 }, sunset: { color: '#f80', alpha: 0.25 }, night: { color: '#024', alpha: 0.45 }, dusk: { color: '#630', alpha: 0.35 },
@@ -63,7 +63,7 @@ export class Effects {
   }
   scrollBusy(): boolean { return this.scroll !== null; }
 
-  /** Advance scripted scrolling and apply shake; returns the camera to draw with. */
+  /** Advance scripted scrolling; returns the logical camera (shake is a draw-time offset, see `snapshot`). */
   update(now: number, camera: { x: number; y: number }, clamp: (x: number, y: number) => { x: number; y: number }): { x: number; y: number } {
     this.lastNow = now;
     let cam = camera;
@@ -84,11 +84,14 @@ export class Effects {
         if (this.scroll && !s.target && (cam.x !== x || cam.y !== y)) this.scroll = null;      // no target: stop at the map edge
       }
     }
-    if (this.shakeAmp > 0) {
-      const phase = Math.floor(now / 50);
-      cam = { x: cam.x + ((phase & 1) !== 0 ? this.shakeAmp : -this.shakeAmp), y: cam.y + ((phase & 2) !== 0 ? this.shakeAmp : -this.shakeAmp) };
-    }
     return cam;
+  }
+
+  /** SHAKE n: ±n px, phase flips every 50 ms (x on odd phases, y on phases 2–3). */
+  private shakeAt(now: number): { x: number; y: number } | null {
+    if (this.shakeAmp <= 0) return null;
+    const phase = Math.floor(now / 50);
+    return { x: (phase & 1) !== 0 ? this.shakeAmp : -this.shakeAmp, y: (phase & 2) !== 0 ? this.shakeAmp : -this.shakeAmp };
   }
 
   snapshot(now: number): FxSnapshot {
@@ -99,6 +102,6 @@ export class Effects {
       if (!this.fadeBusy() && alpha <= 0) this.fadeState = null;
       else fade = { color: this.fadeState.color, alpha: Math.round(alpha * 1000) / 1000 };
     }
-    return { fade, tint: this.tintState, image: typeof this.image === 'function' ? this.image() : this.image };
+    return { fade, tint: this.tintState, image: typeof this.image === 'function' ? this.image() : this.image, shake: this.shakeAt(now) };
   }
 }

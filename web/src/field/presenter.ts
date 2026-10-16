@@ -49,10 +49,14 @@ export class Presenter {
   get busy(): boolean { return this.queue.length > 0; }
 
   /** Replace the snapshot with the rules' units (call when a battle starts and whenever the queue drains). */
+  /** Copies the rules' units; a unit whose walk is queued or in flight keeps its visual (the rules already hold the destination). */
   sync(state: Pick<BattleState, 'units'>): void {
     this.snapshot = state.units.map((u) => (u ? clone(u) : null));
+    const walking = new Set<number>();
+    for (const s of this.queue) for (const it of s.items) if (it.kind === 'move') walking.add(it.slot);
+    const kept = new Map([...this.visuals].filter(([slot]) => walking.has(slot)));
     this.visuals.clear();
-    for (const u of this.snapshot) if (u) this.visuals.set(u.slot, { c: u.c, r: u.r, dir: u.dir, offset: { x: 0, y: 0 } });
+    for (const u of this.snapshot) if (u) this.visuals.set(u.slot, kept.get(u.slot) ?? { c: u.c, r: u.r, dir: u.dir, offset: { x: 0, y: 0 } });
   }
 
   enqueue(events: BattleEvent[]): void {

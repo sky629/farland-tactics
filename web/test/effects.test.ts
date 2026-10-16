@@ -43,6 +43,18 @@ describe('Effects', () => {
     fx.hideImage();
     expect(fx.snapshot(501).image).toBeNull();
   });
+  it('shake is reported in the snapshot and never written into the camera, so frames do not accumulate it', () => {
+    const fx = new Effects();
+    const clamp = (x: number, y: number) => ({ x, y });
+    fx.shake(6);
+    const c1 = fx.update(0, { x: 100, y: 100 }, clamp);
+    const c2 = fx.update(50, c1, clamp);
+    expect(c2).toEqual({ x: 100, y: 100 });
+    expect(fx.snapshot(0).shake).toEqual({ x: -6, y: -6 });
+    expect(fx.snapshot(50).shake).toEqual({ x: 6, y: -6 });
+    fx.shake(0);
+    expect(fx.snapshot(100).shake).toBeNull();
+  });
   it('tints map to overlay colours and reset clears them; FLASH_WHITE fades to white', () => {
     const fx = new Effects();
     fx.tint('dim', 1);
@@ -54,14 +66,14 @@ describe('Effects', () => {
     fx.tint('white', 4);
     expect(fx.snapshot(0).fade).toEqual({ color: 'white', alpha: 0 });
   });
-  it('shake offsets the camera while active; scroll moves the camera toward the target cell and stops there', () => {
+  it('shake is a draw-time offset while active; scroll moves the camera toward the target cell and stops there', () => {
     const fx = new Effects();
     const clamp = (x: number, y: number) => ({ x, y });
     fx.shake(6);
-    const shaken = fx.update(100, { x: 100, y: 100 }, clamp);
-    expect(Math.abs(shaken.x - 100) + Math.abs(shaken.y - 100)).toBeGreaterThan(0);
+    expect(fx.update(100, { x: 100, y: 100 }, clamp)).toEqual({ x: 100, y: 100 });   // the logical camera is untouched
+    expect(fx.snapshot(100).shake).not.toBeNull();
     fx.shake(0);
-    expect(fx.update(200, { x: 100, y: 100 }, clamp)).toEqual({ x: 100, y: 100 });
+    expect(fx.snapshot(200).shake).toBeNull();
     fx.startScroll(16, 0, 5, 5, 100, () => ({ x: 480, y: 340 }));    // target cell centre → camera (160, 100) at 640×480
     expect(fx.scrollBusy()).toBe(true);
     let cam = { x: 100, y: 100 };

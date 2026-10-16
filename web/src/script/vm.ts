@@ -141,7 +141,12 @@ export class ScriptVm {
       case 'WAIT_FADE': return this.host.fadeBusy() ? 'wait' : 'next';
       case 'WAIT_SCROLL': return this.host.scrollBusy() ? 'wait' : 'next';
       case 'WAIT_MUSIC_FADE': return this.host.musicFadeBusy() ? 'wait' : 'next';
-      case 'WAIT_CLICK': { const ms = idx(0); if (this.host.takeClick()) { this.wait = null; return 'next'; } if (ms <= 0) return 'wait'; return this.waitUntil(now, () => now + ms); }
+      case 'WAIT_CLICK': {                                                   // arms on its first frame: clicks from before it do not count
+        const ms = idx(0);
+        if (!this.wait || this.wait.pc !== this.state.pc) { while (this.host.takeClick()) { /* drop */ } this.wait = { pc: this.state.pc, until: ms > 0 ? now + ms : Infinity }; return 'wait'; }
+        if (this.host.takeClick() || now >= this.wait.until) { this.wait = null; return 'next'; }
+        return 'wait';
+      }
       case 'TIMER_START': this.timer = now; return 'next';
       case 'WAIT_TIMER': return now - this.timer < idx(0) * 1000 ? 'wait' : 'next';
       // screen

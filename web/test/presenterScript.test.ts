@@ -58,6 +58,21 @@ describe('Presenter: script sprites', () => {
     p.update(STEP_MS * 2 + 1); p.update(STEP_MS * 2 + 2);
     expect(p.unitBusy(0)).toBe(false);
   });
+  it('a sync while a walk is queued or in flight keeps that unit\'s walking visual: it still starts from its old cell', () => {
+    const s = state();
+    const p = new Presenter(provider, tables());
+    p.sync(s);
+    s.units[0]!.c = 4; s.units[0]!.moved = true;                               // the rules (or the VM) already moved it
+    p.moveUnit(0, [1, 1], 'walk');
+    p.sync(s);                                                                 // an ANIM / LOAD_SPRITE right after MOVE_PATH re-syncs
+    p.update(0); p.update(STEP_MS / 2);
+    expect(p.scene(mapModel(s), s).sprites.find((sp) => sp.layer === 4 && sp.model === heroB)!.c).toBe(2);
+    p.sync(s);                                                                 // and again mid-walk
+    p.update(STEP_MS + 1);
+    expect(p.scene(mapModel(s), s).sprites.find((sp) => sp.layer === 4 && sp.model === heroB)!.c).toBe(3);
+    p.update(STEP_MS * 2 + 1); p.update(STEP_MS * 2 + 2);
+    expect(p.scene(mapModel(s), s).sprites.find((sp) => sp.layer === 4)!.c).toBe(4);
+  });
   it('a marker draws LARGE.M under the unit and sweat shows F.SWEAT above it for a moment', () => {
     const s = state();
     s.units[0]!.sprite = { marker: true };

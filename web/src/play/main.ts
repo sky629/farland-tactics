@@ -89,6 +89,7 @@ async function boot(): Promise<void> {
     stage = new BrowserStage(canvas, renderer, assets, bitmaps, dialogue, sprites, tables, {
       onCell: (cell) => { if (core?.battle) { const cmd = cellCommand(core.battle.state, cell); if (cmd) core.dispatch(cmd); } },
       onTownClick: (i) => core?.townSelect(i),
+      onTownMenu: () => dialogue.openParty({ tables, inventory: core!.campaign.inventory, party: core!.campaign.units.slice(0, PARTY_SLOTS) }),
       onCancel: () => core?.dispatch({ type: 'cancel' }),
       modalContext: () => ({ tables, inventory: core!.campaign.inventory, party: core!.campaign.units.slice(0, PARTY_SLOTS) }),
       log,
