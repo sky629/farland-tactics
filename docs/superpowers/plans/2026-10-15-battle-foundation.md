@@ -45,6 +45,7 @@ web/src/battle/targets.ts       신규: targetsOf, canAttack, magicRadius
 web/src/battle/resolve.ts       신규: Hit, resolveAction (물리·마법)
 web/src/battle/outcome.ts       신규: applyOutcome, statusTick, roundStart, checkEnd
 web/src/battle/ai.ts            신규: chooseAction
+web/src/battle/types.ts          신규: BattleState, Phase, Selection, Command, BattleEvent
 web/src/battle/battle.ts        신규: BattleState, Command, BattleEvent, Battle, createParty, applyRoster
 web/src/field/unitSprites.ts    신규: bodyApd, bodyAnim, shadowAnim, iconAnim, LAYER
 web/src/field/overlay.ts        신규: overlaySprites

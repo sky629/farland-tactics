@@ -2,12 +2,14 @@
 """Export Farland Tactics 2 maps and sprites for the web renderer.
 
 Usage: python3 -I tools/ft2_export.py GAME_DIR OUT_DIR
-Writes OUT_DIR/index.json, OUT_DIR/map/<name>.json|.png, OUT_DIR/sprite/<name>.json|.png.
+Writes OUT_DIR/index.json, OUT_DIR/map/<name>.json|.png, OUT_DIR/sprite/<name>.json|.png,
+OUT_DIR/data/{race,item,magic}.json, data/roster/stageNNN.json, data/battles.json.
 Names are lower-case stems. PNGs are 8-bit indexed with the palette and no transparency;
 the renderer applies color keys (docs/superpowers/specs/2026-10-14-rendering-foundation-design.md §5, §6).
 Exit code 1 when an error was reported. Missing referenced files are warnings.
 """
 import json
+import re
 import struct
 import sys
 from pathlib import Path
@@ -15,9 +17,14 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # keep sibling imports working under -I
 from ft2_apd import parse as parse_apd  # noqa: E402
 from ft2_map import parse as parse_map  # noqa: E402
+from ft2_event_disasm import disassemble  # noqa: E402
 from ft2_szdd import bmp8_to_png, szdd_decompress  # noqa: E402
+from ft2_tables import item as parse_item, magic as parse_magic, race as parse_race, stage as parse_stage  # noqa: E402
 
 FORMAT = 1
+INSTR = re.compile(r'^\s+0x[0-9a-f]+: (\w+)(?: (.*))?$')
+STRING = re.compile(r'"([^"]*)"')
+ROSTER_FIELDS = ('unit_id', 'race', 'level', 'dir', 'c', 'r', 'status', 'side', 'weapon', 'armor', 'drop_item', 'drop_gold')
 
 
 def normalize_name(raw: str) -> str:
@@ -149,6 +156,85 @@ def export_sprites(game: Path, out: Path, report: Report) -> list[str]:
     return names
 
 
+def battles_from_listing(lines: list[str], event: int) -> tuple[list[dict], list[str]]:
+    """One BattleEntry per BATTLE_START(_HEAL): the last LOAD_MAP/LOAD_UNITS/EPISODE/MESSAGE seen since the previous battle.
+
+    The context deliberately survives label boundaries: EVENT01 sets the EPISODE and EVENT03 loads map and units in the
+    label that then JUMPs to `battle_start`. It resets after every BATTLE_START."""
+    entries, warnings = [], []
+    label, ctx = '', {}
+    for line in lines:
+        if line.endswith(':') and not line.startswith(' '):
+            label = line[:-1]
+            continue
+        m = INSTR.match(line)
+        if not m:
+            continue
+        name, args = m.group(1), m.group(2) or ''
+        if name in ('LOAD_MAP', 'LOAD_UNITS'):
+            ctx[name] = int(args)
+        elif name in ('EPISODE', 'MESSAGE'):
+            s = STRING.search(args)
+            ctx[name] = s.group(1).replace('_', ' ') if s else ''
+        elif name in ('BATTLE_START', 'BATTLE_START_HEAL'):
+            if 'LOAD_MAP' not in ctx or 'LOAD_UNITS' not in ctx:
+                warnings.append(f'EVENT{event:02d} {label}: BATTLE_START without LOAD_MAP/LOAD_UNITS')
+                continue
+            entries.append(dict(event=event, label=label, map=f'stage{ctx["LOAD_MAP"]:02d}', roster=ctx['LOAD_UNITS'],
+                                episode=ctx.get('EPISODE', ''), objective=ctx.get('MESSAGE', ''),
+                                heal=name == 'BATTLE_START_HEAL'))
+            ctx = {}
+    return entries, warnings
+
+
+def roster_json(records) -> list[dict]:
+    return [{k: r[k] for k in ROSTER_FIELDS} for r in records]
+
+
+def export_data(game: Path, out: Path, report: Report) -> dict:
+    """Tables, rosters and the battle catalog -> OUT/data. Returns counts."""
+    data_dir, roster_dir = out / 'data', out / 'data' / 'roster'
+    roster_dir.mkdir(parents=True, exist_ok=True)
+    tables = {}
+    for name, parser in (('race', parse_race), ('item', parse_item), ('magic', parse_magic)):
+        tables[name] = list(parser((game / 'DATA' / f'{name}.dat').read_bytes()))
+        (data_dir / f'{name}.json').write_text(json.dumps(tables[name], ensure_ascii=False), encoding='utf-8')
+    rosters = {}
+    for p in sorted(game.joinpath('DATA').iterdir()):
+        mm = re.fullmatch(r'stage(\d{3})\.dat', p.name.lower())
+        if not mm:
+            continue
+        recs = roster_json(parse_stage(p.read_bytes()))
+        for i, r in enumerate(recs):
+            if not (0 <= r['race'] < len(tables['race'])):
+                report.error(f'{p.name}: unit {i} race {r["race"]} out of range')
+            for k in ('weapon', 'armor', 'drop_item'):
+                if not (0 <= r[k] < len(tables['item'])):
+                    report.error(f'{p.name}: unit {i} {k} {r[k]} out of range')
+            if not (1 <= r['level'] <= 99) or not (0 <= r['side'] <= 7):
+                report.error(f'{p.name}: unit {i} level {r["level"]} or side {r["side"]} out of range')
+        n = int(mm.group(1))
+        rosters[n] = recs
+        (roster_dir / f'stage{n:03d}.json').write_text(json.dumps(recs), encoding='utf-8')
+    battles = []
+    for ev in range(0, 18):
+        p = game / 'DATA' / f'EVENT{ev:02d}.dat'
+        if not p.exists():
+            continue
+        _, _, lines, _, _ = disassemble(p.read_bytes())
+        entries, warnings = battles_from_listing(lines, ev)
+        for w in warnings:
+            report.warn(w)
+        for e in entries:
+            if e['roster'] not in rosters:
+                report.error(f'EVENT{ev:02d} {e["label"]}: roster {e["roster"]} missing')
+            if not (game / 'Map' / f'{e["map"]}.map').exists() and not (game / 'Map' / f'{e["map"].upper()}.MAP').exists():
+                report.error(f'EVENT{ev:02d} {e["label"]}: map {e["map"]} missing')
+        battles.extend(entries)
+    (data_dir / 'battles.json').write_text(json.dumps(battles, ensure_ascii=False), encoding='utf-8')
+    return dict(race=len(tables['race']), item=len(tables['item']), magic=len(tables['magic']), rosters=len(rosters), battles=len(battles))
+
+
 def main(argv: list[str]) -> int:
     if len(argv) != 3:
         raise SystemExit(__doc__)
@@ -156,16 +242,17 @@ def main(argv: list[str]) -> int:
     report = Report()
     maps = export_maps(game, out, report)
     sprites = export_sprites(game, out, report)
+    counts = export_data(game, out, report)
     out.mkdir(parents=True, exist_ok=True)
-    (out / 'index.json').write_text(json.dumps(dict(format=FORMAT, maps=maps, sprites=sprites)), encoding='utf-8')
+    (out / 'index.json').write_text(json.dumps(dict(format=FORMAT, maps=maps, sprites=sprites, data=True)), encoding='utf-8')
     pngs = sum(1 for d in ('map', 'sprite') for _ in (out / d).glob('*.png'))
     print(f'maps {len(maps)}, sprites {len(sprites)}, pngs {pngs}, warnings {len(report.warnings)}, errors {len(report.errors)}')
+    print(f'tables race {counts["race"]}, item {counts["item"]}, magic {counts["magic"]}, rosters {counts["rosters"]}, battles {counts["battles"]}')
     for w in report.warnings:
         print('warning:', w)
     for e in report.errors:
         print('error:', e)
     return 1 if report.errors else 0
-
 
 if __name__ == '__main__':
     sys.exit(main(sys.argv))

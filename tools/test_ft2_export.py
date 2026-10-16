@@ -47,5 +47,60 @@ class ApdJson(unittest.TestCase):
         self.assertEqual(j['anims'][0]['script'], 'S200\r\nP0')
 
 
+from ft2_export import battles_from_listing, roster_json
+
+
+class BattlesFromListing(unittest.TestCase):
+    LISTING = [
+        'outfield:',
+        '  0x26d1: MUSIC 6',
+        '  0x26d6: LOAD_MAP 49',
+        '  0x26d9: LOAD_UNITS 49',
+        '  0x2755: MESSAGE "슬라임을_전멸시켜라!?"',
+        '  0x276d: BATTLE_START_HEAL',
+        '  0x276f: END',
+        'restart:',
+        '  0x2774: LOAD_MAP 49',
+        '  0x277a: FIELD_MODE',
+        '  0x2781: END',
+        'roof:',
+        '  0x1d9b: LOAD_MAP 29',
+        '  0x1d9c: LOAD_UNITS 29',
+        '  0x1daa: EPISODE "지붕_위에서의_싸움", 0',
+        '  0x1dc0: MESSAGE "적을_전멸시켜라!"',
+        '  0x1dd3: BATTLE_START',
+        'setup:',
+        '  0x2600: LOAD_MAP 26',
+        '  0x2603: LOAD_UNITS 26',
+        '  0x2606: EPISODE "나_시집가요", 1',
+        '  0x2620: JUMP @battle_start',
+        '  0x2629: END',
+        'battle_start:',
+        '  0x2686: FLAG_ADD 2, 1',
+        '  0x268a: FIELD_MODE',
+        '  0x268f: BATTLE_START_HEAL',
+        'broken:',
+        '  0x3000: MESSAGE "x"',
+        '  0x3001: BATTLE_START',
+    ]
+
+    def test_extracts_one_entry_per_battle_start(self):
+        entries, warnings = battles_from_listing(self.LISTING, 5)
+        self.assertEqual(entries, [
+            dict(event=5, label='outfield', map='stage49', roster=49, episode='', objective='슬라임을 전멸시켜라!?', heal=True),
+            dict(event=5, label='roof', map='stage29', roster=29, episode='지붕 위에서의 싸움', objective='적을 전멸시켜라!', heal=False),
+            dict(event=5, label='battle_start', map='stage26', roster=26, episode='나 시집가요', objective='', heal=True),   # set up in the label that jumps here
+        ])
+        self.assertEqual(warnings, ['EVENT05 broken: BATTLE_START without LOAD_MAP/LOAD_UNITS'])
+
+
+class RosterJson(unittest.TestCase):
+    def test_drops_hi_words_and_keeps_named_fields(self):
+        recs = [dict(unit_id=8, race=10, level=1, dir=1, c=14, c_hi=0, r=17, r_hi=0, status=0, side=4,
+                     weapon=130, armor=0, drop_item=0, drop_gold=0)]
+        self.assertEqual(roster_json(recs), [dict(unit_id=8, race=10, level=1, dir=1, c=14, r=17, status=0, side=4,
+                                                  weapon=130, armor=0, drop_item=0, drop_gold=0)])
+
+
 if __name__ == '__main__':
     unittest.main()

@@ -115,7 +115,7 @@ python3 -I tools/ft2_export.py GAME_DIR OUT_DIR
 
 ### 5.2 전투 카탈로그 추출 규칙
 
-이벤트 파일 `EVENT00..17`을 디스어셈블한 명령열을 라벨 단위로 훑는다. `BATTLE_START` 또는 `BATTLE_START_HEAL`을 만나면 그 라벨 안에서 **마지막으로 본** `LOAD_MAP n`, `LOAD_UNITS m`, `EPISODE s`, `MESSAGE s`로 항목을 만든다. 라벨 안에 `LOAD_MAP`이나 `LOAD_UNITS`가 없으면 경고로 보고하고 항목을 쓰지 않는다. 기대 결과 33개(`analysis/field_mode.md` §1.1). `_`는 공백으로 바꾼다. 로스터 파일이 없으면 오류.
+이벤트 파일 `EVENT00..17`을 디스어셈블한 명령열을 파일 순서대로 훑는다. `BATTLE_START` 또는 `BATTLE_START_HEAL`을 만나면 **직전 전투 이후 마지막으로 본** `LOAD_MAP n`, `LOAD_UNITS m`, `EPISODE s`, `MESSAGE s`로 항목을 만들고 문맥을 비운다. 문맥은 라벨 경계를 넘어 유지한다(EVENT01은 에피소드를, EVENT03은 맵·로스터를 `battle_start`로 점프하는 앞 라벨에서 설정한다). `LOAD_MAP`이나 `LOAD_UNITS`가 없으면 경고로 보고하고 항목을 쓰지 않는다. 기대 결과 33개(`analysis/field_mode.md` §1.1). `_`는 공백으로 바꾼다. 로스터 파일이 없으면 오류.
 
 ### 5.3 JSON 스키마
 
