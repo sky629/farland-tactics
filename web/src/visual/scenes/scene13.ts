@@ -1,8 +1,9 @@
 /**
  * Scene 13 (PLAY_VISUAL 33, second ending): FUN_00407440 drives six parts FUN_00407510, 407680, 4078f0, 407a50, 407ed0,
  * 408140 (setups FUN_00407590, 4076e0, 407950, 407ca0, 407f30, 4081d0); each ends on the scene clock (10, 23, 29, 45, 53, 60 s).
- * Not reproduced [추정]: the captions of FUN_00405920 (parts 0, 1, 3 show text over black or the picture), the 4 s palette
- * cross-fades of part 3 (FUN_00419b80, here plain cuts), the final wave of part 5 (name unknown).
+ * Not reproduced [추정]: the procedural star effect of FUN_00405920 ("star": parts 0, 1, 3 sprinkle stars over black or the
+ * picture — part 0 is therefore 10 s of plain black here), the 4 s palette cross-fades of part 3 (FUN_00419b80, plain cuts),
+ * the final wave of part 5 (name unknown).
  */
 import { slides, type Cmd, type SceneDef } from '../timeline';
 
