@@ -128,7 +128,7 @@ list   := number* 0                   ; SHOP 전용, 0 으로 종료
 | 0F | SET_VISIBLE | u, n | 3개 스프라이트 표시/숨김. status 9(숨김) 유닛은 n≠0 이면 0 으로 | [관찰] |
 | 10 | ALL_FACE | u | 모든 유닛이 u 를 바라봄 | [관찰] |
 | 11 | UNIT_TO_ID8 | u | id=8, HP=0, status=1. id 8 은 이벤트 라벨이 발생하지 않는 익명 유닛 | [관찰] |
-| 12 | ALL_VISIBLE | n | 전 유닛 표시/숨김 | [관찰] |
+| 12 | ALL_VISIBLE | n | 전 유닛 표시/숨김. n≠0 이면 status 9(숨김) 유닛도 0 으로 (0x40a5c0 case 0x12) | [관찰] |
 | 13 | GAME_COMPLETE_QUIT | – | 종료 메시지, INI `CompleteFlag` 기록, `WM_DESTROY` | [관찰] |
 | 14 | RESET_PAL_STAGE0 | – | 팔레트 0x10..0x20, 0x90..0xD0 즉시 복원, stage=0 | [관찰] |
 | 15 | CLEAR_SCREEN | – | 백버퍼 지움 + flip | [관찰] |

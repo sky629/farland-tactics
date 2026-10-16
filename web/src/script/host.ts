@@ -9,7 +9,7 @@ export interface Resources { program(stage: number): Program | null; roster(n: n
 
 export type Where = 'top' | 'bottom';
 export type Tint = 'dim' | 'sunset' | 'night' | 'dusk' | 'white' | 'uiDark' | 'uiHalfA' | 'uiHalfB' | 'textpal' | 'facepal' | 'black' | 'dimUi' | 'reset';
-export type ModalKind = 'message' | 'ask' | 'shop' | 'result' | 'episode' | 'save';
+export type ModalKind = 'message' | 'ask' | 'shop' | 'result' | 'save';
 export type Restore = 'battle' | 'town' | 'previous';
 
 /** Every side effect a script can have (spec §7). The VM never touches the DOM or the canvas itself. */
@@ -22,6 +22,7 @@ export interface Host {
   text(where: Where, line: string, speakerName: string | null): void;
   takeClick(): boolean;
   openModal(kind: ModalKind, payload: unknown): void; modalResult(): number | null;
+  showEpisode(title: string): void;                        // EPISODE n≠0: centred title, no wait (FUN_0040d4c0)
   anim(u: Unit, name: string, loop: boolean, force: boolean): void; unitBusy(u: Unit, withEffects: boolean): boolean;
   moveUnit(u: Unit, dirs: Dir[], animBase: string): void;
   marker(u: Unit, on: boolean): void; sweat(u: Unit): void; appear(u: Unit, ms: number): void; vanish(u: Unit, ms: number): void;
@@ -46,7 +47,7 @@ export class FakeHost implements Host {
   modal: number | null = 0;          // what modalResult() returns; null keeps a modal open
   enemy = false;
   private rec(name: string, ...args: unknown[]): void { this.calls.push([name, ...args]); }
-  fade(dir: 'in' | 'out', step: number): void { this.rec('fade', dir, step); }
+  fade(dir: 'in' | 'out', step: number): void { this.rec('fade', dir, step); this.fading = step > 0; }   // a fade starts busy; tests clear `fading` to finish it
   fadeBusy(): boolean { return this.fading; }
   showImage(name: string, step: number): void { this.rec('showImage', name, step); }
   hideImage(): void { this.rec('hideImage'); }
@@ -63,6 +64,7 @@ export class FakeHost implements Host {
   takeClick(): boolean { if (this.clicks > 0) { this.clicks--; return true; } return false; }
   openModal(kind: ModalKind, payload: unknown): void { this.rec('openModal', kind, payload); }
   modalResult(): number | null { return this.modal; }
+  showEpisode(title: string): void { this.rec('showEpisode', title); }
   anim(u: Unit, name: string, loop: boolean, force: boolean): void { this.rec('anim', u.slot, name, loop, force); }
   unitBusy(u: Unit, withEffects: boolean): boolean { void withEffects; return this.busyUnits.has(u.slot); }
   moveUnit(u: Unit, dirs: Dir[], animBase: string): void { this.rec('moveUnit', u.slot, dirs, animBase); }

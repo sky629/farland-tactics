@@ -26,7 +26,7 @@
 
 ## 4. 데이터
 
-- 내보내기(`tools/ft2_export.py`): `data/event%02d.json` = `{ symbols: {name: offset}, code: [{ at, op, name, args }] }` (`ft2_event_disasm.py` 의 디코더를 재사용; 문자열은 UTF-8 로 변환, `_` 는 그대로 둔다); `bmp/<name>.png` 전부 + `index.json` 에 `bmp: string[]`, `events: number[]`.
+- 내보내기(`tools/ft2_export.py`): `data/event%02d.json` = `{ symbols: {name: offset}, code: [{ at, op, args }] }` (확장 명령은 `op` 가 하위 이름) (`ft2_event_disasm.py` 의 디코더를 재사용; 문자열은 UTF-8 로 변환, `_` 는 그대로 둔다); `bmp/<name>.png` 전부 + `index.json` 에 `bmp: string[]`, `events: number[]`.
 - 디코드 규칙은 `event_script_format.md` §2 그대로(유닛 id 0 뒤 피연산자 생략 포함). 디코드 결과가 디스어셈블러와 같은지 Python 테스트로 고정한다.
 - 내보낸 결과(2026-10-16 실측): event 20개(JSON), bmp 397개(PNG). 코퍼스 테스트가 모든 점프·CALL·LOAD_SCRIPT 라벨의 존재를 확인했고, `EVENT00 begin` 은 가짜 호스트로 `TOWN` 까지 경고 없이(MOVE_TO 1회 제외) 실행된다.
 
@@ -47,7 +47,7 @@ web/play.html, web/src/play/main.ts   타이틀(새 게임 · 전투 테스트 �
 
 ## 6. VM 의미론
 
-- 프레임 함수가 `step(now)` 를 부른다. 명령은 'done'(다음 명령) 또는 'wait'(다음 프레임에 **같은 명령**을 다시 실행) 를 돌려준다. 대기 명령: `WAIT`(절대 시각), `WAIT_FADE`, `WAIT_UNIT`/`WAIT_UNIT2`, `WAIT_CLICK`, `WAIT_SCROLL`, `WAIT_MUSIC_FADE`, `EXT WAIT_TIMER`, `MESSAGE`, `EXT ASK`, `SHOP`, `EXT BATTLE_RESULT`(호스트의 모달이 닫힐 때까지).
+- 프레임 함수가 `step(now)` 를 부른다. 명령은 'done'(다음 명령) 또는 'wait'(다음 프레임에 **같은 명령**을 다시 실행) 를 돌려준다. 대기 명령: `WAIT`(절대 시각), `FADE_IN`(원작이 페이드 끝까지 양보), `WAIT_FADE`, `WAIT_UNIT`/`WAIT_UNIT2`, `WAIT_CLICK`, `WAIT_SCROLL`, `WAIT_MUSIC_FADE`, `EXT WAIT_TIMER`, `MESSAGE`, `EXT ASK`, `SHOP`, `EXT BATTLE_RESULT`(호스트의 모달이 닫힐 때까지). `EPISODE n≠0` 은 제목을 표시만 하고 기다리지 않는다.
 - `END`: 이전 모드 복원(스크립트 시작 때 저장). `END_RESUME`: 보류한 전투 행동 재개. `FIELD_MODE`: 복원 모드를 전투로 강제. `LOAD_SCRIPT n L`: 프로그램 교체 후 라벨 실행. `JUMP`/`CALL`(깊이 1)/`RETURN`. 라벨 없음 → 스크립트 종료(원작과 같음) + 경고 로그.
 - 유닛 피연산자: id 24 = `campaign.battleTarget`; 그 외 `units.find(id)`; 없으면 뒤 피연산자를 읽지 않는다(디코더가 이미 그렇게 자른다).
 - `TEXT`: `_` → 공백, `[Snn]` 크기, `[Cnn]` 색, `*` 는 제거(의미 미확인 [추정]). 첫 줄이면 화자 이름(spk 14 → `SET_SPEAKER_NAME`, spk < 30 → 이름표, 그 외 유닛 종족명).

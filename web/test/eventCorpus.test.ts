@@ -49,7 +49,7 @@ describe.skipIf(!available)('event corpus', () => {
     const vm = new ScriptVm(res, c, host);
     expect(vm.run(0, 'begin')).toBe(true);
     let now = 0, steps = 0;
-    while (vm.running && steps < 200_000) { host.clicks = 1; const r = vm.step(now); now += 50; steps++; if (r === 'ended') break; }
+    while (vm.running && steps < 200_000) { host.clicks = 1; host.fading = false; const r = vm.step(now); now += 50; steps++; if (r === 'ended') break; }
     expect(vm.running).toBe(false);
     expect(host.calls).toContainEqual(['enterTown']);
     const warnings = host.calls.filter((x) => x[0] === 'log' && x[1] === 'warn').map((x) => String(x[2]));

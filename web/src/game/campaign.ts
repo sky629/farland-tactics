@@ -1,7 +1,5 @@
-import type { RandomSource } from '../battle/rng';
 import { emptyInventory, type Inventory } from '../battle/inventory';
-import { createUnit, MAX_SLOTS, PARTY_SLOTS, type Unit } from '../battle/unit';
-import type { RosterUnit, Tables } from '../data/types';
+import { MAX_SLOTS, PARTY_SLOTS, type Unit } from '../battle/unit';
 
 export const FLAG_COUNT = 100;
 export const TOWN_FLAG_COUNT = 16;
@@ -67,16 +65,5 @@ export function removeDead(c: Campaign): void {
   for (let s = PARTY_SLOTS; s < MAX_SLOTS; s++) {
     const u = c.units[s];
     if (u && (u.id === 8 || u.id === 24 || u.id > 30) && (u.hp === 0 || u.status !== 1)) c.units[s] = null;
-  }
-}
-
-/** LOAD_UNITS: clear slots 10..49 and create the roster's non-party records there (party records are positions for the battle start). */
-export function loadRoster(c: Campaign, recs: RosterUnit[], tables: Tables, rng: RandomSource): void {
-  for (let s = PARTY_SLOTS; s < MAX_SLOTS; s++) c.units[s] = null;
-  for (const rec of recs) {
-    if (rec.side === 0) continue;
-    const slot = freeSlot(c);
-    if (slot < 0) break;
-    c.units[slot] = createUnit(rec, slot, tables, rng);
   }
 }

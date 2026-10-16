@@ -1,9 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { createScriptUnit, findUnit, loadRoster, newCampaign, removeDead, removeScriptUnits } from '../src/game/campaign';
-import type { RosterUnit } from '../src/data/types';
-import { fixedRng, tables, unit } from './helpers/battleFixtures';
-
-const rec = (over: Partial<RosterUnit>): RosterUnit => ({ unit_id: 8, race: 1, level: 1, dir: 0, c: 3, r: 3, status: 0, side: 4, weapon: 1, armor: 0, drop_item: 0, drop_gold: 0, ...over });
+import { createScriptUnit, findUnit, newCampaign, removeDead, removeScriptUnits } from '../src/game/campaign';
+import { unit } from './helpers/battleFixtures';
 
 describe('campaign', () => {
   it('a new game has 200 gold, turn −1, stage 0, cleared flags and no units', () => {
@@ -44,15 +41,5 @@ describe('campaign', () => {
     c.units[13] = unit({ slot: 13, id: 8, side: 4, hp: 5, status: 1 });    // dead status with HP left: kept
     removeDead(c);
     expect([10, 11, 12, 13].map((s) => c.units[s] === null)).toEqual([true, true, false, false]);
-  });
-  it('loadRoster replaces slots 10..49 with the roster records and leaves the party alone', () => {
-    const c = newCampaign();
-    c.units[0] = unit({ slot: 0, id: 1 });
-    c.units[10] = unit({ slot: 10, id: 8, side: 4 });
-    loadRoster(c, [rec({}), rec({ c: 4 }), rec({ unit_id: 1, side: 0, c: 5 })], tables(), fixedRng([0]));
-    expect(c.units[0]).toMatchObject({ id: 1, c: 0 });
-    expect(c.units[10]).toMatchObject({ id: 8, c: 3, side: 4 });
-    expect(c.units[11]).toMatchObject({ c: 4 });
-    expect(c.units[12]).toBeNull();                                        // party records do not create new units here
   });
 });

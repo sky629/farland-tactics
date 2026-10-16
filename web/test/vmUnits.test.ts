@@ -20,6 +20,18 @@ describe('ScriptVm: units and sprites', () => {
     expect(c.units[0]).toMatchObject({ c: 5, r: 2, dir: 3 });
     expect(c.units[1]!.dir).toBe(1);                                      // unit 2 at (3,2) faces unit 1 at (5,2): east
   });
+  it('a unit id that resolves to nobody is skipped with a warning', () => {
+    const { vm, host } = start(['begin', ['SET_POS', 77, 1, 1], ['ANIM', 78, 'x', 1], ['ATTACH_SPRITE', 79], ['END']]);
+    vm.step(0);
+    expect(host.calls.filter((x) => x[0] === 'log' && x[1] === 'warn').map((x) => x[2])).toEqual(['SET_POS: unit 77 not found', 'ANIM: unit 78 not found']);
+  });
+  it('LOAD_SPRITE/SHOW_IMAGE/SOUND names are lower-cased to match the exported asset names', () => {
+    const { c, vm, host } = start(['begin', ['LOAD_SPRITE', 'NPC_02', 15, 1, 1], ['SHOW_IMAGE', 'SOFCOM', 0], ['SOUND', 'MAGIC07'], ['END']]);
+    vm.step(0);
+    expect(c.units.find((x) => x?.id === 15)!.sprite?.apd).toBe('npc_02');
+    expect(host.calls).toContainEqual(['showImage', 'sofcom', 0]);
+    expect(host.calls).toContainEqual(['sound', 'magic07']);
+  });
   it('an instruction whose unit is 0 is skipped without reading the rest', () => {
     const { c, vm, host } = start(['begin', ['SET_DIR', 0], ['SET_POS', 0], ['FLAG_SET', 0, 1], ['END']]);
     expect(vm.step(0)).toBe('ended');
@@ -66,8 +78,12 @@ describe('ScriptVm: units and sprites', () => {
 });
 
 describe('ScriptVm: map, items and battle', () => {
-  it('LOAD_MAP waits for the host; LOAD_UNITS fills slots 10.. from the roster; BATTLE_START_HEAL resets the party and enters battle', () => {
-    const roster = [{ unit_id: 8, race: 1, level: 1, dir: 0, c: 6, r: 4, status: 0, side: 4, weapon: 1, armor: 0, drop_item: 0, drop_gold: 0 }];
+  it('LOAD_MAP waits for the host; LOAD_UNITS places the roster (moving known party members, creating new ones); BATTLE_START_HEAL resets the party and enters battle', () => {
+    const roster = [
+      { unit_id: 8, race: 1, level: 1, dir: 0, c: 6, r: 4, status: 0, side: 4, weapon: 1, armor: 0, drop_item: 0, drop_gold: 0 },
+      { unit_id: 1, race: 0, level: 1, dir: 2, c: 7, r: 7, status: 0, side: 0, weapon: 1, armor: 0, drop_item: 0, drop_gold: 0 },     // existing party member: moved
+      { unit_id: 3, race: 0, level: 1, dir: 0, c: 1, r: 1, status: 0, side: 0, weapon: 1, armor: 0, drop_item: 0, drop_gold: 0 },     // new party member: created in slot 2
+    ];
     const { c, vm, host } = start(['begin', ['LOAD_MAP', 49], ['LOAD_UNITS', 49], ['BATTLE_START_HEAL'], ['END']], { 49: roster });
     host.loading = true;
     expect(vm.step(0)).toBe('waiting');
@@ -75,7 +91,8 @@ describe('ScriptVm: map, items and battle', () => {
     c.units[0]!.hp = 3; c.units[0]!.moved = true;
     expect(vm.step(1)).toBe('ended');
     expect(c.units[10]).toMatchObject({ id: 8, side: 4, c: 6, r: 4 });
-    expect(c.units[0]).toMatchObject({ hp: 30, mp: 10, moved: false, acted: false });
+    expect(c.units[0]).toMatchObject({ id: 1, c: 7, r: 7, dir: 2, hp: 30, mp: 10, moved: false, acted: false });
+    expect(c.units[2]).toMatchObject({ id: 3, side: 0, c: 1, r: 1 });
     expect(c.turn).toBe(0);
     expect(host.calls).toContainEqual(['enterBattle']);
     expect(host.calls.at(-1)).toEqual(['scriptEnded', 'battle']);

@@ -1,8 +1,9 @@
+import { applyRoster, startBattle } from '../battle/battle';
 import { dirTo, stepCell, type Dir } from '../battle/grid';
 import { addGold, giveItem, takeItem } from '../battle/inventory';
 import { growUnit, type Unit } from '../battle/unit';
 import type { Campaign } from '../game/campaign';
-import { createScriptUnit, findUnit, loadRoster, removeDead, removeScriptUnits } from '../game/campaign';
+import { createScriptUnit, findUnit, removeDead, removeScriptUnits } from '../game/campaign';
 import { SPEAKER_NAMES } from '../ui/panel';
 import type { Host, ModalKind, Resources, Restore, Where } from './host';
 import { face, findLabel, list, num, str, type Instr, type Program } from './program';
@@ -29,6 +30,7 @@ export class ScriptVm {
   private timer = 0;
   private window: { where: Where; speaker: number; firstLine: boolean } | null = null;
   private resultPayload: unknown = null;
+  private resumeAfterEnd = false;
 
   constructor(protected readonly res: Resources, protected readonly c: Campaign, protected readonly host: Host) {}
 
@@ -67,6 +69,7 @@ export class ScriptVm {
     this.state.program = null;
     this.host.scriptEnded(this.state.restore);
     this.state.restore = 'previous';
+    if (this.resumeAfterEnd) { this.resumeAfterEnd = false; this.host.resumeBattle(); }   // END_RESUME: END processing first, then the held action
     return 'ended';
   }
 
@@ -109,7 +112,7 @@ export class ScriptVm {
     const idx = (k: number) => i(k) ?? 0;
     switch (ins.op) {
       case 'END': case 'DB': return 'end';
-      case 'END_RESUME': this.host.resumeBattle(); return 'end';
+      case 'END_RESUME': this.resumeAfterEnd = true; return 'end';
       case 'JUMP': return this.jump(str(a[0]) ?? '');
       case 'JUMP_IF_RESULT': return (this.state.result !== 0) === (idx(0) !== 0) ? this.jump(str(a[1]) ?? '') : 'next';
       case 'JUMP_IF_LESS': return (this.state.less !== 0) === (idx(0) !== 0) ? this.jump(str(a[1]) ?? '') : 'next';
@@ -142,9 +145,9 @@ export class ScriptVm {
       case 'TIMER_START': this.timer = now; return 'next';
       case 'WAIT_TIMER': return now - this.timer < idx(0) * 1000 ? 'wait' : 'next';
       // screen
-      case 'FADE_IN': this.host.fade('in', idx(0)); return 'next';
+      case 'FADE_IN': { if (!this.wait || this.wait.pc !== this.state.pc) { this.host.fade('in', idx(0)); this.wait = { pc: this.state.pc, until: 0 }; } if (this.host.fadeBusy()) return 'wait'; this.wait = null; return 'next'; }   // the original yields until the fade completes
       case 'FADE_OUT': this.host.fade('out', idx(0)); return 'next';
-      case 'SHOW_IMAGE': this.host.showImage(str(a[0]) ?? '', idx(1)); return 'next';
+      case 'SHOW_IMAGE': this.host.showImage((str(a[0]) ?? '').toLowerCase(), idx(1)); return 'next';
       case 'HIDE_IMAGE': this.host.hideImage(); return 'next';
       case 'CLEAR_SCREEN': this.host.clearScreen(); return 'next';
       case 'DIM_SCENE': this.host.tint('dim', idx(0)); return 'next';
@@ -165,7 +168,7 @@ export class ScriptVm {
       // sound (the page stubs these until sub-project 5)
       case 'MUSIC': this.host.music(i(0) ?? -1); return 'next';
       case 'MUSIC_FADE': this.host.musicFade(idx(0), idx(1) !== 0); return 'next';
-      case 'SOUND': this.host.sound(str(a[0]) ?? ''); return 'next';
+      case 'SOUND': this.host.sound((str(a[0]) ?? '').toLowerCase()); return 'next';
       case 'PLAY_VISUAL': this.host.playVisual(idx(0)); return 'next';
       // dialogue
       case 'MSG_TOP': case 'MSG_BOTTOM': {
@@ -183,7 +186,7 @@ export class ScriptVm {
         return 'next';
       }
       case 'SET_SPEAKER_NAME': this.c.speakerName = str(a[0]) ?? ''; return 'next';
-      case 'EPISODE': { this.c.episode = scriptText(str(a[0]) ?? ''); if (idx(1) === 0) return 'next'; return this.modal('episode', this.c.episode).done ? 'next' : 'wait'; }
+      case 'EPISODE': this.c.episode = scriptText(str(a[0]) ?? ''); if (idx(1) !== 0) this.host.showEpisode(this.c.episode); return 'next';
       case 'MESSAGE': { this.c.message = scriptText(str(a[0]) ?? ''); return this.modal('message', this.c.message).done ? 'next' : 'wait'; }
       case 'ASK': { const m = this.modal('ask', str(a[0]) ?? ''); if (!m.done) return 'wait'; this.state.result = m.result !== 0 ? 1 : 0; return 'next'; }
       case 'SHOP': return this.modal('shop', list(a[0])).done ? 'next' : 'wait';
@@ -192,7 +195,9 @@ export class ScriptVm {
       case 'WRITE_COMPLETE_FLAG': this.host.writeCompleteFlag(); return 'next';
       case 'TOWN': this.c.turn = -1; this.state.restore = 'town'; this.host.enterTown(); return 'end';
       case 'TEST_ENEMY_PHASE': this.state.result = this.host.enemyPhase() ? 1 : 0; return 'next';
-      default: return this.execUnits(ins, now);
+      default:
+        if (ins.op.startsWith('END(') || ins.op.startsWith('UNKNOWN')) return 'end';   // the original's switch default ends the script
+        return this.execUnits(ins, now);
     }
   }
 
@@ -206,6 +211,7 @@ export class ScriptVm {
     const unitArg = (k: number): Unit | null | 'skip' => { const id = i(k); if (id === null || id === 0) return 'skip'; return findUnit(this.c, id); };
     const first = unitArg(0);
     if (first === 'skip' && UNIT_FIRST.has(ins.op)) return 'next';
+    if (first === null && UNIT_FIRST.has(ins.op) && ins.op !== 'ATTACH_SPRITE') { this.host.log('warn', `${ins.op}: unit ${idx(0)} not found`); return 'next'; }   // the original would misparse here; we skip loudly
     const un = first === 'skip' ? null : first;
     const sprite = (u: Unit, patch: Partial<NonNullable<Unit['sprite']>>) => { u.sprite = { ...u.sprite, ...patch }; };
     switch (ins.op) {
@@ -217,7 +223,7 @@ export class ScriptVm {
       case 'REMOVE_UNIT': if (un) { this.c.units[un.slot] = null; this.host.unitsChanged(); } return 'next';
       case 'REMOVE_SCRIPT_UNITS': removeScriptUnits(this.c); this.host.unitsChanged(); return 'next';
       case 'REMOVE_DEAD': removeDead(this.c); this.host.unitsChanged(); return 'next';
-      case 'LOAD_SPRITE': { const apd = str(a[0]) ?? ''; const id = idx(1); this.c.lastSprite = apd; if (!createScriptUnit(this.c, id, 7, idx(2), idx(3), apd, id < 4000 ? 3 : 5)) this.host.log('warn', 'no free unit slot'); this.host.unitsChanged(); return 'next'; }
+      case 'LOAD_SPRITE': { const apd = (str(a[0]) ?? '').toLowerCase(); const id = idx(1); this.c.lastSprite = apd; if (!createScriptUnit(this.c, id, 7, idx(2), idx(3), apd, id < 4000 ? 3 : 5)) this.host.log('warn', 'no free unit slot'); this.host.unitsChanged(); return 'next'; }
       case 'SPRITE_REUSE': { const id = idx(0); if (this.c.lastSprite) createScriptUnit(this.c, id, 7, idx(1), idx(2), this.c.lastSprite, id < 4000 ? 3 : 5); this.host.unitsChanged(); return 'next'; }
       case 'ATTACH_SPRITE': { const apd = this.c.lastSprite; if (!apd) return 'next'; const target = un ?? createScriptUnit(this.c, idx(0), 7, 0, 0, apd, 3); if (target) sprite(target, { apd }); this.host.unitsChanged(); return 'next'; }
       case 'RESPRITE_UNIT': if (un) { const apd = `char_${String(un.race).padStart(2, '0')}${str(a[1]) ?? 'a'}`; sprite(un, { apd }); this.c.lastSprite = apd; this.host.unitsChanged(); } return 'next';
@@ -266,11 +272,10 @@ export class ScriptVm {
       case 'ADD_GOLD': addGold(this.c.inventory, idx(0)); return 'next';
       // map and battle
       case 'LOAD_MAP': { if (!this.wait || this.wait.pc !== this.state.pc) { this.host.loadMap(idx(0)); this.wait = { pc: this.state.pc, until: 0 }; } if (this.host.mapBusy()) return 'wait'; this.wait = null; return 'next'; }
-      case 'LOAD_UNITS': { const n = idx(0); const recs = this.res.roster(n); if (!recs) { this.host.log('warn', `roster ${n} missing`); return 'next'; } loadRoster(this.c, recs, this.res.tables, this.res.rng); this.host.unitsChanged(); return 'next'; }
-      case 'BATTLE_START': case 'BATTLE_START_HEAL': {
-        for (const v of this.c.units) if (v) { v.moved = false; v.acted = false; v.special = false; if (ins.op === 'BATTLE_START_HEAL') { v.hp = v.hpMax; v.mp = Math.trunc(v.mpMax / 2); if (v.status !== 9) v.status = 0; } }
+      case 'LOAD_UNITS': { const n = idx(0); const recs = this.res.roster(n); if (!recs) { this.host.log('warn', `roster ${n} missing`); return 'next'; } applyRoster(this.c.units, recs, this.res.tables, this.res.rng); this.host.unitsChanged(); return 'next'; }
+      case 'BATTLE_START': case 'BATTLE_START_HEAL':
+        startBattle(this.c.units, ins.op === 'BATTLE_START_HEAL');
         this.c.turn = 0; this.state.restore = 'battle'; this.host.enterBattle(); return 'next';
-      }
       case 'BATTLE_RESULT': {
         if (!this.modalOpen) {
           const gold = idx(0);

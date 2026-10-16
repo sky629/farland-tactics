@@ -258,18 +258,14 @@ def decode_operands(data, pc, spec, labels_lower):
             else:
                 if pc + 2 > len(data):
                     raise DecodeError("face bytes past EOF at 0x%x" % pc)
-                letter, pad = data[pc], data[pc + 1]
-                pc += 2
-                if pad != 0:
-                    raise DecodeError("face pad byte 0x%02x at 0x%x" % (pad, pc - 1))
+                letter = data[pc]
+                pc += 2                                   # the second byte is padding (always 0 in the data)
                 args.append([v, chr(letter) if 0x20 <= letter < 0x7F else "0x%02x" % letter])
         elif code == "V":
             if pc + 2 > len(data):
                 raise DecodeError("variant bytes past EOF at 0x%x" % pc)
-            letter, pad = data[pc], data[pc + 1]
-            pc += 2
-            if pad != 0:
-                raise DecodeError("variant pad byte 0x%02x at 0x%x" % (pad, pc - 1))
+            letter = data[pc]
+            pc += 2                                       # padding byte ignored
             args.append(chr(letter) if 0x20 <= letter < 0x7F else "0x%02x" % letter)
         elif code == "X":
             sub, pc = read_number(data, pc)

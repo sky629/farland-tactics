@@ -52,7 +52,7 @@ describe('ScriptVm: flow and flags', () => {
 
 describe('ScriptVm: waits, windows and modals', () => {
   it('WAIT holds the same instruction until the time passes; WAIT_FADE until the host finishes fading', () => {
-    const { host, vm, c } = setup([prog(0, ['begin', ['WAIT', 1000], ['FADE_OUT', 8], ['WAIT_FADE'], ['FLAG_SET', 0, 1], ['END']])]);
+    const { host, vm, c } = setup([prog(0, ['begin', ['WAIT', 1000], ['FADE_OUT', 8], ['WAIT_FADE'], ['FADE_IN', 4], ['FLAG_SET', 0, 1], ['END']])]);
     vm.run(0, 'begin');
     expect(vm.step(100)).toBe('waiting');
     expect(vm.step(900)).toBe('waiting');
@@ -60,7 +60,10 @@ describe('ScriptVm: waits, windows and modals', () => {
     expect(vm.step(1100)).toBe('waiting');
     expect(host.calls).toContainEqual(['fade', 'out', 8]);
     host.fading = false;
-    expect(vm.step(1200)).toBe('ended');
+    expect(vm.step(1200)).toBe('waiting');                                      // FADE_IN itself yields until the fade is done
+    expect(host.calls.filter((x) => x[0] === 'fade')).toEqual([['fade', 'out', 8], ['fade', 'in', 4]]);
+    host.fading = false;
+    expect(vm.step(1300)).toBe('ended');
     expect(c.flags[0]).toBe(1);
   });
   it('MSG_TOP/TEXT open a window, print the speaker name on the first line only, and close on speaker 0', () => {
@@ -94,14 +97,22 @@ describe('ScriptVm: waits, windows and modals', () => {
     expect(host.calls).toContainEqual(['openModal', 'ask', '+계속?']);
     expect(c.flags[0]).toBe(1);
   });
-  it('EPISODE stores the title and shows it when asked; SHOP waits on the modal', () => {
+  it('EPISODE stores the title and shows it without waiting; SHOP waits on the modal', () => {
     const { host, vm, c } = setup([prog(0, ['begin', ['EPISODE', '첫_업무', 1], ['SHOP', [1, 5]], ['END']])]);
     vm.run(0, 'begin'); host.modal = null;
     expect(vm.step(0)).toBe('waiting');
     expect(c.episode).toBe('첫 업무');
-    expect(host.calls).toContainEqual(['openModal', 'episode', '첫 업무']);
+    expect(host.calls).toContainEqual(['showEpisode', '첫 업무']);
+    expect(host.calls.at(-1)).toEqual(['openModal', 'shop', [1, 5]]);         // the shop is already open: EPISODE did not block
     host.modal = 1;
     expect(vm.step(1)).toBe('ended');
-    expect(host.calls).toContainEqual(['openModal', 'shop', [1, 5]]);
+  });
+  it('END_RESUME ends the script first and resumes the battle after; unknown opcodes end the script', () => {
+    const { host, vm } = setup([prog(0, ['begin', ['END_RESUME']]), prog(1, ['begin', ['UNKNOWN_0x41'], ['FLAG_SET', 0, 1], ['END']])]);
+    vm.run(0, 'begin'); vm.step(0);
+    expect(host.calls.slice(-2)).toEqual([['scriptEnded', 'previous'], ['resumeBattle']]);
+    const second = setup([prog(1, ['begin', ['END(default op 0x41)'], ['FLAG_SET', 0, 1], ['END']])]);
+    second.vm.run(1, 'begin'); second.vm.step(0);
+    expect(second.c.flags[0]).toBe(0);
   });
 });
