@@ -18,7 +18,7 @@ export type Cmd =
   | { op: 'waitMove'; obj: number }                                                                // FUN_0041a270
   | { op: 'alpha'; obj: number; from: number; to: number; ms: number }                             // FUN_0041a0b0 dissolve / FUN_0041c6c0 picture fade as an opacity ramp [추정]
   | { op: 'waitAlpha'; obj: number }
-  | { op: 'fade'; dir: 'in' | 'out'; steps: number }                                               // FUN_00419a20(steps, 1) in; (steps, 2|4) out [추정: to black]
+  | { op: 'fade'; dir: 'in' | 'out'; steps: number; color?: 'black' | 'white' }                   // FUN_00419a20(steps, 1) in; (steps, 2|4) out [추정: to black]; white = palette set to white first (FUN_004198d0(255,255,255))
   | { op: 'waitFade' }                                                                             // FUN_00419aa0 / thunk_FUN_004184d0
   | { op: 'wait'; ms: number }                                                                     // FUN_004024f0: part clock ≥ ms (DAT_00449688)
   | { op: 'resetClock' }                                                                           // DAT_00449674 = now

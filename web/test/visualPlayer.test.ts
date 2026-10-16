@@ -138,6 +138,13 @@ describe('VisualPlayer', () => {
     expect(f.fade).toBeNull();
     expect(f.done).toBe(true);
   });
+  it('a fade may come from white (opening part 13, FUN_004198d0(255,255,255))', () => {
+    const p = new VisualPlayer();
+    p.start(scene([{ op: 'fade', dir: 'in', steps: 4, color: 'white' }, { op: 'waitFade' }, { op: 'end' }]), 0, images({}), 0);
+    expect(p.update(0).fade).toEqual({ color: 'white', alpha: 1 });
+    expect(p.update(60).fade).toEqual({ color: 'white', alpha: 0.5 });
+    expect(p.update(120).fade).toBeNull();
+  });
   it('fade out ends black and stays black', () => {
     const p = new VisualPlayer();
     p.start(scene([{ op: 'fade', dir: 'out', steps: 2 }, { op: 'waitFade' }, { op: 'wait', ms: 1000 }]), 0, images({}), 0);

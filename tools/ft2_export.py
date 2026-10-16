@@ -332,17 +332,18 @@ def export_staff(src: Path, dst: Path, report: Report) -> int:
         line = raw.rstrip()
         if not line.strip() or line.startswith('//'):
             continue
-        if line.startswith('/'):
-            for name, arg in re.findall(r'/([A-Z]+)(?::(\d+))?/', line):
-                if name == 'MINCHO': font = 'mincho'
-                elif name == 'GOTIC': font = 'gotic'
-                elif name == 'BOLD': bold = True
-                elif name == 'SIZE': size = int(arg)
-                elif name == 'LINESPACE': gap = int(arg)
-                elif name == 'SPACESIZE': space = int(arg)
-                elif name == 'SPACE': out.append(dict(space=space))
-            continue
-        out.append(dict(text=line.strip(), size=size, font=font, bold=bold, gap=gap))
+        m = re.match(r'^((?:/[A-Z]+(?::\d+)?/)+)(.*)$', line.strip())          # tokens first, then (maybe) text on the same line
+        tokens, text = (m.group(1), m.group(2)) if m else ('', line)
+        for name, arg in re.findall(r'/([A-Z]+)(?::(\d+))?/', tokens):
+            if name == 'MINCHO': font = 'mincho'
+            elif name == 'GOTIC': font = 'gotic'
+            elif name == 'BOLD': bold = True
+            elif name == 'SIZE': size = int(arg)
+            elif name == 'LINESPACE': gap = int(arg)
+            elif name == 'SPACESIZE': space = int(arg)
+            elif name == 'SPACE': out.append(dict(space=space))
+        if text.strip():
+            out.append(dict(text=text.strip(), size=size, font=font, bold=bold, gap=gap))
     (dst / 'data').mkdir(parents=True, exist_ok=True)
     (dst / 'data' / 'staff.json').write_text(json.dumps(out, ensure_ascii=False), encoding='utf-8')
     return len(out)

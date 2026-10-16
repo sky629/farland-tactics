@@ -264,6 +264,7 @@ export class BrowserStage implements Stage {
     this.visualScene = def.id;
     this.visualImages.clear();                                                 // the original frees each part's images (FUN_00401000)
     for (const slot of this.visualNames.get(def.id)!.keys()) this.visualImage(slot, slot === 0 ? null : 249);   // preload (FUN_00401f70); object 0 shows slot 0 in every transcribed scene
+    for (const c of def.parts.flat()) if (c.op === 'sprite') this.sprites.apd(c.apd);   // and the characters' APDs
     this.player.start(def, part, { get: (slot, key) => this.visualImage(slot, key) }, this.lastNow, this.staff, this.sprites);
   }
   /**
@@ -275,7 +276,8 @@ export class BrowserStage implements Stage {
     if (!black && f.backdrop.length > 0) {
       const snap = document.createElement('canvas'); snap.width = VIEW_W; snap.height = VIEW_H;
       const g = snap.getContext('2d')!;
-      for (const b of f.backdrop) g.drawImage(b.image, b.sx, b.sy, b.w, b.h, b.dx, b.dy, b.w, b.h);
+      for (const b of f.backdrop) { g.globalAlpha = b.alpha ?? 1; g.drawImage(b.image, b.sx, b.sy, b.w, b.h, b.dx, b.dy, b.w, b.h); }
+      g.globalAlpha = 1;
       this.effects.showImage(snap, 0, now);                                   // also ends the fade the script left before the scene
     } else {
       this.effects.hideImage();

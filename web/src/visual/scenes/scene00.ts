@@ -6,8 +6,8 @@
  * table 0x449058 (`deadline`), fading to the stored palette [추정: black]; part 17 ends by itself.
  *
  * Characters are APD anims (FUN_0041c0e0 file, FUN_0041c240 place, FUN_0041c300 play n times) at screen points [추정: the point
- * is the sprite origin]. Approximations [추정]: dissolves (FUN_0041a0b0/a1a0/a200) are opacity ramps; part 13 fades in from
- * white (FUN_004198d0(255,255,255)) — here from black; FUN_0041aa20 repeat 2 plays once.
+ * is the sprite origin]. Approximations [추정]: dissolves (FUN_0041a0b0/a1a0/a200) are opacity ramps; FUN_0041aa20 repeat 2
+ * plays once.
  */
 import { OPENING_PART_END_MS as E, sheet, slides, type Cmd, type Frame, type SceneDef } from '../timeline';
 
@@ -17,8 +17,8 @@ const show = (obj: number, slot: number, w: number, h: number, dx: number, dy: n
 const fr = (slot: number, w: number, h: number, ms: number, x: number, y: number): Frame => ({ slot, sx: 0, sy: 0, w, h, ms, x, y });
 const range = (a: number, b: number): number[] => Array.from({ length: b - a + 1 }, (_, i) => a + i);
 const sprite = (id: number, apdName: string, anim: string, x: number, y: number, times = 1): Cmd => ({ op: 'sprite', id, apd: apdName, anim, x, y, times });
-/** The split-screen wipe of parts 6/8/11/13: the background slides a little, then the half-screen picture dissolves in (FUN_0041a0b0 500 ms). */
-const wipe = (bgBy: [number, number]): Cmd[] => [{ op: 'move', obj: 0, by: bgBy, ms: 300 }, { op: 'waitMove', obj: 0 }, { op: 'alpha', obj: 4, from: 0, to: 1, ms: 500 }];
+/** The split-screen wipe of parts 6/8/11/13: the background slides 300 ms while the half-screen picture dissolves in (FUN_0041a0b0 500 ms, started in the same step). */
+const wipe = (bgBy: [number, number]): Cmd[] => [{ op: 'move', obj: 0, by: bgBy, ms: 300 }, { op: 'alpha', obj: 4, from: 0, to: 1, ms: 500 }, { op: 'waitMove', obj: 0 }];
 /** A picture prepared for a dissolve: shown but still invisible. */
 const hidden = (obj: number): Cmd => ({ op: 'alpha', obj, from: 0, to: 0, ms: 0 });
 
@@ -97,8 +97,8 @@ export const scene00: SceneDef = { id: 0, parts: [
   part(11, 8, [{ op: 'order', ids: [0, 4] }, full(0, 69), show(4, 128, 320, 480, 0, 0), hidden(4), { op: 'fade', dir: 'in', steps: 8 }, { op: 'waitFade' }, { op: 'wait', ms: 3000 }, ...wipe([-160, 0])]),
   // p12: vop13a with four characters (FUN_00403d80)
   part(12, 2, [{ op: 'order', ids: [0] }, full(0, 70), sprite(0, 'vop13a', 'OP_EVENT1', 288, 272, 3), sprite(1, 'vop13a', 'OP_EVENT2', 352, 240), sprite(2, 'vop13a', 'OP_EVENT3', 224, 304), sprite(3, 'vop13a', 'OP_EVENT4', 224, 240), { op: 'fade', dir: 'in', steps: 4 }]),
-  // p13: vop14a; after 1 s it slides right while the right-half vop14z appears (FUN_00404020; the original fades in from white)
-  part(13, 4, [{ op: 'order', ids: [0, 4] }, full(0, 80), show(4, 129, 320, 480, 320, 0), hidden(4), { op: 'fade', dir: 'in', steps: 4 }, { op: 'waitFade' }, { op: 'wait', ms: 1000 }, ...wipe([200, 0])]),
+  // p13: vop14a fades in from white; after 1 s it slides right while the right-half vop14z appears (FUN_00404020)
+  part(13, 4, [{ op: 'order', ids: [0, 4] }, full(0, 80), show(4, 129, 320, 480, 320, 0), hidden(4), { op: 'fade', dir: 'in', steps: 4, color: 'white' }, { op: 'waitFade' }, { op: 'wait', ms: 1000 }, ...wipe([200, 0])]),
   // p14: vop15a with the cloud strip vop15b drifting right for 30 s at base y 280 and two characters (FUN_004041b0)
   part(14, 2, [
     { op: 'order', ids: [0, 3] }, full(3, 81), { op: 'pos', obj: 0, x: 0, y: 280 }, show(0, 82, 640, 204, 0, 0),
@@ -109,7 +109,7 @@ export const scene00: SceneDef = { id: 0, parts: [
     { op: 'order', ids: [0, 3, 4, 5] }, full(0, 83), full(3, 84), hidden(3), show(4, 130, 320, 480, 0, 0), hidden(4), show(5, 131, 320, 480, 320, 0), hidden(5), { op: 'fade', dir: 'in', steps: 4 },
     { op: 'waitUntil', ms: 111000 }, { op: 'alpha', obj: 3, from: 0, to: 1, ms: 1000 },
     { op: 'waitUntil', ms: 119000 }, { op: 'hide', obj: 0 }, { op: 'alpha', obj: 4, from: 0, to: 1, ms: 500 },
-    { op: 'waitUntil', ms: 123500 }, { op: 'alpha', obj: 4, from: 1, to: 0, ms: 500 }, { op: 'wait', ms: 300 }, { op: 'alpha', obj: 5, from: 0, to: 1, ms: 500 },
+    { op: 'waitUntil', ms: 123500 }, { op: 'alpha', obj: 4, from: 1, to: 0, ms: 500 }, { op: 'waitUntil', ms: 123800 }, { op: 'alpha', obj: 5, from: 0, to: 1, ms: 500 },   // the original moves 300 ms between the two dissolves
   ]),
   // p16: a 30 s three-layer panorama pan over vop17a/b/c (FUN_00404850)
   part(16, 4, [

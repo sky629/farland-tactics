@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { countOf, emptyInventory } from '../src/battle/inventory';
 import { Dialogue, parseTextTags, type ModalContext } from '../src/ui/dialogue';
 import { newCampaign } from '../src/game/campaign';
-import { encodeSave, saveSummary, type SaveSummary } from '../src/save/format';
+import { BROKEN_SUMMARY, encodeSave, saveSummary, type SaveSummary } from '../src/save/format';
 import { tables, unit } from './helpers/battleFixtures';
 import { FakeElement, fakeDocument } from './helpers/fakeDom';
 
@@ -120,6 +120,7 @@ describe('Dialogue', () => {
     const list = new Array<SaveSummary | null>(32).fill(null);
     const c = newCampaign(); c.episode = '첫업무'; c.stage = 1; c.inventory.gold = 350;
     list[2] = saveSummary(encodeSave(c, new Date(2026, 9, 16, 9, 30)));
+    list[5] = BROKEN_SUMMARY;
     return list;
   };
   it('save slot modal: an empty slot answers its number; a used slot asks to overwrite first; 취소 → −1', () => {
@@ -144,6 +145,8 @@ describe('Dialogue', () => {
     const picked: number[] = [], exported: number[] = [];
     dlg.openLoad(slotList(), { onPick: (s) => picked.push(s), onExport: (s) => exported.push(s), onImport: () => {} });
     expect(el(root.find('00 비어 있음')!).disabled).toBe(true);
+    expect(el(root.find('05 손상됨')!).disabled).toBe(true);                   // a broken slot cannot be loaded
+    expect(root.find('스테이지 0')).toBeNull();                                  // and shows no summary
     root.find('02 첫업무')!.click();
     expect(picked).toEqual([2]);
     root.find('내보내기')!.click();

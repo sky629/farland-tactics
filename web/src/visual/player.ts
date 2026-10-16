@@ -8,7 +8,7 @@ import type { AnimCmd, Cmd, Frame, SceneDef, ScreenText, TextLine, VisualImages 
 
 /** An APD animation at a screen point (the opening's characters). */
 export interface ScreenSprite { model: ApdModel; player: AnimPlayer; x: number; y: number }
-export interface VisualFrame { backdrop: Backdrop[]; sprites: ScreenSprite[]; texts: ScreenText[]; fade: { color: 'black'; alpha: number } | null; done: boolean }
+export interface VisualFrame { backdrop: Backdrop[]; sprites: ScreenSprite[]; texts: ScreenText[]; fade: { color: 'black' | 'white'; alpha: number } | null; done: boolean }
 
 interface Obj { slot: number; sx: number; sy: number; w: number; h: number; dx: number; dy: number; base: [number, number]; key: number | null; clip: { x: number; y: number; w: number; h: number } | null; visible: boolean; alpha: { from: number; to: number; start: number; ms: number } | null }
 const COLOR_KEY = 249;                                                        // FUN_00401880: objects 1..9; object 0 is opaque
@@ -43,7 +43,8 @@ export class VisualPlayer {
   private readonly moves = new Map<number, Move>();
   private readonly effects = new Map<number, Effect>();
   private fadeState: Fade | null = null;
-  private fadeLevel = 0;                                                       // 0 clear … 1 black when no fade runs
+  private fadeLevel = 0;                                                       // 0 clear … 1 covered when no fade runs
+  private fadeColor: 'black' | 'white' = 'black';
   private lines: TextLine[] = [];
   private roll: { start: number; ms: number } | null = null;
   private provider: SpriteProvider | null = null;
@@ -59,7 +60,7 @@ export class VisualPlayer {
     this.def = def; this.images = images; this.lines = lines; this.roll = null; this.provider = sprites;
     this.sceneStart = now;
     this.finished = part >= def.parts.length; this.wasSkipped = false;
-    this.fadeState = null; this.fadeLevel = 0;
+    this.fadeState = null; this.fadeLevel = 0; this.fadeColor = 'black';
     this.beginPart(part, now);
   }
 
@@ -111,6 +112,7 @@ export class VisualPlayer {
       case 'alpha': this.obj(c.obj).alpha = { from: c.from, to: c.to, start: now, ms: c.ms }; return true;
       case 'waitAlpha': { const a = this.objs.get(c.obj)?.alpha; return !a || now - a.start >= a.ms; }
       case 'fade': {
+        this.fadeColor = c.color ?? 'black';
         const to = c.dir === 'in' ? 0 : 1, from = c.dir === 'in' ? 1 : this.fadeLevel;
         if (c.steps <= 0) { this.fadeState = null; this.fadeLevel = to; return true; }
         this.fadeState = { from, to, start: now, ms: c.steps * FADE_STEP_MS };
@@ -264,6 +266,6 @@ export class VisualPlayer {
       if (t >= 1) this.fadeState = null;
     }
     const alpha = Math.round(this.fadeLevel * 1000) / 1000;
-    return alpha > 0 ? { color: 'black', alpha } : null;
+    return alpha > 0 ? { color: this.fadeColor, alpha } : null;
   }
 }

@@ -42,8 +42,7 @@ export class SpessaSynth implements Synth {
   async init(knownSongs: Set<number>): Promise<boolean> {
     this.known = knownSongs;
     try {
-      const sf = await fetch(`${this.base}/sf2/gm.sf3`);
-      const bank = sf.ok ? await sf.arrayBuffer() : null;
+      const bank = await fetch(`${this.base}/sf2/gm.sf3`).then((r) => (r.ok ? r.arrayBuffer() : null)).catch(() => null);   // a network error is a missing soundfont too
       if (!bank || !isSoundfont(bank)) { this.failure = 'soundfont'; this.log('warn', '음악: 사운드폰트가 없다 — python3 -I tools/ft2_soundfont.py web/public/assets 로 받는다'); return false; }
       await this.ctx.audioWorklet.addModule(workletUrl);
       const synth = new WorkletSynthesizer(this.ctx);

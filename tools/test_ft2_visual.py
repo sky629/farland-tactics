@@ -27,7 +27,7 @@ class VisualExportTest(unittest.TestCase):
             self.assertEqual(data[1]['pal'], [32, 10, 208])
 
     def test_staff_list_parses_markup_into_lines_and_spaces(self):
-        text = '//\r\n// comment\r\n/MINCHO//BOLD//LINESPACE:6//FONTCOL:243//DECOCOL:244/\r\n/SPACESIZE:12/\r\n\r\n/SPACE/\r\n/SIZE:24//MINCHO/\r\n파랜드 택틱스\r\n/SIZE:16//GOTIC/\r\n프로그램\r\n/SPACE/\r\nKoji Yamamoto\r\n'
+        text = '//\r\n// comment\r\n/MINCHO//BOLD//LINESPACE:6//FONTCOL:243//DECOCOL:244/\r\n/SPACESIZE:12/\r\n\r\n/SPACE/\r\n/SIZE:24//MINCHO/\r\n파랜드 택틱스\r\n/SIZE:16//GOTIC/\r\n프로그램\r\n/SPACE/\r\nKoji Yamamoto\r\n/SIZE:28/한글화 제작팀\r\n/SIZE:23/서판규\r\n'
         with tempfile.TemporaryDirectory() as d:
             src, dst = Path(d, 'game'), Path(d, 'out')
             (src / 'DATA').mkdir(parents=True)
@@ -43,6 +43,8 @@ class VisualExportTest(unittest.TestCase):
                 {'text': '프로그램', 'size': 16, 'font': 'gotic', 'bold': True, 'gap': 6},
                 {'space': 12},
                 {'text': 'Koji Yamamoto', 'size': 16, 'font': 'gotic', 'bold': True, 'gap': 6},
+                {'text': '한글화 제작팀', 'size': 28, 'font': 'gotic', 'bold': True, 'gap': 6},   # tokens and text on one line (the Korean team block)
+                {'text': '서판규', 'size': 23, 'font': 'gotic', 'bold': True, 'gap': 6},
             ])
 
     def test_missing_list_is_an_error(self):
