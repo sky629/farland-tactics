@@ -28,6 +28,7 @@ export type Cmd =
   | { op: 'effect'; fx: number; on: boolean }                                                      // FUN_0041a890
   | { op: 'waitEffect'; fx: number }                                                               // FUN_0041a910: running and not finished
   | { op: 'sound'; name: string }                                                                  // FUN_0041dc50 + FUN_0041dca0(ch, 1)
+  | { op: 'sprite'; id: number; apd: string; anim: string; x: number; y: number; times: number }   // FUN_0041c0e0 (file) + FUN_0041c240 (place) + FUN_0041c300 (play n times): an APD anim at a screen point [추정: the point is the sprite origin]
   | { op: 'textRoll'; ms: number }                                                                 // FUN_0041bfa0: the staff roll (start()'s lines) climbs from the bottom edge to above the top in ms [추정 speed]
   | { op: 'waitText' }                                                                             // FUN_0041bf90
   | { op: 'end' };                                                                                 // FUN_00402070

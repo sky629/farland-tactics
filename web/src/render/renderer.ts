@@ -3,6 +3,7 @@ import { IndexedBitmaps } from '../gfx/indexed';
 import { TILE_H, TILE_W, VIEW_H, VIEW_W } from '../iso/grid';
 import { bgPosition, type MapModel, type PlacedCell } from '../map/mapModel';
 import type { ScreenText } from '../visual/timeline';
+import type { ScreenSprite } from '../visual/player';
 import type { AnimPlayer } from '../sprite/animPlayer';
 import type { ApdModel, DrawCommand } from '../sprite/apdModel';
 import { rectVisible } from './culling';
@@ -11,7 +12,7 @@ export interface PlacedSprite { model: ApdModel; player: AnimPlayer; c: number; 
 export interface Overlay { grid: boolean; height: boolean; land: boolean; blocked: boolean }
 export interface SceneText { x: number; y: number; text: string }   // map pixels, centered
 export interface Backdrop { image: CanvasImageSource; sx: number; sy: number; w: number; h: number; dx: number; dy: number; alpha?: number }   // screen-space image pieces (town layers, visual scenes); alpha < 1 = a dissolve
-export interface Scene { map: MapModel | null; sprites: PlacedSprite[]; camera: { x: number; y: number }; overlay: Overlay; seeThrough: boolean; texts?: SceneText[]; fx?: FxSnapshot; backdrop?: Backdrop[]; screenTexts?: ScreenText[] }
+export interface Scene { map: MapModel | null; sprites: PlacedSprite[]; camera: { x: number; y: number }; overlay: Overlay; seeThrough: boolean; texts?: SceneText[]; fx?: FxSnapshot; backdrop?: Backdrop[]; screenSprites?: ScreenSprite[]; screenTexts?: ScreenText[] }
 
 /** Within one diagonal row the original sorts by the sprite's layer field (+0x48); equal layers keep placement order. */
 export function sortRow(sprites: PlacedSprite[]): PlacedSprite[] {
@@ -70,6 +71,7 @@ export class Renderer {
       ctx.drawImage(b.image, b.sx, b.sy, b.w, b.h, b.dx, b.dy, b.w, b.h);
       if (b.alpha !== undefined) ctx.globalAlpha = 1;
     }
+    for (const s of scene.screenSprites ?? []) this.drawSpriteOrigin(s.model, s.player, false, s.x + s.player.offset.x, s.y + s.player.offset.y);
     if (scene.screenTexts?.length) this.drawScreenTexts(scene.screenTexts);
     const map = scene.map;
     if (map) {
@@ -115,13 +117,18 @@ export class Renderer {
   /** FUN_0042a560 / FUN_0042a610: sprite origin = cell anchor + animation offset; each image at origin + (dx, dy). */
   private drawSprite(map: MapModel, sp: PlacedSprite, cam: Camera): void {
     const cell = map.cellAt(sp.c, sp.r);
-    const sheets = this.apdBitmaps.get(sp.model);
-    if (!cell || !sheets) return;
-    const frame = sp.player.frame, flip = sp.flipH ?? false;
-    const ox = cell.x + sp.player.offset.x + (sp.offset?.x ?? 0) - cam.x, oy = cell.y + sp.player.offset.y + (sp.offset?.y ?? 0) - cam.y;
-    const b = sp.model.bounds(frame, flip);
+    if (!cell) return;
+    this.drawSpriteOrigin(sp.model, sp.player, sp.flipH ?? false, cell.x + sp.player.offset.x + (sp.offset?.x ?? 0) - cam.x, cell.y + sp.player.offset.y + (sp.offset?.y ?? 0) - cam.y);
+  }
+
+  /** The current frame of a player drawn with its origin at screen (ox, oy); nothing when the APD's bitmaps are not prepared. */
+  private drawSpriteOrigin(model: ApdModel, player: AnimPlayer, flip: boolean, ox: number, oy: number): void {
+    const sheets = this.apdBitmaps.get(model);
+    if (!sheets) return;
+    const frame = player.frame;
+    const b = model.bounds(frame, flip);
     if (!rectVisible(ox + b.left, oy + b.top, b.right - b.left, b.bottom - b.top, 0, 0)) return;
-    for (const c of sp.model.commands(frame, flip)) this.drawCommand(sheets[c.sheet]!.get(c.key), c, ox + c.dx, oy + c.dy);
+    for (const c of model.commands(frame, flip)) this.drawCommand(sheets[c.sheet]!.get(c.key), c, ox + c.dx, oy + c.dy);
   }
 
   private drawCommand(bmp: ImageBitmap, c: DrawCommand, x: number, y: number): void {

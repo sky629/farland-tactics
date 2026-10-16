@@ -108,6 +108,16 @@ describe('visual scenes (corpus)', () => {
     expect(starts.map((s) => Math.round(s / 1000))).toEqual([0, 10, 23, 29, 45, 53]);
     expect(doneAt).toBeGreaterThanOrEqual(60000);
   });
+  it('every sprite a scene plays has its APD and anim exported', () => {
+    for (const def of Object.values(scenes)) for (const c of def.parts.flat()) {
+      if (c.op !== 'sprite') continue;
+      const path = join(ASSETS, `sprite/${c.apd}.json`);
+      expect(existsSync(path), `${c.apd}.json`).toBe(true);
+      const anims = (JSON.parse(readFileSync(path, 'utf-8')) as { anims: { name: string }[] }).anims.map((a) => a.name.toUpperCase());
+      expect(anims, `${c.apd} ${c.anim}`).toContain(c.anim.toUpperCase());
+    }
+    expect(scenes[0]!.parts.flat().filter((c) => c.op === 'sprite')).toHaveLength(11);   // parts 5 (2), 7 (1), 9 (2), 12 (4), 14 (2)
+  });
   it('every PLAY_VISUAL number the scripts use resolves to a transcribed scene', () => {
     for (const n of SCRIPT_USES) {
       const d = dispatch(n);

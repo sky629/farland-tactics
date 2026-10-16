@@ -5,10 +5,9 @@
  * 403630, 403830, 403c00, 403d80, 404020, 4041b0, 4045e0, 404850, 404e50). Every part ends when the scene clock passes
  * table 0x449058 (`deadline`), fading to the stored palette [추정: black]; part 17 ends by itself.
  *
- * Not reproduced [추정]: the character sprite animations of parts 5, 7, 9, 12, 14 (FUN_0041c0e0/c240/c300 play APD anims
- * OP_EVENT1..4 from VOP06A/08A/10A/13A/15A — the backgrounds show without them); the dissolves (FUN_0041a0b0/a1a0/a200)
- * are opacity ramps; part 13 fades in from white (FUN_004198d0(255,255,255)) — here from black; repeat counts above 1
- * (FUN_0041aa20 repeat 2) play once.
+ * Characters are APD anims (FUN_0041c0e0 file, FUN_0041c240 place, FUN_0041c300 play n times) at screen points [추정: the point
+ * is the sprite origin]. Approximations [추정]: dissolves (FUN_0041a0b0/a1a0/a200) are opacity ramps; part 13 fades in from
+ * white (FUN_004198d0(255,255,255)) — here from black; FUN_0041aa20 repeat 2 plays once.
  */
 import { OPENING_PART_END_MS as E, sheet, slides, type Cmd, type Frame, type SceneDef } from '../timeline';
 
@@ -17,6 +16,7 @@ const full = (obj: number, slot: number): Cmd => ({ op: 'show', obj, slot, sx: 0
 const show = (obj: number, slot: number, w: number, h: number, dx: number, dy: number): Cmd => ({ op: 'show', obj, slot, sx: 0, sy: 0, w, h, dx, dy });
 const fr = (slot: number, w: number, h: number, ms: number, x: number, y: number): Frame => ({ slot, sx: 0, sy: 0, w, h, ms, x, y });
 const range = (a: number, b: number): number[] => Array.from({ length: b - a + 1 }, (_, i) => a + i);
+const sprite = (id: number, apdName: string, anim: string, x: number, y: number, times = 1): Cmd => ({ op: 'sprite', id, apd: apdName, anim, x, y, times });
 /** The split-screen wipe of parts 6/8/11/13: the background slides a little, then the half-screen picture dissolves in (FUN_0041a0b0 500 ms). */
 const wipe = (bgBy: [number, number]): Cmd[] => [{ op: 'move', obj: 0, by: bgBy, ms: 300 }, { op: 'waitMove', obj: 0 }, { op: 'alpha', obj: 4, from: 0, to: 1, ms: 500 }];
 /** A picture prepared for a dissolve: shown but still invisible. */
@@ -70,16 +70,16 @@ export const scene00: SceneDef = { id: 0, parts: [
     { op: 'wait', ms: 7000 }, { op: 'fade', dir: 'out', steps: 3 },
     { op: 'waitEffect', fx: 4 }, { op: 'effect', fx: 1, on: true },
   ]),
-  // p5: vop06a with the vop06b sign (FUN_00402e70; sprite animation omitted)
-  part(5, 2, [{ op: 'order', ids: [0, 3] }, full(0, 46), show(3, 47, 320, 176, 64, 0), { op: 'fade', dir: 'in', steps: 4 }]),
+  // p5: vop06a with the vop06b sign and two characters (FUN_00402e70)
+  part(5, 2, [{ op: 'order', ids: [0, 3] }, full(0, 46), show(3, 47, 320, 176, 64, 0), sprite(0, 'vop06a', 'OP_EVENT1', 128, 120), sprite(1, 'vop06b', 'OP_EVENT1', 320, 288), { op: 'fade', dir: 'in', steps: 4 }]),
   // p6: vop07a; after 1 s the picture slides left while the left-half vop07z appears (FUN_00403100)
   part(6, 8, [{ op: 'order', ids: [0, 4] }, full(0, 48), show(4, 126, 320, 480, 0, 0), hidden(4), { op: 'fade', dir: 'in', steps: 4 }, { op: 'waitFade' }, { op: 'wait', ms: 1000 }, ...wipe([-40, 0])]),
-  // p7: vop08a (FUN_00403280; sprite animation omitted)
-  part(7, 2, [{ op: 'order', ids: [0] }, full(0, 49), { op: 'fade', dir: 'in', steps: 4 }]),
+  // p7: vop08a with its character (FUN_00403280)
+  part(7, 2, [{ op: 'order', ids: [0] }, full(0, 49), sprite(0, 'vop08a', 'OP_EVENT1', 320, 224), { op: 'fade', dir: 'in', steps: 4 }]),
   // p8: vop09a; after 1 s it nudges up while the top strip vop09z appears (FUN_004034b0)
   part(8, 8, [{ op: 'order', ids: [0, 4] }, full(0, 50), show(4, 127, 640, 240, 0, 0), hidden(4), { op: 'fade', dir: 'in', steps: 4 }, { op: 'waitFade' }, { op: 'wait', ms: 1000 }, ...wipe([0, -16])]),
-  // p9: vop10a (FUN_00403630; sprite animations omitted)
-  part(9, 2, [{ op: 'order', ids: [0] }, full(0, 51), { op: 'fade', dir: 'in', steps: 4 }]),
+  // p9: vop10a with two characters (FUN_00403630)
+  part(9, 2, [{ op: 'order', ids: [0] }, full(0, 51), sprite(0, 'vop10a', 'OP_EVENT1', 288, 208), sprite(1, 'vop10a', 'OP_EVENT2', 320, 224, 3), { op: 'fade', dir: 'in', steps: 4 }]),
   // p10: sky vop11a, looping sea vop11b00..05, strip vop11c and the vop11d figure sequence (FUN_00403830)
   part(10, 4, [
     { op: 'order', ids: [0, 3, 4, 5] },
@@ -95,14 +95,14 @@ export const scene00: SceneDef = { id: 0, parts: [
   ]),
   // p11: vop12a; after 3 s it slides left while vop12z appears (FUN_00403c00)
   part(11, 8, [{ op: 'order', ids: [0, 4] }, full(0, 69), show(4, 128, 320, 480, 0, 0), hidden(4), { op: 'fade', dir: 'in', steps: 8 }, { op: 'waitFade' }, { op: 'wait', ms: 3000 }, ...wipe([-160, 0])]),
-  // p12: vop13a (FUN_00403d80; sprite animations omitted)
-  part(12, 2, [{ op: 'order', ids: [0] }, full(0, 70), { op: 'fade', dir: 'in', steps: 4 }]),
+  // p12: vop13a with four characters (FUN_00403d80)
+  part(12, 2, [{ op: 'order', ids: [0] }, full(0, 70), sprite(0, 'vop13a', 'OP_EVENT1', 288, 272, 3), sprite(1, 'vop13a', 'OP_EVENT2', 352, 240), sprite(2, 'vop13a', 'OP_EVENT3', 224, 304), sprite(3, 'vop13a', 'OP_EVENT4', 224, 240), { op: 'fade', dir: 'in', steps: 4 }]),
   // p13: vop14a; after 1 s it slides right while the right-half vop14z appears (FUN_00404020; the original fades in from white)
   part(13, 4, [{ op: 'order', ids: [0, 4] }, full(0, 80), show(4, 129, 320, 480, 320, 0), hidden(4), { op: 'fade', dir: 'in', steps: 4 }, { op: 'waitFade' }, { op: 'wait', ms: 1000 }, ...wipe([200, 0])]),
-  // p14: vop15a with the cloud strip vop15b drifting right for 30 s at base y 280 (FUN_004041b0; sprite animations omitted)
+  // p14: vop15a with the cloud strip vop15b drifting right for 30 s at base y 280 and two characters (FUN_004041b0)
   part(14, 2, [
     { op: 'order', ids: [0, 3] }, full(3, 81), { op: 'pos', obj: 0, x: 0, y: 280 }, show(0, 82, 640, 204, 0, 0),
-    { op: 'move', obj: 0, from: [0, 0], by: [640, 0], ms: 30000 }, { op: 'fade', dir: 'in', steps: 4 },
+    { op: 'move', obj: 0, from: [0, 0], by: [640, 0], ms: 30000 }, sprite(0, 'vop15a', 'OP_EVENT1', 304, 248), sprite(1, 'vop15a', 'OP_EVENT2', 240, 248), { op: 'fade', dir: 'in', steps: 4 },
   ]),
   // p15: vop16a, then vop16b over it at 111 s, the left half vop16z00 at 119 s and the right half vop16z01 at 123.5 s (FUN_004045e0)
   part(15, 4, [

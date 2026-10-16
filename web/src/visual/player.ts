@@ -1,9 +1,14 @@
 import { FADE_STEP_MS } from '../field/effects';
 import { VIEW_H, VIEW_W } from '../iso/grid';
 import type { Backdrop } from '../render/renderer';
+import type { SpriteProvider } from '../field/presenter';
+import { AnimPlayer } from '../sprite/animPlayer';
+import type { ApdModel } from '../sprite/apdModel';
 import type { AnimCmd, Cmd, Frame, SceneDef, ScreenText, TextLine, VisualImages } from './timeline';
 
-export interface VisualFrame { backdrop: Backdrop[]; texts: ScreenText[]; fade: { color: 'black'; alpha: number } | null; done: boolean }
+/** An APD animation at a screen point (the opening's characters). */
+export interface ScreenSprite { model: ApdModel; player: AnimPlayer; x: number; y: number }
+export interface VisualFrame { backdrop: Backdrop[]; sprites: ScreenSprite[]; texts: ScreenText[]; fade: { color: 'black'; alpha: number } | null; done: boolean }
 
 interface Obj { slot: number; sx: number; sy: number; w: number; h: number; dx: number; dy: number; base: [number, number]; key: number | null; clip: { x: number; y: number; w: number; h: number } | null; visible: boolean; alpha: { from: number; to: number; start: number; ms: number } | null }
 const COLOR_KEY = 249;                                                        // FUN_00401880: objects 1..9; object 0 is opaque
@@ -41,6 +46,8 @@ export class VisualPlayer {
   private fadeLevel = 0;                                                       // 0 clear … 1 black when no fade runs
   private lines: TextLine[] = [];
   private roll: { start: number; ms: number } | null = null;
+  private provider: SpriteProvider | null = null;
+  private readonly sprites = new Map<number, { apd: string; anim: string; x: number; y: number; times: number; model: ApdModel | null; player: AnimPlayer | null; played: number }>();
 
   get playing(): boolean { return this.def !== null && !this.finished; }
   /** Index of the part being played (tests, debugging). */
@@ -48,8 +55,8 @@ export class VisualPlayer {
   /** true when the scene ended by skip() rather than by itself. */
   get skipped(): boolean { return this.wasSkipped; }
 
-  start(def: SceneDef, part: number, images: VisualImages, now: number, lines: TextLine[] = []): void {
-    this.def = def; this.images = images; this.lines = lines; this.roll = null;
+  start(def: SceneDef, part: number, images: VisualImages, now: number, lines: TextLine[] = [], sprites: SpriteProvider | null = null): void {
+    this.def = def; this.images = images; this.lines = lines; this.roll = null; this.provider = sprites;
     this.sceneStart = now;
     this.finished = part >= def.parts.length; this.wasSkipped = false;
     this.fadeState = null; this.fadeLevel = 0;
@@ -61,17 +68,17 @@ export class VisualPlayer {
     this.partIndex = part; this.i = 0; this.partStart = now;
     this.list = this.def?.parts[part] ?? []; this.deadline = null; this.inOutro = false;
     this.order = Array.from({ length: OBJECTS }, (_, k) => k);
-    this.objs.clear(); this.moves.clear(); this.effects.clear();
+    this.objs.clear(); this.moves.clear(); this.effects.clear(); this.sprites.clear();
   }
 
   /** A click or Enter: the scene ends now (the original's cancel flag DAT_0044a63c). */
   skip(): void { if (this.def && !this.finished) { this.finished = true; this.wasSkipped = true; } }
 
   update(now: number): VisualFrame {
-    if (!this.def) return { backdrop: [], texts: [], fade: null, done: true };
+    if (!this.def) return { backdrop: [], sprites: [], texts: [], fade: null, done: true };
     if (!this.finished) this.run(now);
-    if (this.wasSkipped) return { backdrop: [], texts: [], fade: null, done: true };
-    return { backdrop: this.compose(now), texts: this.rollTexts(now), fade: this.fadeAt(now), done: this.finished };
+    if (this.wasSkipped) return { backdrop: [], sprites: [], texts: [], fade: null, done: true };
+    return { backdrop: this.compose(now), sprites: this.spriteFrames(now), texts: this.rollTexts(now), fade: this.fadeAt(now), done: this.finished };
   }
 
   // ---- command loop ----
@@ -124,6 +131,7 @@ export class VisualPlayer {
       }
       case 'waitEffect': { const e = this.effects.get(c.fx); return !e || e.start === null || (!e.def.loop && now - e.start >= e.total); }
       case 'sound': this.onSound?.(c.name); return true;
+      case 'sprite': this.sprites.set(c.id, { apd: c.apd, anim: c.anim, x: c.x, y: c.y, times: Math.max(c.times, 1), model: null, player: null, played: 0 }); return true;
       case 'textRoll': this.roll = { start: now, ms: Math.max(c.ms, 1) }; return true;
       case 'waitText': return !this.roll || now - this.roll.start >= this.roll.ms;
       case 'end': this.finished = true; return true;
@@ -205,6 +213,24 @@ export class VisualPlayer {
     const piece: Backdrop = { image: img.image, sx, sy, w, h, dx: Math.round(dx), dy: Math.round(dy) };
     if (alpha < 1) piece.alpha = alpha;
     return piece;
+  }
+
+  /** Screen sprites: the APD arrives whenever the provider has it; the anim then starts from its first frame and repeats `times`. */
+  private spriteFrames(now: number): ScreenSprite[] {
+    const out: ScreenSprite[] = [];
+    for (const s of this.sprites.values()) {
+      if (!s.model) {
+        s.model = this.provider?.apd(s.apd) ?? null;
+        const tl = s.model?.anim(s.anim);
+        if (!s.model || !tl) { s.model = null; continue; }
+        s.player = new AnimPlayer(tl);
+      }
+      const player = s.player!;
+      player.update(now);
+      if (player.finished && s.played + 1 < s.times) { s.played++; s.player = new AnimPlayer(s.model.anim(s.anim)!); s.player.update(now); }
+      out.push({ model: s.model, player: s.player!, x: s.x, y: s.y });
+    }
+    return out;
   }
 
   /** The staff roll: the whole list climbs from y = screen bottom to −height over the roll's time; only lines on screen are emitted. */

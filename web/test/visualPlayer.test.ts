@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { VisualPlayer } from '../src/visual/player';
+import { apd } from './helpers/presenterFixtures';
 import { dispatch, sheet, slides, type Cmd, type SceneDef, type TextLine, type VisualImages } from '../src/visual/timeline';
 
 const img = (w: number, h: number) => ({ image: { w, h } as unknown as CanvasImageSource, w, h });
@@ -106,6 +107,21 @@ describe('VisualPlayer', () => {
     const f = p.update(1000);
     expect(f.texts).toEqual([]);
     expect(f.done).toBe(true);
+  });
+  it('a sprite plays its APD anim at a screen point once the model is there, the given number of times, and keeps its last frame (FUN_0041c240/c300)', () => {
+    const p = new VisualPlayer();
+    const model = apd({ 'OP_EVENT1': 'S100 P0 P0' });                          // 2 frames × 100 ms
+    let ready = false;
+    p.start(scene([{ op: 'sprite', id: 0, apd: 'vop06a', anim: 'OP_EVENT1', x: 128, y: 120, times: 2 }, { op: 'wait', ms: 5000 }]), 0, images({}), 0, [], { apd: (name) => (ready && name === 'vop06a' ? model : null) });
+    expect(p.update(0).sprites).toEqual([]);                                   // not loaded yet: the frame has no sprite, the scene goes on
+    ready = true;
+    const f1 = p.update(100);
+    expect(f1.sprites).toHaveLength(1);
+    expect(f1.sprites[0]).toMatchObject({ x: 128, y: 120 });
+    expect(f1.sprites[0]!.player.finished).toBe(false);
+    for (let t = 200; t <= 700; t += 100) p.update(t);
+    expect(p.update(800).sprites[0]!.player.finished).toBe(true);              // played twice (2 × 200 ms) and stays on its last frame
+    expect(p.update(2000).sprites).toHaveLength(1);
   });
   it('a frame may carry its own position (FUN_0041a970 lists)', () => {
     const p = new VisualPlayer();
