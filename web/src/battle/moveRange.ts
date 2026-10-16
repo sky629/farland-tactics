@@ -79,6 +79,15 @@ export function computeMoveRange(grid: BattleGrid, units: (Unit | null)[], unit:
 /** FUN_00439690: action 0 marks physical targets (with the original early-return height quirk); a magic index marks its range. Returns the count. */
 export function markTargets(t: RangeTable, grid: BattleGrid, units: (Unit | null)[], unit: Unit, action: number, tables: Tables): number {
   let n = 0;
+  if (action >= 1000) {                                   // consumable: party units within item range (the fallen too; revive items need them)
+    const item = tables.item[action - 1000]!;
+    for (const v of units) {
+      if (!v || v.side !== 0 || v.status === 9) continue;
+      const d = dist(unit.c, unit.r, v.c, v.r);
+      if (d >= item.range_min && d <= item.range_max && t.index(v.c, v.r) >= 0) { t.setKind(v.c, v.r, 2); n++; }
+    }
+    return n;
+  }
   if (action === 0) {
     if (unit.acted) return 0;
     const w = tables.item[unit.weapon]!;

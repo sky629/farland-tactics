@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { emptyInventory } from '../src/battle/inventory';
 import { BattleGrid } from '../src/battle/grid';
 import { RangeTable } from '../src/battle/moveRange';
 import type { BattleState } from '../src/battle/types';
@@ -9,7 +10,7 @@ import { fakeDocument, type FakeElement } from './helpers/fakeDom';
 const entry = { event: 1, label: 'x', map: 'stage49', roster: 49, episode: '', objective: '', heal: true };
 const base = (phase: BattleState['phase'], us = units(unit({ slot: 0, spells: [1] }), unit({ slot: 10, side: 4, id: 8, race: 1 }))): BattleState => {
   const map = flatMap(5);
-  return { entry, map, grid: new BattleGrid(map), units: us, turn: 1, phase, rng: fixedRng([0]), lastPath: [] };
+  return { entry, map, grid: new BattleGrid(map), units: us, turn: 1, phase, rng: fixedRng([0]), lastPath: [], inventory: emptyInventory() };
 };
 
 describe('menuEnabled', () => {

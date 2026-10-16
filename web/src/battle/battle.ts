@@ -3,6 +3,7 @@ import { DataError } from '../data/loader';
 import type { BattleEntry, ItemData, RosterUnit, Tables } from '../data/types';
 import { chooseAction } from './ai';
 import { BattleGrid, dirTo, dist, hostile, incap, liveUnits, stepCell, type Dir } from './grid';
+import { addGold, emptyInventory, giveItem, takeItem, usableItems, type Inventory } from './inventory';
 import { canStop, computeMoveRange, hasMoveTarget, markTargets, pathTo, RangeTable } from './moveRange';
 import { applyOutcome, endIfOver, roundStart, statusTick } from './outcome';
 import { resolveAction } from './resolve';
@@ -106,7 +107,7 @@ const reject = (reason: string): BattleEvent[] => [{ type: 'rejected', reason }]
 export class Battle {
   constructor(readonly state: BattleState, private readonly tables: Tables) {}
 
-  static start(entry: BattleEntry, map: MapData, roster1: RosterUnit[], roster: RosterUnit[], tables: Tables, seed: number): Battle {
+  static start(entry: BattleEntry, map: MapData, roster1: RosterUnit[], roster: RosterUnit[], tables: Tables, seed: number, inventory: Inventory = emptyInventory()): Battle {
     const rng = Rng.fromSeed(seed);
     const units = createParty(roster1, tables, rng);
     applyRoster(units, roster, tables, rng);
@@ -120,7 +121,7 @@ export class Battle {
       if (!grid.cell(u.c, u.r)) throw new DataError(`roster/stage${String(entry.roster).padStart(3, '0')}.json`, `unit ${u.slot} (id ${u.id}) stands on a missing cell (${u.c}, ${u.r})`);
     }
     startBattle(units, entry.heal);
-    return new Battle({ entry, map, grid, units, turn: 1, phase: { kind: 'player', sel: { mode: 'idle' } }, rng, lastPath: [] }, tables);
+    return new Battle({ entry, map, grid, units, turn: 1, phase: { kind: 'player', sel: { mode: 'idle' } }, rng, lastPath: [], inventory }, tables);
   }
 
   partyFinished(): boolean {
@@ -195,15 +196,39 @@ export class Battle {
     if (path.length === 0) return reject('no path');
     u.c = c; u.r = r; u.dir = path[path.length - 1]!; u.moved = true;
     this.state.lastPath = path;
+    const events: BattleEvent[] = [{ type: 'moved', slot: u.slot, path, to: [c, r] }];
+    if (u.side === 0) events.push(...this.pickUp(u));
     this.setSel({ mode: 'menu', slot: u.slot, range: this.rangeFor(u) });
-    return [{ type: 'moved', slot: u.slot, path, to: [c, r] }];
+    return events;
+  }
+
+  /** FUN_00431170 after a party move: stand on a treasure to take it; stand next to a hidden one to reveal it. */
+  private pickUp(u: Unit): BattleEvent[] {
+    const events: BattleEvent[] = [];
+    for (const o of liveUnits(this.state.units)) {
+      if (o.side !== 7) continue;
+      const d = dist(u.c, u.r, o.c, o.r);
+      if (d === 0) {
+        if (o.dropItem === 0) { addGold(this.state.inventory, o.dropGold); events.push({ type: 'pickup', slot: u.slot, item: 0, gold: o.dropGold }); }
+        else if (giveItem(this.state.inventory, u, o.dropItem, 1, this.tables.item)) events.push({ type: 'pickup', slot: u.slot, item: o.dropItem, gold: 0 });
+        else { events.push({ type: 'bagFull', slot: u.slot, item: o.dropItem }); continue; }
+        this.state.units[o.slot] = null;
+        events.push({ type: 'removed', slot: o.slot });
+      } else if (d === 1 && o.status === 9) {
+        o.status = 0;
+        events.push({ type: 'revealed', slot: o.slot });
+      }
+    }
+    return events;
   }
 
   private beginTarget(sel: Selection, action: number): BattleEvent[] {
     const u = this.unitOf(sel);
     if (!u || sel.mode !== 'menu') return reject(u ? 'not in menu' : 'no unit selected');
     if (u.acted) return reject('already acted');
-    if (action !== 0) {
+    if (action >= 1000) {
+      if (!usableItems(this.state.inventory, this.tables.item).some((s) => s.id === action - 1000)) return reject('no such item');
+    } else if (action !== 0) {
       if (!u.spells.includes(action) || !this.tables.magic[action]) return reject('unknown spell');
       if (u.mp < Math.abs(this.tables.magic[action]!.mp_cost)) return reject('not enough MP');
       if (u.status === 6) return reject('silenced');
@@ -232,12 +257,13 @@ export class Battle {
   /** Shared by player and AI: MP, dash, resolution, flags, outcome. */
   private perform(u: Unit, action: number, cell: [number, number], targets: Unit[], path: Dir[]): BattleEvent[] {
     const weapon = this.tables.item[u.weapon]!;
-    if (action !== 0) u.mp -= Math.abs(this.tables.magic[action]!.mp_cost);
+    if (action !== 0 && action < 1000) u.mp -= Math.abs(this.tables.magic[action]!.mp_cost);
     const dash = action === 0 && isDash(this.state.grid, u, path, cell, weapon);
     const hits = resolveAction(u, action, targets, { tables: this.tables, grid: this.state.grid, units: this.state.units, rng: this.state.rng, dash });
     u.acted = true;
     const events: BattleEvent[] = [{ type: 'action', slot: u.slot, action, cell, hits }];
     events.push(...applyOutcome(this.state, u, hits, this.tables));
+    if (action >= 1000) takeItem(this.state.inventory, action - 1000, 1, this.tables.item);   // consumed after the action (FUN_0042eaa0)
     return events;
   }
 

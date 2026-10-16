@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { applyRoster, Battle, createParty, isDash } from '../src/battle/battle';
 import { BattleGrid } from '../src/battle/grid';
+import { countOf, emptyInventory, giveItem } from '../src/battle/inventory';
 import type { BattleEvent, Command } from '../src/battle/types';
 import { DataError } from '../src/data/loader';
 import type { RosterUnit } from '../src/data/types';
@@ -59,6 +60,90 @@ describe('map-wide spells and menu ranges', () => {
     const sel = b.state.phase.kind === 'player' ? b.state.phase.sel : null;
     expect(sel?.mode).toBe('menu');
     expect(sel && sel.mode === 'menu' ? sel.range.moveAt(hero.c + 1, hero.r) : 0).toBeGreaterThan(0);
+  });
+});
+
+describe('treasure pickup (battle_rules §4.4)', () => {
+  const chest = (over: Partial<RosterUnit>) => rec({ unit_id: 8, race: 9, side: 7, level: 1, c: 3, r: 4, ...over });
+  const moveHero = (b: Battle, c: number, r: number) => { b.reduce({ type: 'select', slot: 0 }); b.reduce({ type: 'beginMove' }); return b.reduce({ type: 'move', c, r }); };
+  it('standing on a gold chest adds the gold and removes the chest', () => {
+    const b = start(1, flatMap(9), [...roster, chest({ drop_gold: 50 })]);
+    const ev = moveHero(b, 3, 4);
+    expect(types(ev)).toEqual(['moved', 'pickup', 'removed']);
+    expect(ev[1]).toEqual({ type: 'pickup', slot: 0, item: 0, gold: 50 });
+    expect(b.state.inventory.gold).toBe(50);
+    expect(b.state.units[12]).toBeNull();
+  });
+  it('an item chest goes to the party inventory, equipment into the bag of the unit that stepped on it', () => {
+    const b = start(1, flatMap(9), [...roster, chest({ drop_item: 7 }), chest({ drop_item: 1, c: 2, r: 3 })]);
+    moveHero(b, 3, 4);
+    expect(countOf(b.state.inventory, 7)).toBe(1);
+    const b2 = start(1, flatMap(9), [...roster, chest({ drop_item: 1 })]);
+    moveHero(b2, 3, 4);
+    expect(b2.state.units[0]!.bag).toEqual([1, 0, 0, 0]);
+  });
+  it('a full bag leaves the treasure where it is', () => {
+    const b = start(1, flatMap(9), [...roster, chest({ drop_item: 1 })]);
+    b.state.units[0]!.bag = [1, 1, 1, 1];
+    const ev = moveHero(b, 3, 4);
+    expect(types(ev)).toEqual(['moved', 'bagFull']);
+    expect(b.state.units[12]).toMatchObject({ side: 7, c: 3, r: 4 });
+    expect(b.state.units[0]).toMatchObject({ c: 3, r: 4 });
+  });
+  it('a hidden chest next to the destination is revealed', () => {
+    const b = start(1, flatMap(9), [...roster, chest({ drop_gold: 5, c: 4, r: 4, status: 9 })]);
+    const ev = moveHero(b, 3, 4);
+    expect(types(ev)).toEqual(['moved', 'revealed']);
+    expect(b.state.units[12]!.status).toBe(0);
+  });
+});
+
+describe('items in battle (spec §5.3)', () => {
+  const withHerbs = (n = 2) => { const inv = emptyInventory(); giveItem(inv, null, 7, n, t.item); giveItem(inv, null, 9, 1, t.item); return Battle.start(entry, flatMap(9), roster1, roster, t, 1, inv); };
+  it('uses a held consumable on itself: target cell, effect, one consumed, acted', () => {
+    const b = withHerbs();
+    const hero = b.state.units[0]!; hero.hp = 1;
+    b.reduce({ type: 'select', slot: 0 });
+    expect(b.reduce({ type: 'beginTarget', action: 1007 })).toEqual([]);
+    const sel = b.state.phase.kind === 'player' ? b.state.phase.sel : null;
+    expect(sel && sel.mode === 'target' ? sel.range.kindAt(hero.c, hero.r) : 0).toBe(2);
+    const ev = b.reduce({ type: 'act', c: hero.c, r: hero.r });
+    expect(ev[0]).toMatchObject({ type: 'action', action: 1007, hits: [expect.objectContaining({ target: 0, kind: 'heal', value: 20 })] });
+    expect(hero).toMatchObject({ hp: 21, acted: true, moved: false });
+    expect(countOf(b.state.inventory, 7)).toBe(1);
+  });
+  it('rejects items the party does not hold or cannot use', () => {
+    const b = withHerbs();
+    b.reduce({ type: 'select', slot: 0 });
+    expect(b.reduce({ type: 'beginTarget', action: 1008 })).toEqual([{ type: 'rejected', reason: 'no such item' }]);
+    expect(b.reduce({ type: 'beginTarget', action: 1009 })).toEqual([{ type: 'rejected', reason: 'no such item' }]);
+  });
+  it('a revive item targets a fallen ally and brings it back', () => {
+    const inv = emptyInventory(); giveItem(inv, null, 7, 1, t.item);
+    const items = t.item.map((it, i) => (i === 7 ? { ...it, status_code: 1 } : it));             // make the herb a revive item for this test
+    const b = Battle.start(entry, flatMap(9), roster1, roster, { ...t, item: items }, 1, inv);
+    const ally = b.state.units[1]!; ally.hp = 0; ally.status = 1;
+    b.reduce({ type: 'select', slot: 0 });
+    b.reduce({ type: 'beginTarget', action: 1007 });
+    const sel = b.state.phase.kind === 'player' ? b.state.phase.sel : null;
+    expect(sel && sel.mode === 'target' ? sel.range.kindAt(ally.c, ally.r) : 0).toBe(2);
+    b.reduce({ type: 'act', c: ally.c, r: ally.r });
+    expect(ally).toMatchObject({ status: 0, hp: 20 });
+  });
+  it('the last of an item disappears after use', () => {
+    const b = withHerbs(1);
+    const hero = b.state.units[0]!; hero.hp = 1;
+    b.reduce({ type: 'select', slot: 0 }); b.reduce({ type: 'beginTarget', action: 1007 }); b.reduce({ type: 'act', c: hero.c, r: hero.r });
+    expect(b.state.inventory.items.find((s) => s.id === 7)).toBeUndefined();
+  });
+  it('cancelling item targeting consumes nothing', () => {
+    const b = withHerbs();
+    b.reduce({ type: 'select', slot: 0 }); b.reduce({ type: 'beginTarget', action: 1007 }); b.reduce({ type: 'cancel' });
+    expect(b.state.phase.kind === 'player' && b.state.phase.sel.mode).toBe('menu');
+    expect(countOf(b.state.inventory, 7)).toBe(2);
+  });
+  it('a battle started without an inventory has an empty one', () => {
+    expect(start().state.inventory).toEqual({ items: [], gold: 0 });
   });
 });
 

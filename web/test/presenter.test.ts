@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { emptyInventory } from '../src/battle/inventory';
 import type { ApdData } from '../src/assets/types';
 import { BattleGrid } from '../src/battle/grid';
 import type { BattleState } from '../src/battle/types';
@@ -28,7 +29,7 @@ const entry = { event: 1, label: 'x', map: 'stage49', roster: 49, episode: '', o
 function state(): BattleState {
   const map = flatMap(9);
   const h = unit({ slot: 0, c: 2, r: 4, race: 0 }), s = unit({ slot: 10, c: 6, r: 4, race: 1, side: 4, id: 8, hp: 12, hpMax: 12 });
-  return { entry, map, grid: new BattleGrid(map), units: units(h, s), turn: 1, phase: { kind: 'player', sel: { mode: 'idle' } }, rng: fixedRng([0]), lastPath: [] };
+  return { entry, map, grid: new BattleGrid(map), units: units(h, s), turn: 1, phase: { kind: 'player', sel: { mode: 'idle' } }, rng: fixedRng([0]), lastPath: [], inventory: emptyInventory() };
 }
 const mapModel = (s: BattleState) => new MapModel(s.map, [], null);
 

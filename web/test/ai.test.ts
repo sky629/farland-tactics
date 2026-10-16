@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { emptyInventory } from '../src/battle/inventory';
 import { chooseAction } from '../src/battle/ai';
 import { BattleGrid, dist } from '../src/battle/grid';
 import { Rng } from '../src/battle/rng';
@@ -7,7 +8,7 @@ import { flatMap, MAGIC, tables, unit, units } from './helpers/battleFixtures';
 
 const entry = { event: 1, label: 'x', map: 'stage49', roster: 49, episode: '', objective: '', heal: true };
 function state(map = flatMap(11), us = units()): BattleState {
-  return { entry, map, grid: new BattleGrid(map), units: us, turn: 1, phase: { kind: 'enemy', queue: [] }, rng: Rng.fromSeed(1), lastPath: [] };
+  return { entry, map, grid: new BattleGrid(map), units: us, turn: 1, phase: { kind: 'enemy', queue: [] }, rng: Rng.fromSeed(1), lastPath: [], inventory: emptyInventory() };
 }
 const t = tables();
 

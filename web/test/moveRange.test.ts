@@ -129,6 +129,20 @@ describe('markTargets: map-wide spells', () => {
   });
 });
 
+describe('markTargets: items', () => {
+  it('an item marks party units within its range (self included, the fallen too) as kind 2', () => {
+    const grid = new BattleGrid(flatMap(7));
+    const u = unit({ slot: 0, c: 3, r: 3 });
+    const ally = unit({ slot: 1, c: 4, r: 3, status: 1, hp: 0 }), far = unit({ slot: 2, c: 5, r: 3 }), foe = unit({ slot: 10, c: 3, r: 4, side: 4 });
+    const t = new RangeTable(3, 3);
+    expect(markTargets(t, grid, units(u, ally, far, foe), u, 1007, tables())).toBe(2);
+    expect(t.kindAt(3, 3)).toBe(2);
+    expect(t.kindAt(4, 3)).toBe(2);
+    expect(t.kindAt(5, 3)).toBe(0);
+    expect(t.kindAt(3, 4)).toBe(0);
+  });
+});
+
 describe('pathTo (FUN_00438960) and canStop', () => {
   it('walks back along increasing move points and prefers the previous direction on ties', () => {
     const grid = new BattleGrid(flatMap(7));

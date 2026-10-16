@@ -1,6 +1,7 @@
 import type { MapData } from '../assets/types';
 import type { BattleEntry } from '../data/types';
 import type { BattleGrid, Dir } from './grid';
+import type { Inventory } from './inventory';
 import type { RangeTable } from './moveRange';
 import type { Hit } from './resolve';
 import type { RandomSource } from './rng';
@@ -29,6 +30,7 @@ export interface BattleState {
   phase: Phase;
   rng: RandomSource;        // an Rng in the game; tests inject fixed sources
   lastPath: Dir[];          // path of the selected unit's last move (dash detection)
+  inventory: Inventory;     // party consumables and gold (battle_rules.md §4.3)
 }
 
 export type Command =
@@ -48,4 +50,5 @@ export type BattleEvent =
   | { type: 'statusTick'; slot: number; status: number; value: number; cured: boolean }
   | { type: 'roundStart'; turn: number } | { type: 'phase'; kind: 'player' | 'enemy' }
   | { type: 'end'; result: 'victory' | 'defeat' }
+  | { type: 'pickup'; slot: number; item: number; gold: number } | { type: 'bagFull'; slot: number; item: number } | { type: 'revealed'; slot: number }
   | { type: 'rejected'; reason: string };

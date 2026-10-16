@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { emptyInventory } from '../src/battle/inventory';
 import { BattleGrid } from '../src/battle/grid';
 import { applyOutcome, checkEnd, expGain, roundStart, statusTick } from '../src/battle/outcome';
 import type { Hit } from '../src/battle/resolve';
@@ -9,7 +10,7 @@ import { fixedRng, flatMap, RACE, tables, unit, units } from './helpers/battleFi
 const entry = { event: 1, label: 'outfield', map: 'stage49', roster: 49, episode: '', objective: '', heal: true };
 function state(us: ReturnType<typeof units>, rng: RandomSource = Rng.fromSeed(1)): BattleState {
   const map = flatMap(9);
-  return { entry, map, grid: new BattleGrid(map), units: us, turn: 1, phase: { kind: 'player', sel: { mode: 'idle' } }, rng, lastPath: [] };
+  return { entry, map, grid: new BattleGrid(map), units: us, turn: 1, phase: { kind: 'player', sel: { mode: 'idle' } }, rng, lastPath: [], inventory: emptyInventory() };
 }
 const dmg = (target: number, value: number, dead = false): Hit => ({ target, kind: 'damage', value, crit: false, popup: String(value), statusAfter: dead ? 1 : 0 });
 const t = tables({ race: [RACE(), RACE({ name: 'slime', exp_value: 10, hp: 12 })] });
