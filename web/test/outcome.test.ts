@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { Battle } from '../src/battle/battle';
 import { emptyInventory } from '../src/battle/inventory';
 import { BattleGrid } from '../src/battle/grid';
 import { applyOutcome, checkEnd, expGain, roundStart, statusTick } from '../src/battle/outcome';
@@ -36,23 +37,28 @@ describe('expGain (FUN_0043a2e0 case 7)', () => {
 });
 
 describe('applyOutcome', () => {
-  it('kills convert enemies with drops into treasure objects and remove the others; EXP and level-ups follow', () => {
+  it('kills report deaths, EXP and level-ups; the corpses stay until settle converts drops into treasure objects and removes plain ones', () => {
     const actor = unit({ slot: 0, level: 1, exp: 95, hpMax: 30 });
     const chest = unit({ slot: 10, id: 8, race: 1, side: 4, hp: 0, status: 1, dropGold: 50, hpMax: 12 });
     const plain = unit({ slot: 11, id: 8, race: 1, side: 4, hp: 0, status: 1, hpMax: 12 });
-    const s = state(units(actor, chest, plain));
-    const events = applyOutcome(s, actor, [dmg(10, 12, true), dmg(11, 12, true)], t);
-    expect(s.units[10]).toMatchObject({ side: 7, race: 9, status: 0 });
+    const named = unit({ slot: 12, id: 21, race: 1, side: 4, hp: 0, status: 1, hpMax: 12 });
+    const s = state(units(actor, chest, plain, named));
+    const events = applyOutcome(s, actor, [dmg(10, 12, true), dmg(11, 12, true), dmg(12, 12, true)], t);
+    expect(events.map((e) => e.type)).toEqual(['died', 'died', 'died', 'exp', 'levelUp']);
+    expect(events.find((e) => e.type === 'exp')).toMatchObject({ slot: 0, gain: 80 });   // per kill: 10×12/12 + 10 = 20, same level → 100 %; the named kill counts double
+    expect(s.units[10]).toMatchObject({ side: 4, status: 1 });                            // still a corpse: the story hooks run first
+    const settled = new Battle(s, t).settle();
+    expect(s.units[10]).toMatchObject({ side: 7, race: 9, status: 0, id: 8 });
     expect(s.units[11]).toBeNull();
-    expect(events.map((e) => e.type)).toEqual(['died', 'died', 'removed', 'exp', 'levelUp', 'end']);
-    expect(events.find((e) => e.type === 'exp')).toMatchObject({ slot: 0, gain: 40 });   // per kill: 10×12/12 + 10 = 20, same level → 100 %
+    expect(s.units[12]).toMatchObject({ id: 21, status: 1, side: 4 });                    // a named corpse stays (story_flow.md §5 case 9)
+    expect(settled.map((e) => e.type)).toEqual(['removed', 'end']);
   });
-  it('a drop item makes a chest (race 8) and the battle is not over while a live enemy remains', () => {
+  it('a drop item makes a chest (race 8) on settle and the battle is not over while a live enemy remains', () => {
     const actor = unit({ slot: 0, level: 5 });
     const dead = unit({ slot: 10, id: 8, race: 1, side: 4, hp: 0, status: 1, dropItem: 118, hpMax: 12 });
     const alive = unit({ slot: 11, id: 8, race: 1, side: 4, hp: 3, hpMax: 12 });
     const s = state(units(actor, dead, alive));
-    const events = applyOutcome(s, actor, [dmg(10, 12, true)], t);
+    const events = [...applyOutcome(s, actor, [dmg(10, 12, true)], t), ...new Battle(s, t).settle()];
     expect(s.units[10]).toMatchObject({ side: 7, race: 8 });
     expect(events.some((e) => e.type === 'end')).toBe(false);
   });

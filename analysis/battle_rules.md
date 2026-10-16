@@ -402,7 +402,7 @@ if side == 0: [0x1c..] = { m | magic[m].mask & 1<<(id-1), 0 < magic[m].lv ≤ le
 ```
 - 스테이지 시작 리셋(0x4085f0 opcode 0x1d): HP = max, **MP = MPmax/2**, 상태·버프·[0x32] 초기화 [관찰].
 - 승패 [관찰 0x43a2e0 case 10]: 파티 10슬롯 중 행동 가능 유닛 0 → GAMEOVER; 스테이지 유닛 중 HP>0, side∉{1,7}, status≠9 인 유닛 0 → COMPLETE.
-- 적 사망 처리 [관찰 case 9]: [0xe](드롭 아이템) 또는 [0xf](드롭 골드)가 있으면 side 7, race 8(보물상자)/9(금) 오브젝트로 전환; 없으면 제거.
+- 적 사망 처리 [관찰 case 9]: [0xe](드롭 아이템) 또는 [0xf](드롭 골드)가 있으면 side 7, race 8(보물상자)/9(금) 오브젝트로 전환; 없으면 id 8·id > 30 시체만 제거. 이름 있는 시체(id 1..30, ≠ 8)는 스크립트가 `UNIT_TO_ID8`/`REMOVE_DEAD` 로 치울 때까지 남는다(`story_flow.md` §5). 이 처리는 대상별 스크립트 훅(case 4) **뒤**에 온다 → 웹판은 `Battle.settle()` 로 분리.
 
 ---
 

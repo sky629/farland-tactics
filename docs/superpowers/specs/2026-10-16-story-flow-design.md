@@ -91,8 +91,9 @@ interface Host {
 
 - 모드: `title | script | town | battle | modal`. 매 프레임: `script` 면 `vm.step`; `battle` 면 기존 `game/main.ts` 의 루프(선택·적 페이즈·표현 큐)를 `Game` 안으로 옮긴다; `town` 은 마우스 처리와 레이어 애니.
 - 전투 훅(`story_flow.md` §5): `Battle.reduce` 결과 이벤트를 `Game` 이 받아
-  1. `action` 전(플레이어 `act`/AI 행동 직전): 라벨 `battle%02d` 가 stage 파일에 있으면 스크립트를 먼저 돌리고 `END_RESUME` 에서 행동을 수행한다 [결정: 연출 대체가 아니라 "스크립트 뒤 즉시 수행"으로 단순화].
-  2. `action` 후 대상마다 `BEAT/AFTER/ASSIST` → `WIN`, 표현 큐가 빈 뒤 순서대로 실행(각 라벨은 `battleTarget` 을 그 대상으로).
+  1. `action` 전(플레이어 `act`/AI 행동 직전, `Battle` 옵션 `beforeAction`): 첫 적대 대상의 id(대상이 파티면 행동 유닛 id)로 라벨 `battle%02d` 가 stage 파일에 있으면 `Battle` 이 행동을 보류하고 스크립트를 먼저 돌린 뒤 `END_RESUME` → `Battle.resume()` 으로 수행한다 [결정: 연출 대체가 아니라 "스크립트 뒤 즉시 수행"으로 단순화]. 원작 `battle18/19` 는 적의 공격 직전에도 돈다(`TEST_ENEMY_PHASE`). 스크립트가 `END` 로 끝나면 보류 행동은 다음 명령 때 수행된다.
+  2. `action` 후 대상마다(표현 큐가 빈 뒤) `BEAT`(쓰러짐)/`AFTER`(생존)/`ASSIST`(파티가 파티를 도움, 행동 유닛 id) 중 하나 — 라벨이 있으면 그 대상은 끝, 없고 대상이 쓰러졌으며 행동 유닛이 파티면 `WIN%02d`(행동 유닛 id). id 8 대상은 `BEAT/AFTER/ASSIST` 없음. 각 라벨은 `battleTarget`/`actor` 를 그 대상·행동 유닛으로.
+  3. 대상 훅 뒤 `Battle.settle()`(`deferSettle`): 드롭 오브젝트 전환, 시체(id 8·id > 30) 제거, 승패 판정, 적 큐 소진 시 적 턴 종료. 이름 있는 시체는 남는다(`battle_rules.md` §5). 그 뒤 `levelup%02d`(EVENT00) → `COMPLETE`(stage)/`GAMEOVER`(EVENT00); 라벨이 없으면 결과 패널.
   3. `levelUp` → `levelup%02d`(행동 유닛 id, EVENT00).
   4. `end: defeat` → `GAMEOVER`(EVENT00); `end: victory` → `COMPLETE`(stage). 라벨이 없으면 결과 패널을 띄우고 마을로 돌아가지 않는다(원작도 멈춘다).
   5. 스크립트가 `FIELD_MODE` 없이 `END` 하면 전투로 복귀, `TOWN` 이면 마을로.
@@ -126,7 +127,7 @@ interface Host {
 - `vm.test.ts`: 명령 그룹별(흐름·플래그·대기·유닛·소지품·호스트 호출) 가짜 호스트 테스트; 라벨 없음 → ended; CALL 깊이 1.
 - `eventCorpus.test.ts`: 20개 파일 전부 로드, `JUMP/CALL/JUMP_IF_*/LOAD_SCRIPT` 의 라벨 존재(대상 파일 포함), `EVENT00 begin` 을 가짜 호스트로 `TOWN` 까지 실행.
 - `campaign.test.ts`: 새 게임 초기값(골드 200, 턴 −1), `LOAD_UNITS`/`BATTLE_START` 후 `Battle` 이 같은 유닛 배열을 쓴다.
-- `game.test.ts`(헤드리스): 전투 훅 순서(`BEAT` → `WIN` → `levelup` → `COMPLETE`), `END` 후 모드 복원, `TOWN` 전환.
+- `gameCore.test.ts`/`gameHooks.test.ts`(헤드리스): 전투 훅 순서(`battle` 보류 → `BEAT`|`WIN` → settle → `levelup` → `COMPLETE`/`GAMEOVER`), `END` 후 모드 복원, `TOWN` 전환.
 - `town.test.ts`: 핫스팟 적중·비활성·라벨 선택(stage 파일 없으면 EVENT00).
 - `dialogue.test.ts`: 텍스트 태그 파싱, 화자 이름 규칙(가짜 DOM).
 

@@ -5,7 +5,7 @@ import { chooseAction } from './ai';
 import { BattleGrid, dirTo, dist, hostile, incap, liveUnits, stepCell, type Dir } from './grid';
 import { addGold, emptyInventory, giveItem, takeItem, usableItems, type Inventory } from './inventory';
 import { canStop, computeMoveRange, hasMoveTarget, markTargets, pathTo, RangeTable } from './moveRange';
-import { applyOutcome, endIfOver, roundStart, statusTick } from './outcome';
+import { applyOutcome, endIfOver, removeFallen, roundStart, statusTick } from './outcome';
 import { resolveAction } from './resolve';
 import { Rng, type RandomSource } from './rng';
 import { targetsOf } from './targets';
@@ -104,8 +104,20 @@ export function isDash(grid: BattleGrid, unit: Unit, path: Dir[], target: [numbe
 
 const reject = (reason: string): BattleEvent[] => [{ type: 'rejected', reason }];
 
+/** A resolved action waiting to be performed (a `battle%02d` script runs first; story_flow.md §5). */
+interface HeldAction { u: Unit; action: number; cell: [number, number]; targets: Unit[]; path: Dir[]; player: boolean }
+
+export interface BattleOptions {
+  /** Story hook asked before every action with its resolved targets; `true` holds the action until `resume()`. */
+  beforeAction?: (actor: Unit, action: number, targets: Unit[]) => boolean;
+  /** Leave corpse removal, drop conversion and the end check to an explicit `settle()` (the story runs its hooks in between). */
+  deferSettle?: boolean;
+}
+
 export class Battle {
-  constructor(readonly state: BattleState, private readonly tables: Tables) {}
+  private held: HeldAction | null = null;
+
+  constructor(readonly state: BattleState, private readonly tables: Tables, private readonly opts: BattleOptions = {}) {}
 
   static start(entry: BattleEntry, map: MapData, roster1: RosterUnit[], roster: RosterUnit[], tables: Tables, seed: number, inventory: Inventory = emptyInventory()): Battle {
     const rng = Rng.fromSeed(seed);
@@ -128,7 +140,35 @@ export class Battle {
     return this.state.units.slice(0, PARTY_SLOTS).every((u) => !u || incap(u.status) || (u.moved && u.acted));
   }
 
+  /** One command → events. A held action still waiting is performed first; without `deferSettle` the outcome is settled in the same batch. */
   reduce(cmd: Command): BattleEvent[] {
+    const events = this.held ? this.resume() : [];
+    events.push(...this.step(cmd));
+    if (!this.opts.deferSettle) events.push(...this.settle());
+    return events;
+  }
+
+  /** Performs the action a `beforeAction` hook held back (END_RESUME). */
+  resume(): BattleEvent[] {
+    const h = this.held;
+    if (!h) return [];
+    this.held = null;
+    const events = this.finish(h);
+    if (!this.opts.deferSettle) events.push(...this.settle());
+    return events;
+  }
+
+  /** FUN_0043a2e0 cases 9–10 after the story hooks: drops and plain corpses leave the field, the battle may end, an exhausted enemy queue ends the enemy phase. */
+  settle(): BattleEvent[] {
+    const s = this.state;
+    const events: BattleEvent[] = [];
+    for (const u of s.units) if (u && u.slot >= PARTY_SLOTS && u.status === 1 && u.hp === 0 && u.side !== 7) removeFallen(s, u, events);
+    if (s.phase.kind !== 'end') events.push(...endIfOver(s));
+    if (s.phase.kind === 'enemy' && s.phase.queue.length === 0 && !this.held) events.push(...this.endEnemyPhase());
+    return events;
+  }
+
+  private step(cmd: Command): BattleEvent[] {
     const s = this.state;
     if (s.phase.kind === 'end') return reject('battle over');
     if (s.phase.kind === 'enemy') return cmd.type === 'enemyStep' ? this.enemyStep() : reject('enemy phase');
@@ -250,8 +290,14 @@ export class Battle {
     const targets = targetsOf(this.state.grid, this.state.units, probe, sel.action, [c, r], this.tables).map((t) => (t === probe ? u : t));
     if (targets.length === 0) return reject('no target there');
     u.dir = dir;
-    const events = this.perform(u, sel.action, [c, r], targets, this.state.lastPath);
-    if (this.state.phase.kind === 'player') this.setSel(u.status === 1 ? { mode: 'idle' } : { mode: 'face', slot: u.slot });
+    const h: HeldAction = { u, action: sel.action, cell: [c, r], targets, path: this.state.lastPath, player: true };
+    if (this.opts.beforeAction?.(u, h.action, targets)) { this.held = h; return []; }
+    return this.finish(h);
+  }
+
+  private finish(h: HeldAction): BattleEvent[] {
+    const events = this.perform(h.u, h.action, h.cell, h.targets, h.path);
+    if (h.player && this.state.phase.kind === 'player') this.setSel(h.u.status === 1 ? { mode: 'idle' } : { mode: 'face', slot: h.u.slot });
     return events;
   }
 
@@ -327,13 +373,16 @@ export class Battle {
     if (d.action !== null && d.cell) {
       if (d.cell[0] !== u.c || d.cell[1] !== u.r) u.dir = dirTo(u.c, u.r, d.cell[0], d.cell[1]);
       const targets = targetsOf(s.grid, s.units, u, d.action, d.cell, this.tables);
-      if (targets.length > 0) events.push(...this.perform(u, d.action, d.cell, targets, d.path));
-      else u.acted = true;
+      if (targets.length === 0) u.acted = true;
+      else {
+        const h: HeldAction = { u, action: d.action, cell: d.cell, targets, path: d.path, player: false };
+        if (this.opts.beforeAction?.(u, h.action, targets)) { this.held = h; return events; }
+        events.push(...this.finish(h));
+      }
     } else if (d.faceDir !== null) {
       u.dir = d.faceDir;
       events.push({ type: 'faced', slot: u.slot, dir: d.faceDir });
     }
-    if (s.phase.kind === 'enemy' && s.phase.queue.length === 0) events.push(...this.endEnemyPhase());
-    return events;
+    return events;                                                             // an empty queue ends the phase in settle()
   }
 }

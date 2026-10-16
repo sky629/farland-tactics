@@ -33,12 +33,15 @@ export function checkEnd(state: BattleState): 'victory' | 'defeat' | null {
   return enemies.length === 0 ? 'victory' : null;
 }
 
-/** A fallen non-party unit turns into a drop object (item → race 8, gold → race 9) or leaves its slot (FUN_0043a2e0 case 9). */
+/**
+ * FUN_0043a2e0 case 9: a fallen non-party unit with a drop turns into a drop object (item → race 8, gold → race 9);
+ * without one, only plain corpses (id 8 or id > 30) leave their slot — a named corpse stays until a script converts (UNIT_TO_ID8) or removes it.
+ */
 export function removeFallen(state: BattleState, t: Unit, events: BattleEvent[]): void {
   if (t.slot < PARTY_SLOTS) return;
   if (t.dropItem !== 0 || t.dropGold !== 0) {
     t.side = 7; t.race = t.dropItem !== 0 ? 8 : 9; t.status = 0; t.id = 8;
-  } else {
+  } else if (t.id === 8 || t.id > 30) {
     state.units[t.slot] = null;
     events.push({ type: 'removed', slot: t.slot });
   }
@@ -52,7 +55,7 @@ export function endIfOver(state: BattleState): BattleEvent[] {
   return [{ type: 'end', result: end }];
 }
 
-/** FUN_0043a2e0 cases 4, 7, 8, 9, 10 after one action: deaths → EXP (before removal) → drops/removal → level-ups → end check. */
+/** Hits are already applied: `died` per fallen target, then the actor's experience and level-ups. Removal and the end check wait for `Battle.settle`. */
 export function applyOutcome(state: BattleState, actor: Unit, hits: Hit[], tables: Tables): BattleEvent[] {
   const events: BattleEvent[] = [];
   const dead: Unit[] = [];
@@ -68,7 +71,6 @@ export function applyOutcome(state: BattleState, actor: Unit, hits: Hit[], table
       if (t) total += expGain(actor, t, h, tables, k);
     }
   }
-  for (const t of dead) removeFallen(state, t, events);
   if (actor.side === 0) {
     actor.exp = Math.min(actor.exp + total, EXP_CAP);
     events.push({ type: 'exp', slot: actor.slot, gain: total });
@@ -79,7 +81,6 @@ export function applyOutcome(state: BattleState, actor: Unit, hits: Hit[], table
       events.push({ type: 'levelUp', slot: actor.slot, level: actor.level, learned });
     }
   }
-  events.push(...endIfOver(state));
   return events;
 }
 
