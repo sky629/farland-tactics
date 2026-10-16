@@ -4,14 +4,14 @@ import type { BattleEvent, Command } from '../battle/types';
 import type { Unit } from '../battle/unit';
 import { DataError, DataLoader } from '../data/loader';
 import type { BattleEntry, Tables } from '../data/types';
-import { Presenter, type SpriteProvider } from '../field/presenter';
+import { Presenter } from '../field/presenter';
 import { addGold, emptyInventory, giveItem, usableItems } from '../battle/inventory';
 import { animApd } from '../field/unitSprites';
 import { cellCommand } from './battleInput';
+import { SpriteCache } from './spriteCache';
 import { VIEW_H, VIEW_W } from '../iso/grid';
 import { MapModel } from '../map/mapModel';
 import { Renderer, type Scene } from '../render/renderer';
-import { ApdModel } from '../sprite/apdModel';
 import { Panel } from '../ui/panel';
 import { clampCamera, fitScale } from '../viewer/scale';
 
@@ -19,30 +19,6 @@ import { clampCamera, fitScale } from '../viewer/scale';
 const STARTER_KIT: { gold: number; items: [number, number][] } = { gold: 300, items: [[1, 3], [2, 2], [7, 1]] };
 
 const $ = <T extends HTMLElement>(id: string): T => { const el = document.getElementById(id); if (!el) throw new Error(`missing element #${id}`); return el as T; };
-
-/** Loads APDs on demand; returns null until a sprite file is ready or when it does not exist. */
-class SpriteCache implements SpriteProvider {
-  private readonly models = new Map<string, ApdModel | null>();
-  private readonly pending = new Set<string>();
-  constructor(private readonly loader: AssetLoader, private readonly renderer: Renderer, private readonly known: Set<string>, private readonly onError: (e: unknown) => void) {}
-  apd(name: string): ApdModel | null {
-    if (this.models.has(name)) return this.models.get(name)!;
-    if (!this.known.has(name)) { this.models.set(name, null); return null; }
-    if (!this.pending.has(name)) {
-      this.pending.add(name);
-      void (async () => {
-        try {
-          const data = await this.loader.apd(name);
-          const sheets = await Promise.all(data.sheets.map((s) => this.loader.image('sprite', s)));
-          const model = new ApdModel(name, data, sheets);
-          await this.renderer.prepareApd(model);
-          this.models.set(name, model);
-        } catch (e) { this.models.set(name, null); this.onError(e); }
-      })();
-    }
-    return null;
-  }
-}
 
 const canvas = $<HTMLCanvasElement>('view');
 const renderer = new Renderer(canvas);

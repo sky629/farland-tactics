@@ -40,6 +40,7 @@ web/src/game/campaign.ts    Campaign: units(50), inventory, flags, townFlags, st
 web/src/game/game.ts        Game: 모드 기계, Host 구현(캔버스/패널에 연결), 전투 훅
 web/src/town/town.ts        핫스팟 표(story_flow.md §3.2), 레이어 그리기, 마우스 처리
 web/src/ui/dialogue.ts      대화창(상단/하단), 중앙 메시지, 예/아니오, 전투 결과, 상점 목록
+web/src/game/browserStage.ts  Stage 구현: 캔버스·렌더러·맵 로딩·마을 레이어·대화 오버레이 연결
 web/play.html, web/src/play/main.ts   타이틀(새 게임 · 전투 테스트 링크) 와 조립
 ```
 
@@ -94,9 +95,7 @@ interface Host {
   1. `action` 전(플레이어 `act`/AI 행동 직전, `Battle` 옵션 `beforeAction`): 첫 적대 대상의 id(대상이 파티면 행동 유닛 id)로 라벨 `battle%02d` 가 stage 파일에 있으면 `Battle` 이 행동을 보류하고 스크립트를 먼저 돌린 뒤 `END_RESUME` → `Battle.resume()` 으로 수행한다 [결정: 연출 대체가 아니라 "스크립트 뒤 즉시 수행"으로 단순화]. 원작 `battle18/19` 는 적의 공격 직전에도 돈다(`TEST_ENEMY_PHASE`). 스크립트가 `END` 로 끝나면 보류 행동은 다음 명령 때 수행된다.
   2. `action` 후 대상마다(표현 큐가 빈 뒤) `BEAT`(쓰러짐)/`AFTER`(생존)/`ASSIST`(파티가 파티를 도움, 행동 유닛 id) 중 하나 — 라벨이 있으면 그 대상은 끝, 없고 대상이 쓰러졌으며 행동 유닛이 파티면 `WIN%02d`(행동 유닛 id). id 8 대상은 `BEAT/AFTER/ASSIST` 없음. 각 라벨은 `battleTarget`/`actor` 를 그 대상·행동 유닛으로.
   3. 대상 훅 뒤 `Battle.settle()`(`deferSettle`): 드롭 오브젝트 전환, 시체(id 8·id > 30) 제거, 승패 판정, 적 큐 소진 시 적 턴 종료. 이름 있는 시체는 남는다(`battle_rules.md` §5). 그 뒤 `levelup%02d`(EVENT00) → `COMPLETE`(stage)/`GAMEOVER`(EVENT00); 라벨이 없으면 결과 패널.
-  3. `levelUp` → `levelup%02d`(행동 유닛 id, EVENT00).
-  4. `end: defeat` → `GAMEOVER`(EVENT00); `end: victory` → `COMPLETE`(stage). 라벨이 없으면 결과 패널을 띄우고 마을로 돌아가지 않는다(원작도 멈춘다).
-  5. 스크립트가 `FIELD_MODE` 없이 `END` 하면 전투로 복귀, `TOWN` 이면 마을로.
+  4. 훅 스크립트가 `FIELD_MODE` 없이 `END` 하면 전투로 복귀(선택 상태는 `Battle` 이 둔 그대로), `TOWN` 이면 마을로(전투 종료).
 - `BATTLE_START` 는 `Battle` 을 공유 유닛 위에 만든다. 플레이어 턴 입력은 하위 프로젝트 2 의 패널을 그대로 쓴다(`game.html` 과 `play.html` 이 같은 `Panel`).
 
 ## 9. 마을 화면
