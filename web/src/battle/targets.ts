@@ -24,6 +24,7 @@ const campOk = (actor: Unit, u: Unit, magic: MagicData) => magic.target === 2 ||
 export function targetsOf(grid: BattleGrid, units: (Unit | null)[], actor: Unit, action: number, cell: [number, number], tables: Tables): Unit[] {
   const out: Unit[] = [];
   const hA = grid.height(actor.c, actor.r);
+  if (action >= 1000) { const u = unitAt(units, cell[0], cell[1]); return u ? [u] : []; }   // consumable: the unit on the chosen cell
   if (action === 0) {
     const w = tables.item[actor.weapon]!;
     if (w.weapon_type === 1) {

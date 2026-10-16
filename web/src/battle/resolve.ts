@@ -211,9 +211,35 @@ export function resolveMagic(a: Unit, t: Unit, index: number, ctx: ResolveContex
   return hit(t, 'damage', dmg, String(dmg));
 }
 
+const STAT_UP: Record<number, ['hpMax' | 'mpMax' | 'str' | 'def' | 'wis' | 'mgr', string]> = {
+  155: ['hpMax', 'hp_up!'], 156: ['mpMax', 'mp_up!'], 157: ['str', 'str_up!'], 158: ['def', 'def_up!'], 159: ['wis', 'wis_up!'], 160: ['mgr', 'mgr_up!'],
+};
+
+/** battle_rules.md §4.2: one consumable (`id` = action − 1000) on one unit. HP/MP first, then the status rule; the popup prefers the HP number. */
+export function resolveItem(t: Unit, id: number, ctx: ResolveContext): Hit {
+  const item = ctx.tables.item[id]!;
+  if ((t.status === 1 || t.side === 7) && item.status_code !== 1) return hit(t, 'miss', 0, 'miss!');
+  const heal = Math.max(Math.min(item.hp_heal, t.hpMax - t.hp), 0), mp = Math.max(Math.min(item.mp_heal, t.mpMax - t.mp), 0);
+  t.hp += heal; t.mp += mp;
+  const value = heal > 0 ? heal : mp;
+  const popup = value > 0 ? String(value) : '';
+  const miss = () => (value > 0 ? hit(t, 'heal', value, popup) : hit(t, 'miss', 0, 'miss!'));
+  const up = STAT_UP[id];
+  if (up) { t[up[0]] = Math.min(t[up[0]] + 5, 999); return hit(t, 'buff', 5, up[1]); }
+  const before = t.status;
+  if (id === 6) { if (t.status === 0) return miss(); t.status = 0; }
+  else if (id === 7) { if (t.status === 1 || t.status === 3) t.status = 0; }
+  else if (id === 8 || id === 9) { if (t.status === 1 || t.status === 5) t.status = 0; }
+  else if (id === 163) t.status = 0;
+  else if (item.status_code !== 0) { if (t.status !== item.status_code) return miss(); t.status = 0; }
+  if (t.status === before) return value > 0 ? hit(t, 'heal', value, popup) : hit(t, 'none', 0, '');
+  return value > 0 ? hit(t, 'heal', value, popup) : hit(t, 'cure', 0, 'well');
+}
+
 /** One FUN_0043b4a0 call per target; lifesteal/drain heal the caster (last target) by the first damage dealt. */
 export function resolveAction(actor: Unit, action: number, targets: Unit[], ctx: ResolveContext): Hit[] {
   if (action === 0) return targets.map((t) => resolvePhysical(actor, t, ctx));
+  if (action >= 1000) return targets.map((t) => resolveItem(t, action - 1000, ctx));
   const hits: Hit[] = [];
   for (const t of targets) {
     if ((action === 55 || action === 81) && t === actor) {
