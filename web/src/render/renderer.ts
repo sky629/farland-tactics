@@ -1,3 +1,4 @@
+import type { FxSnapshot } from '../field/effects';
 import { IndexedBitmaps } from '../gfx/indexed';
 import { TILE_H, TILE_W, VIEW_H, VIEW_W } from '../iso/grid';
 import type { MapModel, PlacedCell } from '../map/mapModel';
@@ -8,7 +9,7 @@ import { rectVisible } from './culling';
 export interface PlacedSprite { model: ApdModel; player: AnimPlayer; c: number; r: number; layer: number; offset?: { x: number; y: number }; flipH?: boolean }
 export interface Overlay { grid: boolean; height: boolean; land: boolean; blocked: boolean }
 export interface SceneText { x: number; y: number; text: string }   // map pixels, centered
-export interface Scene { map: MapModel | null; sprites: PlacedSprite[]; camera: { x: number; y: number }; overlay: Overlay; seeThrough: boolean; texts?: SceneText[] }
+export interface Scene { map: MapModel | null; sprites: PlacedSprite[]; camera: { x: number; y: number }; overlay: Overlay; seeThrough: boolean; texts?: SceneText[]; fx?: FxSnapshot }
 
 /** Within one diagonal row the original sorts by the sprite's layer field (+0x48); equal layers keep placement order. */
 export function sortRow(sprites: PlacedSprite[]): PlacedSprite[] {
@@ -63,25 +64,31 @@ export class Renderer {
     ctx.fillStyle = '#000';
     ctx.fillRect(0, 0, VIEW_W, VIEW_H);
     const map = scene.map;
-    if (!map) return;
-    const gfx = this.mapBitmaps.get(map);
-    if (!gfx) throw new Error('map bitmaps not prepared; call prepareMap first');
-    const cam = scene.camera;
-    if (gfx.bg) ctx.drawImage(gfx.bg.get(null), -cam.x, -cam.y);
+    if (map) {
+      const gfx = this.mapBitmaps.get(map);
+      if (!gfx) throw new Error('map bitmaps not prepared; call prepareMap first');
+      const cam = scene.camera;
+      if (gfx.bg) ctx.drawImage(gfx.bg.get(null), -cam.x, -cam.y);
 
-    const spritesByRow = new Map<number, PlacedSprite[]>();
-    for (const sp of scene.sprites) {
-      const s = sp.c + sp.r;
-      if (!spritesByRow.has(s)) spritesByRow.set(s, []);
-      spritesByRow.get(s)!.push(sp);
+      const spritesByRow = new Map<number, PlacedSprite[]>();
+      for (const sp of scene.sprites) {
+        const s = sp.c + sp.r;
+        if (!spritesByRow.has(s)) spritesByRow.set(s, []);
+        spritesByRow.get(s)!.push(sp);
+      }
+      for (const row of map.rows) {
+        for (const p of row.cells) this.drawObjects(gfx, p, cam, false, false);
+        for (const sp of sortRow(spritesByRow.get(row.s) ?? [])) this.drawSprite(map, sp, cam);
+        for (const p of row.cells) this.drawObjects(gfx, p, cam, true, scene.seeThrough);
+      }
+      this.drawTexts(scene.texts ?? [], cam);
+      this.drawOverlay(map, scene.overlay, cam);
     }
-    for (const row of map.rows) {
-      for (const p of row.cells) this.drawObjects(gfx, p, cam, false, false);
-      for (const sp of sortRow(spritesByRow.get(row.s) ?? [])) this.drawSprite(map, sp, cam);
-      for (const p of row.cells) this.drawObjects(gfx, p, cam, true, scene.seeThrough);
-    }
-    this.drawTexts(scene.texts ?? [], cam);
-    this.drawOverlay(map, scene.overlay, cam);
+    const fx = scene.fx;
+    if (!fx) return;
+    if (fx.image) ctx.drawImage(fx.image, 0, 0, VIEW_W, VIEW_H);                 // SHOW_IMAGE covers the whole screen
+    if (fx.tint) { ctx.globalAlpha = fx.tint.alpha; ctx.fillStyle = fx.tint.color; ctx.fillRect(0, 0, VIEW_W, VIEW_H); ctx.globalAlpha = 1; }
+    if (fx.fade) { ctx.globalAlpha = fx.fade.alpha; ctx.fillStyle = fx.fade.color === 'white' ? '#fff' : '#000'; ctx.fillRect(0, 0, VIEW_W, VIEW_H); ctx.globalAlpha = 1; }
   }
 
   /** FUN_0042d1e0: the objects of one cell, back (front == 0) or front (front != 0). Mode 4 = checkerboard see-through. */
