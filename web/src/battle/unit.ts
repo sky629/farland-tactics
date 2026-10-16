@@ -11,6 +11,7 @@ export interface Unit {
   status: number; side: number;
   weapon: number; armor: number; acc: [number, number];
   dropItem: number; dropGold: number;
+  bag: number[];                       // 4 equipment slots of a party unit (words 0xe..0x11; battle_rules.md §4.3)
   hpMax: number; hp: number; mpMax: number; mp: number; exp: number;
   str: number; def: number; wis: number; mgr: number; agi: number;
   spells: number[];
@@ -56,7 +57,7 @@ export function growUnit(u: Unit, race: RaceData, randomize: boolean, rng: Rando
 export function createUnit(rec: RosterUnit, slot: number, tables: Tables, rng: RandomSource): Unit {
   const u: Unit = {
     slot, id: rec.unit_id, race: rec.race, level: rec.level, dir: (rec.dir & 3) as 0 | 1 | 2 | 3, c: rec.c, r: rec.r,
-    status: rec.status, side: rec.side, weapon: rec.weapon, armor: rec.armor, acc: [0, 0], dropItem: rec.drop_item, dropGold: rec.drop_gold,
+    status: rec.status, side: rec.side, weapon: rec.weapon, armor: rec.armor, acc: [0, 0], dropItem: rec.drop_item, dropGold: rec.drop_gold, bag: [0, 0, 0, 0],
     hpMax: 0, hp: 0, mpMax: 0, mp: 0, exp: 0, str: 0, def: 0, wis: 0, mgr: 0, agi: 0, spells: [],
     buff: { str: 0, def: 0, wis: 0, mgr: 0, agi: 0 }, elem: [0, 0, 0], moved: true, acted: true, special: false, statusCounter: 0,
   };

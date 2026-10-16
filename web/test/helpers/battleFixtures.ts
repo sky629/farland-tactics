@@ -11,20 +11,23 @@ export const RACE = (over: Partial<RaceData> = {}): RaceData => ({
 });
 export const ITEM = (over: Partial<ItemData> = {}): ItemData => ({
   name: 'item', price: 0, hp_heal: 0, mp_heal: 0, atk: 0, def: 0, wis: 0, mgr: 0, agi: 0, elem0: 0, elem1: 0, elem2: 0,
-  range_min: 1, range_max: 1, slot: 0, use_effect: 0, weapon_type: 0, status_code: 0, race_mask: 0, ...over,
+  range_min: 1, range_max: 1, slot: 0, use_effect: 0, weapon_type: 0, status_code: 0, race_mask: 0xffff, ...over,
 });
 export const MAGIC = (over: Partial<MagicData> = {}): MagicData => ({
   name: 'magic', learn_level: 1, mp_cost: 6, elem0: 5, elem1: 0, elem2: 0, range_min: 1, range_max: 3, effect: 'BURST',
   effect_no: 1, target: 0, shape: 0, learn_mask: 1, short: '', ...over,
 });
 
-/** race 0 mage-like, 1 slime-like (strong def, low hp), 2 flying. item 0 none, 1 sword, 2 bow, 3 pike (line), 4 halberd (T), 5 armor, 6 poison dagger. magic 0 none, 1 burst (shape 1), 2 heal (shape 1, allies), 3 line (shape 2), 4 self-area (shape 3), 5 sleep (status), 6 quake (shape 4, map-wide). */
+/** race 0 mage-like, 1 slime-like (strong def, low hp), 2 flying. item 0 none, 1 sword, 2 bow, 3 pike (line), 4 halberd (T), 5 armor, 6 poison dagger, 7 herb (slot 3, heals 20), 8 antidote (cures poison), 9 dud (no use effect). magic 0 none, 1 burst (shape 1), 2 heal (shape 1, allies), 3 line (shape 2), 4 self-area (shape 3), 5 sleep (status), 6 quake (shape 4, map-wide). */
 export function tables(over: Partial<Tables> = {}): Tables {
   return {
     race: [RACE(), RACE({ name: 'slime', hp: 12, hp_up: 4, str: 20, def: 22, agi: 12, size: 3 }), RACE({ name: 'bird', cost_land0: 4 })],
     item: [ITEM({ name: 'none', range_min: 0, range_max: 0 }), ITEM({ name: 'sword', atk: 10 }), ITEM({ name: 'bow', atk: 6, weapon_type: 3, range_min: 1, range_max: 7 }),
       ITEM({ name: 'pike', atk: 8, weapon_type: 1, range_min: 1, range_max: 2 }), ITEM({ name: 'halberd', atk: 9, weapon_type: 2 }),
-      ITEM({ name: 'armor', slot: 1, def: 5 }), ITEM({ name: 'poison dagger', atk: 5, status_code: 2 })],
+      ITEM({ name: 'armor', slot: 1, def: 5 }), ITEM({ name: 'poison dagger', atk: 5, status_code: 2 }),
+      ITEM({ name: 'herb', slot: 3, hp_heal: 20, use_effect: 1, range_min: 0, range_max: 1 }),
+      ITEM({ name: 'antidote', slot: 3, status_code: 2, use_effect: 1, range_min: 0, range_max: 1 }),
+      ITEM({ name: 'dud', slot: 3, range_min: 0, range_max: 1 })],
     magic: [MAGIC({ name: 'none', mp_cost: 0 }), MAGIC({ name: 'burst', shape: 1, range_min: 2, range_max: 6 }),
       MAGIC({ name: 'heal', shape: 1, target: 1, elem0: 0, elem2: 1, range_min: 0, range_max: 6, learn_mask: 2 }),
       MAGIC({ name: 'line', shape: 2, range_min: 1, range_max: 4 }), MAGIC({ name: 'area', shape: 3, range_min: 1, range_max: 2 }),
@@ -35,7 +38,7 @@ export function tables(over: Partial<Tables> = {}): Tables {
 
 export function unit(over: Partial<Unit> & { slot: number }): Unit {
   return {
-    id: 1, race: 0, level: 1, dir: 0, c: 0, r: 0, status: 0, side: 0, weapon: 1, armor: 0, acc: [0, 0], dropItem: 0, dropGold: 0,
+    id: 1, race: 0, level: 1, dir: 0, c: 0, r: 0, status: 0, side: 0, weapon: 1, armor: 0, acc: [0, 0], dropItem: 0, dropGold: 0, bag: [0, 0, 0, 0],
     hpMax: 30, hp: 30, mpMax: 20, mp: 20, exp: 0, str: 20, def: 10, wis: 10, mgr: 10, agi: 10, spells: [],
     buff: { str: 0, def: 0, wis: 0, mgr: 0, agi: 0 }, elem: [0, 0, 0], moved: false, acted: false, special: false, statusCounter: 0,
     ...over,
