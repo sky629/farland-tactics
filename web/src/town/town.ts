@@ -21,6 +21,45 @@ export const HOTSPOTS: Hotspot[] = [
   { label: 'backdoor', name: '뒷문', click: [228, 190, 260, 222], highlight: [248, 166, 294, 202] },
 ];
 
+/** FUN_0042b080 WM_LBUTTONDOWN: the first active facility whose click rect holds the point (PtInRect: right/bottom exclusive). */
+export function hitTest(x: number, y: number, flags: number[]): number | null {
+  for (let i = 0; i < HOTSPOTS.length; i++) {
+    const [l, t, r, b] = HOTSPOTS[i]!.click;
+    if ((flags[i] ?? 0) !== 0 && x >= l && x < r && y >= t && y < b) return i;
+  }
+  return null;
+}
+
+/** FUN_0042ad70: `Town%02d` sheets of a set — base 0/10/20 + layer 0..3; the 128×128 extra layer (4) exists only for the night set with TOWN_EXTRA. */
+export function townLayers(set: 1 | 2 | 3, extra: boolean): string[] {
+  const base = set === 3 ? 20 : set === 2 ? 10 : 0;
+  const n = set === 2 && extra ? 5 : 4;
+  return Array.from({ length: n }, (_, i) => `town${String(base + i).padStart(2, '0')}`);
+}
+
+/** FUN_0042b740: the two animation counters advance together, at most once per 50 ms. */
+export const TOWN_TICK_MS = 50;
+/** Counter 2 runs 0..29 but skips 2 and 4 after each wrap (28 values a cycle). */
+const COUNTER2 = [0, 1, 3, ...Array.from({ length: 25 }, (_, i) => 5 + i)];
+
+export interface SheetFrame { sx: number; sy: number; w: number; h: number; dx: number; dy: number }
+
+/**
+ * story_flow.md §3.1: layers 1 and 2 show frame k = (counter1 % 15) / 3 of a 2-column × 3-row sheet;
+ * layer 4 shows frame j = 5 − |counter2 − 5| while counter2 < 11 (a 0→5→0 swing), else frame 0.
+ */
+export function layerFrame(layer: 1 | 2 | 4, now: number): SheetFrame {
+  const tick = Math.floor(now / TOWN_TICK_MS);
+  if (layer === 4) {
+    const c = COUNTER2[tick % COUNTER2.length]!;
+    const j = c < 11 ? 5 - Math.abs(c - 5) : 0;
+    return { sx: (j % 3) * 128, sy: Math.floor(j / 3) * 128, w: 128, h: 128, dx: 496, dy: 160 };
+  }
+  const k = Math.floor((tick % 15) / 3);
+  const [w, h, dx, dy] = layer === 1 ? [112, 64, 528, 0] : [288, 160, 352, 320];
+  return { sx: Math.floor(k / 3) * w, sy: (k % 3) * h, w, h, dx, dy };
+}
+
 /** FUN_0042b080: a facility's label is looked up in the stage file first, then in EVENT00. */
 export function townLabel(res: Resources, stage: number, i: number): { stage: number; label: string } | null {
   const spot = HOTSPOTS[i];
