@@ -89,8 +89,8 @@ async function boot(): Promise<void> {
     const res: Resources = { program: (n) => byStage.get(n) ?? null, roster: (n) => rosters.get(n) ?? null, tables, rng: Rng.fromSeed(Date.now() % 1_000_000) };
     const memory = (why: string) => { log('warn', `IndexedDB 를 열 수 없어 세이브는 이 페이지에만 남는다 (${why})`); return new MemoryBackend(); };
     const opening = IdbBackend.open().catch((e: unknown) => memory(e instanceof Error ? e.message : String(e)));
-    const timeout = new Promise<MemoryBackend>((resolve) => setTimeout(() => resolve(memory('2초 안에 열리지 않음')), 2000));
-    saves = new SaveStore(await Promise.race([opening, timeout]));           // a hanging open must not keep the title dead
+    const timeout = new Promise<null>((resolve) => setTimeout(() => resolve(null), 2000));
+    saves = new SaveStore((await Promise.race([opening, timeout])) ?? memory('2초 안에 열리지 않음'));   // a hanging open must not keep the title dead
     const bmpSet = new Set(index.bmp);
     const bitmaps = new BitmapCache('assets', bmpSet, (name) => log('warn', `bitmap ${name} failed to load`));
     const dialogue = new Dialogue(document, $('dialogue'), (spk, letter) => { const name = `face${nn(spk)}${letter}`; return bmpSet.has(name) ? `assets/bmp/${name}.png` : null; });
