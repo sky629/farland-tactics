@@ -1,4 +1,4 @@
-export interface AssetIndex { format: 1; maps: string[]; sprites: string[]; events?: number[]; bmp?: string[] }
+export interface AssetIndex { format: 1; maps: string[]; sprites: string[]; events?: number[]; bmp?: string[]; wave?: string[]; midi?: number[] }
 
 export interface MapObject { layer: number; front: number; left: number; top: number; right: number; bottom: number; ox: number; oy: number }
 export interface MapCell { h: number; blocked: number; flag2: number; land: number; objs: MapObject[] }

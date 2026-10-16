@@ -264,6 +264,39 @@ def export_data(game: Path, out: Path, report: Report) -> dict:
     return dict(race=len(tables['race']), item=len(tables['item']), magic=len(tables['magic']), rosters=len(rosters), battles=len(battles))
 
 
+def export_audio(src: Path, dst: Path, report: Report) -> dict:
+    """Wave/*.wav → wave/<lower>.wav and Midi/bgm%02d.mid (GM only; the _gs variants and back.lzh are skipped) → midi/.
+    Returns {'wave': [names], 'midi': [numbers]} for index.json."""
+    def find_dir(name: str) -> Path | None:
+        if not src.is_dir():
+            return None
+        return next((p for p in src.iterdir() if p.is_dir() and p.name.lower() == name), None)
+    waves: list[str] = []
+    midis: list[int] = []
+    wave_dir, midi_dir = find_dir('wave'), find_dir('midi')
+    if wave_dir is None:
+        report.error('no Wave directory')
+    else:
+        (dst / 'wave').mkdir(parents=True, exist_ok=True)
+        for f in sorted(wave_dir.iterdir()):
+            if f.suffix.lower() != '.wav':
+                continue
+            name = f.stem.lower()
+            (dst / 'wave' / f'{name}.wav').write_bytes(f.read_bytes())
+            waves.append(name)
+    if midi_dir is None:
+        report.error('no Midi directory')
+    else:
+        (dst / 'midi').mkdir(parents=True, exist_ok=True)
+        for f in sorted(midi_dir.iterdir()):
+            m = re.fullmatch(r'bgm(\d\d)\.mid', f.name.lower())
+            if not m:
+                continue
+            (dst / 'midi' / f'bgm{m.group(1)}.mid').write_bytes(f.read_bytes())
+            midis.append(int(m.group(1)))
+    return {'wave': sorted(waves), 'midi': sorted(midis)}
+
+
 def main(argv: list[str]) -> int:
     if len(argv) != 3:
         raise SystemExit(__doc__)
@@ -277,10 +310,11 @@ def main(argv: list[str]) -> int:
     bmps = sorted(export_bmps(bmp_dir, out / 'bmp', report)) if bmp_dir else []
     if bmp_dir is None:
         report.error('no bmp directory')
+    audio = export_audio(game, out, report)
     out.mkdir(parents=True, exist_ok=True)
-    (out / 'index.json').write_text(json.dumps(dict(format=FORMAT, maps=maps, sprites=sprites, data=True, events=events, bmp=bmps)), encoding='utf-8')
+    (out / 'index.json').write_text(json.dumps(dict(format=FORMAT, maps=maps, sprites=sprites, data=True, events=events, bmp=bmps, wave=audio['wave'], midi=audio['midi'])), encoding='utf-8')
     pngs = sum(1 for d in ('map', 'sprite', 'bmp') for _ in (out / d).glob('*.png'))
-    print(f'maps {len(maps)}, sprites {len(sprites)}, events {len(events)}, bmp {len(bmps)}, pngs {pngs}, warnings {len(report.warnings)}, errors {len(report.errors)}')
+    print(f'maps {len(maps)}, sprites {len(sprites)}, events {len(events)}, bmp {len(bmps)}, pngs {pngs}, wave {len(audio["wave"])}, midi {len(audio["midi"])}, warnings {len(report.warnings)}, errors {len(report.errors)}')
     print(f'tables race {counts["race"]}, item {counts["item"]}, magic {counts["magic"]}, rosters {counts["rosters"]}, battles {counts["battles"]}')
     for w in report.warnings:
         print('warning:', w)
