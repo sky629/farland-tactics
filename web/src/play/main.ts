@@ -11,6 +11,7 @@ import { GameCore } from '../game/gameCore';
 import { SpriteCache } from '../game/spriteCache';
 import { VIEW_H, VIEW_W } from '../iso/grid';
 import { Renderer } from '../render/renderer';
+import type { SaveSummary } from '../save/format';
 import { IdbBackend, MemoryBackend, SaveStore } from '../save/store';
 import type { Resources } from '../script/host';
 import type { Program } from '../script/program';
@@ -31,6 +32,8 @@ let stage: BrowserStage | null = null;
 let panel: Panel | null = null;
 let shownEvents: BattleEvent[] | null = null;
 let saves: SaveStore | null = null;
+let saveList: (SaveSummary | null)[] = [];
+const refreshSaves = async (): Promise<void> => { if (saves) saveList = await saves.summaries(); };
 
 const showError = (e: unknown) => { const msg = e instanceof AssetError || e instanceof DataError ? e.message : e instanceof Error ? `${e.name}: ${e.message}` : String(e); $('error').textContent = msg; console.error(e); };
 const log = (kind: 'warn' | 'info', text: string) => { panel?.log(kind === 'warn' ? `⚠ ${text}` : text); if (kind === 'warn') console.warn(text); else console.info(text); };
@@ -94,18 +97,40 @@ async function boot(): Promise<void> {
       onTownClick: (i) => core?.townSelect(i),
       onTownMenu: () => dialogue.openParty({ tables, inventory: core!.campaign.inventory, party: core!.campaign.units.slice(0, PARTY_SLOTS) }),
       onCancel: () => core?.dispatch({ type: 'cancel' }),
-      modalContext: () => ({ tables, inventory: core!.campaign.inventory, party: core!.campaign.units.slice(0, PARTY_SLOTS) }),
-      writeSave: (slot, bytes) => { void saves?.write(slot, bytes).catch(showError); },
+      modalContext: () => ({ tables, inventory: core!.campaign.inventory, party: core!.campaign.units.slice(0, PARTY_SLOTS), saves: saveList }),
+      writeSave: (slot, bytes) => { void saves?.write(slot, bytes).then(refreshSaves).catch(showError); },
       log,
     });
     core = new GameCore(res, stage);
     panel = new Panel(document, { onStart: () => {}, onCommand: (cmd) => core?.dispatch(cmd) }, tables);
     $('newGame').addEventListener('click', () => { $('title').hidden = true; $('error').textContent = ''; core!.newGame(); });
+    await refreshSaves();
+    const loadHandlers = {
+      onPick: async (slot: number) => { const bytes = await saves!.read(slot); if (bytes && core!.loadGame(bytes)) { $('title').hidden = true; $('error').textContent = ''; } },
+      onExport: async (slot: number) => {
+        const bytes = await saves!.read(slot);
+        if (!bytes) return;
+        const url = URL.createObjectURL(new Blob([bytes.slice().buffer]));
+        const a = Object.assign(document.createElement('a'), { href: url, download: SaveStore.fileName(slot) });
+        a.click(); URL.revokeObjectURL(url);
+      },
+      onImport: async (file: File) => {
+        try {
+          const slot = saveList.findIndex((s) => s === null);
+          if (slot < 0) { log('warn', '빈 슬롯이 없다'); return; }
+          const sum = await saves!.importBytes(slot, new Uint8Array(await file.arrayBuffer()));
+          await refreshSaves();
+          log('info', `${SaveStore.fileName(slot)} ← ${file.name} (${sum.title})`);
+          dialogue.openLoad(saveList, loadHandlers);
+        } catch (e) { showError(e); }
+      },
+    };
+    $('loadGame').addEventListener('click', () => { void refreshSaves().then(() => dialogue.openLoad(saveList, loadHandlers)); });
     void bitmaps.load('title');
   } catch (e) { showError(e); }
 }
 
 /** Debug hook for scripted browser checks: window.__ft2().core.mode, .campaign.flags, .vm.state … */
-(window as unknown as { __ft2: () => unknown }).__ft2 = () => ({ core, campaign: core?.campaign, vm: core?.vm, battle: core?.battle, stage, mode: core?.mode });
+(window as unknown as { __ft2: () => unknown }).__ft2 = () => ({ core, campaign: core?.campaign, vm: core?.vm, battle: core?.battle, stage, mode: core?.mode, saves, saveList });
 
 void boot();

@@ -46,6 +46,11 @@
   .modal .list { display: flex; flex-direction: column; gap: .25em; }
   .modal .item { display: grid; grid-template-columns: 1fr auto auto auto; gap: .6em; align-items: center; }
   .modal .who { font: inherit; }
+  .modal .slots { display: grid; grid-template-columns: auto 1fr; gap: .25em .8em; align-items: center; max-height: 55vh; overflow: auto; padding-right: .3em; }
+  .modal .slots .btn { text-align: left; min-width: 11em; }
+  .modal .slots .btn:disabled { opacity: .45; cursor: default; }
+  .modal .info { display: flex; gap: .6em; align-items: center; color: #d8c9a0; font-size: .85em; white-space: nowrap; }
+  .modal .file { font: inherit; color: #eae2d2; max-width: 16em; }
   .modal .member { display: flex; flex-direction: column; gap: .25em; padding: .4em 0; border-top: 1px solid #5a4d33; }
   .modal .uname { font-weight: 600; }
   .modal .equip, .modal .bag { display: flex; flex-wrap: wrap; gap: .4em; align-items: center; }
@@ -75,7 +80,7 @@
   <div id="screen">
     <canvas id="view" width="640" height="480"></canvas>
     <div id="dialogue"></div>
-    <div id="title"><button id="newGame">새 게임</button><a href="game.html">전투 테스트</a></div>
+    <div id="title"><div class="row"><button id="newGame">새 게임</button><button id="loadGame">불러오기</button></div><a href="game.html">전투 테스트</a></div>
   </div>
 </main>
 <script type="module" src="/src/play/main.ts"></script>

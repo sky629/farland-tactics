@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { countOf, emptyInventory } from '../src/battle/inventory';
 import { Dialogue, parseTextTags, type ModalContext } from '../src/ui/dialogue';
+import { newCampaign } from '../src/game/campaign';
+import { encodeSave, saveSummary, type SaveSummary } from '../src/save/format';
 import { tables, unit } from './helpers/battleFixtures';
 import { FakeElement, fakeDocument } from './helpers/fakeDom';
 
@@ -62,13 +64,13 @@ describe('Dialogue', () => {
     root.find('아니오')!.click();
     expect(dlg.takeModalResult()).toBe(0);
   });
-  it('message closes with 0, save answers −1, result lists gold and level-ups', () => {
+  it('message closes with 0, a cancelled save answers −1, result lists gold and level-ups', () => {
     const { root, dlg, ctx } = setup();
     dlg.openModal('message', '잘 있거라', ctx);
     root.find('닫기')!.click();
     expect(dlg.takeModalResult()).toBe(0);
-    dlg.openModal('save', 3, ctx);
-    root.find('닫기')!.click();
+    dlg.openModal('save', -1, ctx);                                            // no slot list given: all 32 empty
+    root.find('취소')!.click();
     expect(dlg.takeModalResult()).toBe(-1);
     dlg.openModal('result', { gold: 120, param: 0, levelUps: [{ slot: 0, from: 2, to: 3 }] }, ctx);
     expect(root.find('120 Gold')).not.toBeNull();
@@ -106,6 +108,42 @@ describe('Dialogue', () => {
     root.find('해제 무기')!.click();
     expect(u.weapon).toBe(0);
     expect(u.bag).toContain(3);
+    root.find('닫기')!.click();
+    expect(el(dlg.modal).hidden).toBe(true);
+  });
+  const slotList = (): (SaveSummary | null)[] => {
+    const list = new Array<SaveSummary | null>(32).fill(null);
+    const c = newCampaign(); c.episode = '첫업무'; c.stage = 1; c.inventory.gold = 350;
+    list[2] = saveSummary(encodeSave(c, new Date(2026, 9, 16, 9, 30)));
+    return list;
+  };
+  it('save slot modal: an empty slot answers its number; a used slot asks to overwrite first; 취소 → −1', () => {
+    const { root, dlg, ctx } = setup();
+    ctx.saves = slotList();
+    dlg.openModal('save', -1, ctx);
+    expect(root.find('02 첫업무')).not.toBeNull();
+    expect(root.find('350 Gold')).not.toBeNull();
+    root.find('00 비어 있음')!.click();
+    expect(dlg.takeModalResult()).toBe(0);
+    dlg.openModal('save', -1, ctx);
+    root.find('02 첫업무')!.click();
+    expect(dlg.takeModalResult()).toBeNull();                                  // not yet: confirm overwrite
+    root.find('덮어쓰기')!.click();
+    expect(dlg.takeModalResult()).toBe(2);
+    dlg.openModal('save', -1, ctx);
+    root.find('취소')!.click();
+    expect(dlg.takeModalResult()).toBe(-1);
+  });
+  it('load modal: only used slots can be picked, each has 내보내기, and a file can be imported', () => {
+    const { root, dlg } = setup();
+    const picked: number[] = [], exported: number[] = [];
+    dlg.openLoad(slotList(), { onPick: (s) => picked.push(s), onExport: (s) => exported.push(s), onImport: () => {} });
+    expect(el(root.find('00 비어 있음')!).disabled).toBe(true);
+    root.find('02 첫업무')!.click();
+    expect(picked).toEqual([2]);
+    root.find('내보내기')!.click();
+    expect(exported).toEqual([2]);
+    expect(root.find('가져오기')).not.toBeNull();
     root.find('닫기')!.click();
     expect(el(dlg.modal).hidden).toBe(true);
   });
