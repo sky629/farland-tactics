@@ -49,6 +49,7 @@ export class BrowserStage implements Stage {
   camera = { x: 0, y: 0 };
   private audio: Audio | null = null;
   private unlocking: Promise<void> | null = null;
+  private synthSettled = false;                                                // init finished (ready or not)
   private pendingMusic: number | null = null;
   private lastNow = 0;
   volumes = { music: 1, sound: 1 };
@@ -73,6 +74,7 @@ export class BrowserStage implements Stage {
   /** One frame: town layers, or the field with the presenter's sprites; the script effects on top. */
   draw(now: number, units: (Unit | null)[], phase: Phase): void {
     this.lastNow = now;
+    if (this.audio && this.pendingMusic !== null && this.synthSettled) { const n = this.pendingMusic; this.pendingMusic = null; this.audio.music.play(n); }
     this.audio?.music.update(now);
     const fx = this.effects.snapshot(now);
     if (this.town) { this.renderer.draw({ map: null, sprites: [], camera: { x: 0, y: 0 }, overlay: OVERLAY_OFF, seeThrough: false, fx, backdrop: this.townBackdrop(now) }); return; }
@@ -217,13 +219,13 @@ export class BrowserStage implements Stage {
         const ctx = new AudioContext();
         await ctx.resume();
         const out = new WebAudioOut(ctx);
-        const synth = new SpessaSynth(ctx, 'assets', (k, t) => this.hooks.log(k, t));
-        await synth.init(this.audioAssets.midi);
-        const audio: Audio = { out, sounds: new SoundPlayer(out, this.audioAssets.wave, (k, t) => this.hooks.log(k, t)), synth, music: new MusicPlayer(synth, (k, t) => this.hooks.log(k, t)) };
+        const log = (k: 'warn' | 'info', t: string) => this.hooks.log(k, t);
+        const synth = new SpessaSynth(ctx, 'assets', log);
+        const audio: Audio = { out, sounds: new SoundPlayer(out, this.audioAssets.wave, log), synth, music: new MusicPlayer(synth, log) };
         audio.sounds.volume = this.volumes.sound; audio.music.volume = this.volumes.music;
-        this.audio = audio;
-        if (this.pendingMusic !== null) { audio.music.play(this.pendingMusic); this.pendingMusic = null; }
-      } catch (e) { this.hooks.log('warn', `소리를 켤 수 없다: ${e instanceof Error ? e.message : String(e)}`); }
+        this.audio = audio;                                                    // effects work now; the synthesizer finishes on its own
+        void synth.init(this.audioAssets.midi).finally(() => { this.synthSettled = true; });
+      } catch (e) { this.hooks.log('warn', `소리를 켤 수 없다: ${e instanceof Error ? e.message : String(e)}`); this.synthSettled = true; }
     })();
     return this.unlocking;
   }
@@ -235,7 +237,7 @@ export class BrowserStage implements Stage {
   }
   get musicReady(): boolean { return this.audio?.synth.ready ?? false; }
   /** true once unlockAudio has finished (so the page can show the soundfont notice exactly once). */
-  get audioTried(): boolean { return this.audio !== null; }
+  get audioTried(): boolean { return this.synthSettled; }
   get currentMusic(): number { return this.audio?.music.current ?? this.pendingMusic ?? -1; }
   playSound(name: string): void { this.audio?.sounds.play(name); }
   playMusic(n: number): void { if (this.audio) this.audio.music.play(n); else this.pendingMusic = n; }
