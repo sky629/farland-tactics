@@ -229,7 +229,7 @@ export class ScriptVm {
       case 'RESPRITE_UNIT': if (un) { const apd = `char_${String(un.race).padStart(2, '0')}${str(a[1]) ?? 'a'}`; sprite(un, { apd }); this.c.lastSprite = apd; this.host.unitsChanged(); } return 'next';
       case 'ANIM': if (un) { const raw = str(a[1]) ?? ''; const force = raw.startsWith('*'); const name = force ? raw.slice(1) : raw; const loop = idx(2) === 0; sprite(un, { anim: { name, loop, force } }); this.host.anim(un, name, loop, force); } return 'next';
       case 'MOVE_PATH': if (un) { const base = str(a[1]) ?? 'run'; const dirs = [...(str(a[2]) ?? '').toLowerCase()].map((ch) => PATH_DIR[ch]).filter((d): d is Dir => d !== undefined); for (const d of dirs) [un.c, un.r] = stepCell(un.c, un.r, d); if (dirs.length > 0) un.dir = dirs[dirs.length - 1]!; this.host.moveUnit(un, dirs, base); } return 'next';
-      case 'MOVE_TO': this.host.log('warn', `MOVE_TO "${str(a[1]) ?? ''}" is not understood; skipped`); return 'next';
+      case 'MOVE_TO': if (un) this.host.moveTo(un, str(a[1]) ?? ''); return 'next';
       case 'WAIT_UNIT': return un && this.host.unitBusy(un, true) ? 'wait' : 'next';
       case 'WAIT_UNIT2': return un && this.host.unitBusy(un, false) ? 'wait' : 'next';
       case 'CAMERA_UNIT': if (un) this.host.cameraUnit(un); return 'next';

@@ -9,7 +9,7 @@
 | 1 렌더링 기반 | 자산 변환, 맵·스프라이트 그리기, 애니메이션 재생, 개발용 뷰어 | 완료 |
 | 2 전투 1판 | 유닛·이동·공격·마법·적 AI·승패 (33개 전투 선택) | 완료 |
 | 3 아이템·소지품 | 전투 중 아이템 사용, 보물 습득, 파티 소지품·장비 가방 | 완료 (상점·장비 화면은 4에서) |
-| 4 스크립트 VM | 이벤트 스크립트 실행 | 예정 |
+| 4 스크립트 VM | 이벤트 스크립트 실행 — 오프닝·대화·마을·상점·전투 훅 (`play.html`) | 완료 (비주얼 씬·세이브·소리는 5에서) |
 | 5 세이브·사운드·UI | 세이브 호환, MIDI/WAV, 메뉴 | 예정 |
 
 ## 빠른 시작
@@ -25,7 +25,7 @@ mv extracted/FarlandTactics2_Package.vol1 extracted/FarlandTactics2
 python3 -I tools/ft2_export.py extracted/FarlandTactics2 web/public/assets
 
 # 3. 뷰어 실행
-cd web && npm install && npm run dev      # 뷰어 http://localhost:5173 · 전투 http://localhost:5173/game.html
+cd web && npm install && npm run dev      # 게임 http://localhost:5173/play.html · 전투 테스트 /game.html · 뷰어 /
 ```
 
 자세한 절차, 뷰어 조작, 검사, 분석 도구, 문제 해결은 **[사용 설명서 `docs/manual.md`](docs/manual.md)** 에 있다.

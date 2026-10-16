@@ -204,7 +204,7 @@ export class GameCore implements Host {
   // ---- Host ----
   fade(dir: 'in' | 'out', step: number): void { this.stage.effects.fade(dir, step, this.now); }
   fadeBusy(): boolean { return this.stage.effects.fadeBusy(); }
-  showImage(name: string, step: number): void { this.stage.effects.showImage(this.stage.bitmap(name), step, this.now); }
+  showImage(name: string, step: number): void { this.stage.effects.showImage(() => this.stage.bitmap(name), step, this.now); }
   hideImage(): void { this.stage.effects.hideImage(); }
   clearScreen(): void { this.stage.effects.clearScreen(); }
   tint(kind: Tint, n: number, pct?: number): void { this.stage.effects.tint(kind, n, pct); }
@@ -223,6 +223,14 @@ export class GameCore implements Host {
   anim(): void { this.syncUnits(); }
   unitBusy(u: Unit): boolean { return this.stage.presenter.unitBusy(u.slot); }
   moveUnit(u: Unit, dirs: Dir[], animBase: string): void { this.stage.presenter.moveUnit(u.slot, dirs, animBase); }
+  moveTo(u: Unit, anim: string): void {
+    this.stage.presenter.moveTo(u.slot, anim, (dx, dy) => {                   // the knock-back stays where the anim left the unit
+      const sp = u.sprite ?? (u.sprite = {});
+      const o = sp.offset ?? { x: 0, y: 0 };
+      sp.offset = { x: o.x + dx, y: o.y + dy };
+      this.syncUnits();
+    });
+  }
   marker(): void { this.syncUnits(); }
   sweat(u: Unit): void { this.stage.presenter.sweat(u.slot); }
   appear(): void { this.syncUnits(); }

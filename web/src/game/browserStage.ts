@@ -10,7 +10,8 @@ import { VIEW_H, VIEW_W } from '../iso/grid';
 import { MapModel } from '../map/mapModel';
 import type { Backdrop, Renderer } from '../render/renderer';
 import type { ModalKind, Where } from '../script/host';
-import { HOTSPOTS, hitTest, layerFrame, townLayers } from '../town/town';
+import { IndexedBitmaps } from '../gfx/indexed';
+import { HOTSPOTS, hitTest, layerFrame, townLayerKey, townLayers } from '../town/town';
 import type { Dialogue, ModalContext } from '../ui/dialogue';
 import { clampCamera } from '../viewer/scale';
 import type { Stage } from './gameCore';
@@ -43,6 +44,8 @@ export class BrowserStage implements Stage {
   private mapModel: MapModel | null = null;
   private loading: string | null = null;
   private town: { set: 1 | 2 | 3; extra: boolean; flags: number[]; hover: number | null; showAll: boolean } | null = null;
+  /** Town sheets as keyed bitmaps (layer 0 opaque, 1..4 color-keyed); null while loading or missing. */
+  private readonly sheets = new Map<string, { bmp: IndexedBitmaps; key: number | null } | null>();
   private drag: { x: number; y: number; cx: number; cy: number } | null = null;
 
   constructor(private readonly canvas: HTMLCanvasElement, private readonly renderer: Renderer, private readonly assets: AssetLoader,
@@ -61,11 +64,28 @@ export class BrowserStage implements Stage {
     this.renderer.draw({ map: this.mapModel, sprites, camera: this.camera, overlay: OVERLAY_OFF, seeThrough: this.seeThrough, texts, fx });
   }
 
+  private sheet(name: string, layer: number): CanvasImageSource | null {
+    if (!this.sheets.has(name)) {
+      this.sheets.set(name, null);
+      void (async () => {
+        try {
+          const img = await this.assets.image('bmp', name);
+          const key = townLayerKey(img, layer);
+          const bmp = new IndexedBitmaps(img);
+          await bmp.prepare(key);
+          this.sheets.set(name, { bmp, key });
+        } catch (e) { this.hooks.log('warn', `${name}: ${e instanceof Error ? e.message : String(e)}`); }
+      })();
+    }
+    const s = this.sheets.get(name);
+    return s ? s.bmp.get(s.key) : null;
+  }
+
   private townBackdrop(now: number): Backdrop[] {
     const t = this.town!;
     const out: Backdrop[] = [];
     townLayers(t.set, t.extra).forEach((name, i) => {
-      const image = this.bitmaps.get(name);
+      const image = this.sheet(name, i);
       if (!image) return;
       if (i === 0) out.push({ image, sx: 0, sy: 0, w: VIEW_W, h: VIEW_H, dx: 0, dy: 0 });
       else if (i === 3) {
@@ -174,7 +194,7 @@ export class BrowserStage implements Stage {
   bitmap(name: string): CanvasImageSource | null { return this.bitmaps.get(name); }
   showTown(set: 1 | 2 | 3, extra: boolean, flags: number[]): void {
     this.town = { set, extra, flags, hover: null, showAll: false };
-    for (const name of townLayers(set, extra)) this.bitmaps.get(name);         // start loading
+    townLayers(set, extra).forEach((name, i) => this.sheet(name, i));          // start loading
   }
   hideTown(): void { this.town = null; this.canvas.style.cursor = 'default'; }
   log(kind: 'warn' | 'info', text: string): void { this.hooks.log(kind, text); }

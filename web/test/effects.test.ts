@@ -14,6 +14,23 @@ describe('Effects', () => {
     expect(fx.snapshot(2000).fade).toBeNull();
     expect(fx.fadeBusy()).toBe(false);
   });
+  it('showImage without a step shows the picture at once, ending any fade that was still black (SHOW_IMAGE after FADE_OUT)', () => {
+    const fx = new Effects();
+    fx.fade('out', 16, 0);
+    fx.snapshot(16 * FADE_STEP_MS + 1);
+    expect(fx.snapshot(16 * FADE_STEP_MS + 1).fade).toEqual({ color: 'black', alpha: 1 });
+    const img = {} as CanvasImageSource;
+    fx.showImage(img, 0, 1000);
+    expect(fx.snapshot(1000)).toMatchObject({ fade: null, image: img });
+  });
+  it('showImage takes a resolver that is read at snapshot time, so a bitmap still loading appears when ready', () => {
+    const fx = new Effects();
+    let loaded: CanvasImageSource | null = null;
+    fx.showImage(() => loaded, 0, 0);
+    expect(fx.snapshot(0).image).toBeNull();
+    loaded = {} as CanvasImageSource;
+    expect(fx.snapshot(16).image).toBe(loaded);
+  });
   it('showImage with a step fades the image in from black; a missing image still completes its fade', () => {
     const fx = new Effects();
     fx.showImage(null, 4, 0);

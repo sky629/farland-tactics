@@ -90,7 +90,7 @@ export class Dialogue {
     const node = this.el('div', 'line');
     for (const run of parseTextTags(line)) {
       const span = this.el('span', run.color === null ? '' : `c${run.color}`, run.text);
-      if (run.size !== null) span.style.fontSize = `${run.size}px`;
+      if (run.size !== null) span.style.fontSize = `${run.size / 16}em`;           // [Snn] is in 640×480 pixels; the overlay scales with the canvas
       node.appendChild(span);
     }
     p.lines.appendChild(node);

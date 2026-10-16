@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Farland Tactics 2</title>
+<link rel="icon" href="data:,">
+<style>
+  :root { color-scheme: dark; }
+  body { margin: 0; background: #14120e; color: #eae4d6; font: 13px/1.4 system-ui, sans-serif; display: flex; min-height: 100vh; }
+  #panel { width: 300px; padding: 12px; box-sizing: border-box; display: flex; flex-direction: column; gap: 8px; background: #1e1a14; overflow-y: auto; }
+  #panel select, #panel button, #panel input { font: inherit; }
+  #stage { flex: 1; display: grid; place-items: center; overflow: auto; }
+  #screen { position: relative; font-size: 16px; }   /* play/main.ts sets 16px × canvas scale */
+  canvas { display: block; image-rendering: pixelated; image-rendering: crisp-edges; background: #000; }
+  .row { display: flex; gap: 6px; flex-wrap: wrap; }
+  .mono { font-family: ui-monospace, monospace; white-space: pre-wrap; }
+  #spells, #items { display: flex; flex-direction: column; gap: 4px; }
+  #spells[hidden], #items[hidden] { display: none; }
+  #error { color: #ff6b6b; }
+  #result { font-size: 16px; font-weight: 600; }
+  #battleRow { display: none; }
+  /* title layer */
+  #title { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 12px; padding-bottom: 8%; background: #000 url(assets/bmp/title.png) center / contain no-repeat; }
+  #title[hidden] { display: none; }
+  #title button { font: 600 18px/1 system-ui, sans-serif; padding: 10px 28px; background: #2b2418; color: #f5e9c8; border: 2px solid #c9a961; border-radius: 4px; cursor: pointer; }
+  #title button:hover { background: #3a3020; }
+  #title a { color: #d8c9a0; }
+  /* dialogue overlay (ui/dialogue.ts builds its children) */
+  #dialogue { position: absolute; inset: 0; pointer-events: none; }
+  #dialogue > * { pointer-events: auto; }
+  .win { position: absolute; left: 4%; right: 4%; display: flex; gap: .6em; padding: .5em .75em; background: rgba(10, 8, 24, .88); border: 2px solid #8a7a50; border-radius: 6px; color: #fff; font-size: 1em; line-height: 1.35; min-height: 4.5em; box-sizing: border-box; }
+  .win.top { top: 2%; } .win.bottom { bottom: 2%; }
+  .win[hidden] { display: none; }
+  .win .face { width: 6em; height: 6em; image-rendering: pixelated; align-self: flex-start; }
+  .win .face[hidden] { display: none; }
+  .win .body { flex: 1; min-width: 0; }
+  .win .name { color: #ffd87a; font-weight: 600; margin-bottom: .1em; }
+  .win .line span { vertical-align: baseline; }
+  .c1 { color: #ff8a8a; } .c2 { color: #8ad0ff; } .c3 { color: #ffd87a; } .c4 { color: #a8ff9a; } .c5 { color: #d8a8ff; } .c6 { color: #9ad8d8; } .c7 { color: #bbb; }
+  .modal { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); min-width: 18em; max-width: 80%; max-height: 80%; overflow: auto; padding: .9em 1.1em; background: rgba(10, 8, 24, .94); border: 2px solid #c9a961; border-radius: 6px; color: #fff; font-size: .95em; display: flex; flex-direction: column; gap: .5em; }
+  .modal[hidden] { display: none; }
+  .modal .title { font-weight: 700; color: #ffd87a; }
+  .modal .row { display: flex; gap: .5em; }
+  .modal .btn { font: inherit; padding: .25em .9em; background: #2b2418; color: #f5e9c8; border: 1px solid #c9a961; border-radius: 4px; cursor: pointer; }
+  .modal .list { display: flex; flex-direction: column; gap: .25em; }
+  .modal .item { display: grid; grid-template-columns: 1fr auto auto auto; gap: .6em; align-items: center; }
+  .modal .who { font: inherit; }
+  .episode { position: absolute; left: 0; right: 0; top: 40%; text-align: center; font: 700 1.75em/1.3 system-ui, sans-serif; color: #fff; text-shadow: 0 0 8px #000, 0 0 2px #000; pointer-events: none; }
+  .episode[hidden] { display: none; }
+</style>
+</head>
+<body>
+<aside id="panel">
+  <div><b>Farland Tactics 2</b> — 이야기 모드</div>
+  <div id="battleRow"><label>전투 <select id="battle"></select></label><label>시드 <input id="seed" type="number"></label><button id="start">시작</button></div>
+  <div id="objective"></div>
+  <div id="turn" class="mono"></div>
+  <div class="row">
+    <button id="move">이동</button><button id="attack">공격</button><button id="magic">마법</button><button id="item">아이템</button><button id="wait">대기</button><button id="endTurn">턴 종료</button>
+  </div>
+  <div id="spells" hidden></div>
+  <div id="items" hidden></div>
+  <div id="unit" class="mono"></div>
+  <div id="inventory" class="mono"></div>
+  <div>대사: 클릭/Enter 진행 · 마을: 시설 클릭 · 전투: 셀 클릭, 오른쪽 클릭·Esc 취소, 방향키/드래그 스크롤, Shift 투시</div>
+  <div id="result"></div>
+  <div id="log" class="mono"></div>
+  <div id="error" class="mono"></div>
+</aside>
+<main id="stage">
+  <div id="screen">
+    <canvas id="view" width="640" height="480"></canvas>
+    <div id="dialogue"></div>
+    <div id="title"><button id="newGame">새 게임</button><a href="game.html">전투 테스트</a></div>
+  </div>
+</main>
+<script type="module" src="/src/play/main.ts"></script>
+</body>
+</html>

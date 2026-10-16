@@ -2,6 +2,7 @@ import { VIEW_H, VIEW_W } from '../iso/grid';
 import type { Tint } from '../script/host';
 
 export const FADE_STEP_MS = 30;   // one palette step of the original ≈ 30 ms [추정, spec §15]
+export type ImageSource = CanvasImageSource | (() => CanvasImageSource | null) | null;
 export interface FxSnapshot { fade: { color: 'black' | 'white'; alpha: number } | null; tint: { color: string; alpha: number } | null; image: CanvasImageSource | null }
 type Fade = { color: 'black' | 'white'; from: number; to: number; start: number; ms: number };
 const TINTS: Partial<Record<Tint, { color: string; alpha: number }>> = {
@@ -14,7 +15,7 @@ const TINTS: Partial<Record<Tint, { color: string; alpha: number }>> = {
 export class Effects {
   private fadeState: Fade | null = null;
   private tintState: { color: string; alpha: number } | null = null;
-  private image: CanvasImageSource | null = null;
+  private image: ImageSource = null;
   private shakeAmp = 0;
   private scroll: { dx: number; dy: number; target: { x: number; y: number } | null; ms: number; last: number } | null = null;
   private lastNow = 0;
@@ -34,11 +35,15 @@ export class Effects {
   }
   fadeBusy(): boolean { return this.fadeState !== null && this.fadeState.ms > 0 && this.lastNow < this.fadeState.start + this.fadeState.ms; }
 
-  /** SHOW_IMAGE: the bitmap covers the screen; with a step it fades in from black. null = no such bitmap (black). */
-  showImage(img: CanvasImageSource | null, step: number, now: number): void {
+  /**
+   * SHOW_IMAGE: the bitmap covers the screen; with a step it fades in from black, without one it shows at once and ends
+   * any fade still on screen (the scripts chain FADE_OUT → SHOW_IMAGE n, 0). A resolver is read every frame, so a
+   * bitmap still loading appears when ready; null = no such bitmap (black).
+   */
+  showImage(img: ImageSource, step: number, now: number): void {
     this.lastNow = now;
     this.image = img;
-    if (step > 0) this.fadeState = { color: 'black', from: 1, to: 0, start: now, ms: step * FADE_STEP_MS };
+    this.fadeState = step > 0 ? { color: 'black', from: 1, to: 0, start: now, ms: step * FADE_STEP_MS } : null;
   }
   hideImage(): void { this.image = null; }
   clearScreen(): void { this.image = null; }
@@ -94,6 +99,6 @@ export class Effects {
       if (!this.fadeBusy() && alpha <= 0) this.fadeState = null;
       else fade = { color: this.fadeState.color, alpha: Math.round(alpha * 1000) / 1000 };
     }
-    return { fade, tint: this.tintState, image: this.image };
+    return { fade, tint: this.tintState, image: typeof this.image === 'function' ? this.image() : this.image };
   }
 }

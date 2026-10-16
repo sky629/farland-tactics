@@ -7,10 +7,11 @@ import { ApdModel } from '../../src/sprite/apdModel';
 import { fixedRng, flatMap, tables, unit, units } from './battleFixtures';
 
 /** One 8×8 image; every anim is 2 frames × 100 ms unless named otherwise. */
+let apdSeq = 0;
 export function apd(anims: Record<string, string>): ApdModel {
   const data: ApdData = { version: 3, sheets: ['s'], images: [{ sheet: 0, key: 255, x: 0, y: 0, w: 8, h: 8, ox: -4, oy: -8 }],
     patterns: [{ yOffset: 0, images: [0] }], anims: Object.entries(anims).map(([name, script]) => ({ name, script })) };
-  return new ApdModel('x', data, [{ width: 8, height: 8, indices: new Uint8Array(64), palette: new Uint8Array(768) }]);
+  return new ApdModel(`apd${++apdSeq}`, data, [{ width: 8, height: 8, indices: new Uint8Array(64), palette: new Uint8Array(768) }]);
 }
 export const hero = apd({ 'F.STAND': 'P0', 'B.STAND': 'P0', 'F.COMPLETE': 'P0', 'F.MIDDLE_DAMAGE': 'S100 P0 P0', 'F.DEAD': 'P0', 'F.DOWN_DAMAGE': 'P0', 'F.DEFENSE': 'S100 P0 P0' });
 export const heroB = apd({ 'F.RUN1': 'S100 P0 P0', 'F.RUN2': 'S100 P0 P0', 'B.RUN1': 'S100 P0 P0', 'B.RUN2': 'S100 P0 P0', 'F.WALK1': 'S100 P0 P0', 'F.ATTACK1': 'S150 P0 P0' });

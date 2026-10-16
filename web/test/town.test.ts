@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { HOTSPOTS, hitTest, layerFrame, townLabel, townLayers } from '../src/town/town';
+import { HOTSPOTS, hitTest, layerFrame, townLabel, townLayerKey, townLayers } from '../src/town/town';
 import { prog, res } from './helpers/scriptFixtures';
 
 const all = Array(15).fill(1);
@@ -39,6 +39,12 @@ describe('town screen model (story_flow.md §3)', () => {
     expect(layerFrame(4, 600)).toMatchObject({ sx: 0, sy: 0 });                // tick 12 → counter 14 ≥ 11 → rest
     expect(layerFrame(4, 1400)).toMatchObject({ sx: 0, sy: 0 });               // tick 28 → counter 0
     expect(layerFrame(4, 1450)).toMatchObject({ sx: 128, sy: 0 });             // tick 29 → counter 1 → j 1
+  });
+  it('townLayerKey is the pixel at column 0, row 8 of a frame sheet (FUN_0042ad70 → FUN_00418c20); layer 0 has no key', () => {
+    const img = { width: 4, height: 10, indices: new Uint8Array(40), palette: new Uint8Array(768) };
+    img.indices[8 * 4] = 249; img.indices[0] = 71;
+    expect(townLayerKey(img, 1)).toBe(249);
+    expect(townLayerKey(img, 0)).toBeNull();
   });
   it('townLabel looks in the stage file first, then EVENT00, else null', () => {
     const r = res([prog(0, ['inn', ['END'], 'guild', ['END']]), prog(3, ['inn', ['END']])]);

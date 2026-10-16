@@ -25,6 +25,12 @@ describe('ScriptVm: units and sprites', () => {
     vm.step(0);
     expect(host.calls.filter((x) => x[0] === 'log' && x[1] === 'warn').map((x) => x[2])).toEqual(['SET_POS: unit 77 not found', 'ANIM: unit 78 not found']);
   });
+  it('MOVE_TO hands the unit and the animation name to the host (its M offsets are the knock-back path)', () => {
+    const { vm, host } = start(['begin', ['MOVE_TO', 1, 'f.event04'], ['END']]);
+    expect(vm.step(0)).toBe('ended');
+    expect(host.calls).toContainEqual(['moveTo', 0, 'f.event04']);
+    expect(host.calls.some((x) => x[0] === 'log' && x[1] === 'warn')).toBe(false);
+  });
   it('LOAD_SPRITE/SHOW_IMAGE/SOUND names are lower-cased to match the exported asset names', () => {
     const { c, vm, host } = start(['begin', ['LOAD_SPRITE', 'NPC_02', 15, 1, 1], ['SHOW_IMAGE', 'SOFCOM', 0], ['SOUND', 'MAGIC07'], ['END']]);
     vm.step(0);
@@ -51,6 +57,7 @@ describe('ScriptVm: units and sprites', () => {
   });
   it('ANIM, MOVE_PATH and WAIT_UNIT go through the host; MOVE_PATH updates the position and the last direction', () => {
     const { c, vm, host } = start(['begin', ['ANIM', 1, '*f.event01', 1], ['MOVE_PATH', 1, 'run', 'sseN'], ['WAIT_UNIT', 1], ['END']]);
+    expect(host.calls).not.toContainEqual(['moveTo', 0, 'f.event04']);
     host.busyUnits.add(0);
     expect(vm.step(0)).toBe('waiting');
     expect(host.calls).toContainEqual(['anim', 0, 'f.event01', false, true]);
@@ -121,9 +128,9 @@ describe('ScriptVm: map, items and battle', () => {
     host.modal = 1;
     expect(vm.step(1)).toBe('ended');
   });
-  it('MOVE_TO and EXT99 are logged and skipped', () => {
-    const { vm, host } = start(['begin', ['MOVE_TO', 1, 'f.event04'], ['EXT99_4', 1, 'x'], ['END']]);
+  it('the debug-only EXT99 ops are logged and skipped', () => {
+    const { vm, host } = start(['begin', ['EXT99_4', 1, 'x'], ['END']]);
     expect(vm.step(0)).toBe('ended');
-    expect(host.calls.filter((x) => x[0] === 'log' && x[1] === 'warn')).toHaveLength(2);
+    expect(host.calls.filter((x) => x[0] === 'log' && x[1] === 'warn')).toHaveLength(1);
   });
 });

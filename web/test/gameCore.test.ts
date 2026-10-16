@@ -18,6 +18,7 @@ describe('GameCore', () => {
     expect(core.mode).toBe('script');
     expect(core.campaign.inventory.gold).toBe(200);
     core.frame(0);
+    stage.effects.snapshot(0);                                                 // the picture is resolved when drawn
     expect(stage.calls).toContainEqual(['bitmap', 'vop99']);
     expect(stage.calls).toContainEqual(['openWindow', 'bottom', 1, 'b']);
     expect(stage.calls).toContainEqual(['text', 'bottom', '아프다', '카린']);

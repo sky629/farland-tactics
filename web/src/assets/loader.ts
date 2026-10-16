@@ -35,7 +35,7 @@ export class AssetLoader {
     return data;
   }
 
-  image(kind: 'map' | 'sprite', name: string): Promise<IndexedImage> {
+  image(kind: 'map' | 'sprite' | 'bmp', name: string): Promise<IndexedImage> {
     const path = `${this.base}/${kind}/${name}.png`;
     let p = this.images.get(path);
     if (!p) {

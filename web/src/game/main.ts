@@ -97,7 +97,16 @@ function onClick(cell: [number, number]): void {
   if (cmd) dispatch(cmd);
 }
 
+let lastFrameError = '';
 function frame(now: number): void {
+  try { drawFrame(now); } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);                  // one bad frame must not stop the loop
+    if (msg !== lastFrameError) { lastFrameError = msg; showError(e); }
+  }
+  requestAnimationFrame(frame);
+}
+
+function drawFrame(now: number): void {
   if (battle && presenter && mapModel && panel) {
     presenter.update(now);
     const s = battle.state;
@@ -119,7 +128,6 @@ function frame(now: number): void {
   } else {
     renderer.draw({ map: null, sprites: [], camera, overlay: { grid: false, height: false, land: false, blocked: false }, seeThrough: false });
   }
-  requestAnimationFrame(frame);
 }
 
 function bind(): void {

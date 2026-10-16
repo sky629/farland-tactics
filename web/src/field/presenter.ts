@@ -105,6 +105,25 @@ export class Presenter {
     this.queue.push(step({ kind: 'move', slot, path: dirs, from: null, step: 0, base: base.toUpperCase() }));
   }
 
+  /** EXT MOVE_TO: the named anim of the unit's own sprite file plays once; its summed M offsets are reported when it ends (FUN_004383d0 move job). */
+  moveTo(slot: number, anim: string, onDone: (dx: number, dy: number) => void): void {
+    this.queue.push(step({ kind: 'anim', slot, name: `@${anim}`, ms: 0, model: null, player: null }), step({ kind: 'apply', fn: () => {
+      const r = this.resolveOwn(slot, anim);
+      if (!r) return;
+      const [dx, dy] = r.tl.steps.reduce(([x, y], st) => [x + st.dx, y + st.dy], [0, 0]);
+      onDone(r.flipH ? -dx : dx, dy);
+    } }));
+  }
+
+  /** A full anim name in the unit's current body file (the scripted APD, else the race's STAND file). */
+  private resolveOwn(slot: number, anim: string): { model: ApdModel; tl: Timeline; flipH: boolean } | null {
+    const u = this.snapshot[slot], v = this.visuals.get(slot);
+    if (!u || !v) return null;
+    const model = (u.sprite?.apd ? this.provider.apd(u.sprite.apd) : null) ?? this.provider.apd(bodyApd(u.race));
+    const tl = model ? pickTimeline(model, anim.toUpperCase()) : undefined;
+    return model && tl ? { model, tl, flipH: facing(v.dir, u.race).flipH } : null;
+  }
+
   /** WAIT_UNIT: anything queued for this unit (a walk, a one-shot anim, a popup). */
   unitBusy(slot: number): boolean {
     return this.queue.some((s) => s.items.some((it) => (it.kind === 'move' || it.kind === 'anim' || it.kind === 'popup') && it.slot === slot));
@@ -237,6 +256,7 @@ export class Presenter {
       const tl = model ? pickTimeline(model, anim!) : undefined;
       return model && tl ? { model, tl, flipH: false } : null;
     }
+    if (item.name.startsWith('@')) return this.resolveOwn(item.slot, item.name.slice(1));   // MOVE_TO: a full anim name
     const u = this.snapshot[item.slot], v = this.visuals.get(item.slot);
     if (!u || !v) return null;
     const f = facing(v.dir, u.race);
@@ -254,7 +274,7 @@ export class Presenter {
     for (const base of [...new Set([first, 'RUN', 'WALK', 'FLY'])]) {
       const model = this.provider.apd(animApd(u.race, `${base}${n}`));
       const tl = model ? pickTimeline(model, `${prefix}${base}${n}`) : undefined;
-      if (model && tl) return { model, player: this.player(`${u.slot}:${tl.name}:${flipH}`, tl, true, flipH) };
+      if (model && tl) return { model, player: this.player(`${u.slot}:${model.name}:${tl.name}:${flipH}`, tl, true, flipH) };
     }
     return null;
   }
@@ -290,10 +310,10 @@ export class Presenter {
         const { prefix, flipH } = facing(v.dir, u.race);
         let playing = overrides.get(u.slot) ?? (move ? this.runSprite(u, prefix, flipH, move.step, move.base) : null);
         const scriptAnim = u.sprite?.anim;
-        if (!playing && scriptAnim) { const tl = pickTimeline(model, scriptAnim.name.toUpperCase()); if (tl) playing = { model, player: this.player(`${u.slot}:${tl.name}:${flipH}:${scriptAnim.loop}`, tl, scriptAnim.loop, flipH) }; }
+        if (!playing && scriptAnim) { const tl = pickTimeline(model, scriptAnim.name.toUpperCase()); if (tl) playing = { model, player: this.player(`${u.slot}:${model.name}:${tl.name}:${flipH}:${scriptAnim.loop}`, tl, scriptAnim.loop, flipH) }; }
         if (!playing) {
           const tl = (body ? pickTimeline(model, body.name) : undefined) ?? pickTimeline(model, `${prefix}STAND`) ?? (scripted ? model.anim(model.animNames()[0] ?? '') : undefined);
-          if (tl) playing = { model, player: this.player(`${u.slot}:${tl.name}:${flipH}`, tl, true, flipH) };
+          if (tl) playing = { model, player: this.player(`${u.slot}:${model.name}:${tl.name}:${flipH}`, tl, true, flipH) };
         }
         const layer = u.sprite?.layer ?? (u.side === 7 ? LAYER.object : LAYER.unit);
         const offset = { x: v.offset.x + (u.sprite?.offset?.x ?? 0), y: v.offset.y + (u.sprite?.offset?.y ?? 0) };

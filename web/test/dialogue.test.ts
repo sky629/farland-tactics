@@ -33,7 +33,7 @@ describe('Dialogue', () => {
     expect(win.hidden).toBe(false);
     expect(root.find('카린')).not.toBeNull();
     expect(root.find('아프다')).not.toBeNull();
-    expect(root.find('정말!')!.style['fontSize']).toBe('32px');
+    expect(root.find('정말!')!.style['fontSize']).toBe('2em');
     expect(el(dlg.face('bottom')).src).toBe('/assets/bmp/face01b.png');
     expect(el(dlg.lines('bottom')).children.length).toBe(2);
     dlg.openWindow('bottom', 2, 'a');                                          // re-opening clears the lines (no face for an unknown speaker)

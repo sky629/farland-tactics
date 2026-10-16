@@ -1,3 +1,4 @@
+import type { IndexedImage } from '../assets/png';
 import { findLabel } from '../script/program';
 import type { Resources } from '../script/host';
 
@@ -35,6 +36,11 @@ export function townLayers(set: 1 | 2 | 3, extra: boolean): string[] {
   const base = set === 3 ? 20 : set === 2 ? 10 : 0;
   const n = set === 2 && extra ? 5 : 4;
   return Array.from({ length: n }, (_, i) => `town${String(base + i).padStart(2, '0')}`);
+}
+
+/** FUN_0042ad70: layers 1..4 are blitted with a color key read from the sheet's pixel at column 0, row 8 (FUN_00418c20(surface, 0, 8, &key)); layer 0 is opaque. */
+export function townLayerKey(img: IndexedImage, layer: number): number | null {
+  return layer === 0 ? null : img.indices[8 * img.width] ?? null;
 }
 
 /** FUN_0042b740: the two animation counters advance together, at most once per 50 ms. */

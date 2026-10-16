@@ -25,6 +25,7 @@ export interface Host {
   showEpisode(title: string): void;                        // EPISODE n≠0: centred title, no wait (FUN_0040d4c0)
   anim(u: Unit, name: string, loop: boolean, force: boolean): void; unitBusy(u: Unit, withEffects: boolean): boolean;
   moveUnit(u: Unit, dirs: Dir[], animBase: string): void;
+  moveTo(u: Unit, anim: string): void;                     // EXT MOVE_TO: the anim's M offsets carry the unit (FUN_004383d0)
   marker(u: Unit, on: boolean): void; sweat(u: Unit): void; appear(u: Unit, ms: number): void; vanish(u: Unit, ms: number): void;
   showOnly(u: Unit): void; setVisible(u: Unit, on: boolean): void; allVisible(on: boolean): void;
   resetSprites(): void; loadMap(n: number): void; mapBusy(): boolean; unitsChanged(): void;
@@ -68,6 +69,7 @@ export class FakeHost implements Host {
   anim(u: Unit, name: string, loop: boolean, force: boolean): void { this.rec('anim', u.slot, name, loop, force); }
   unitBusy(u: Unit, withEffects: boolean): boolean { void withEffects; return this.busyUnits.has(u.slot); }
   moveUnit(u: Unit, dirs: Dir[], animBase: string): void { this.rec('moveUnit', u.slot, dirs, animBase); }
+  moveTo(u: Unit, anim: string): void { this.rec('moveTo', u.slot, anim); }
   marker(u: Unit, on: boolean): void { this.rec('marker', u.slot, on); }
   sweat(u: Unit): void { this.rec('sweat', u.slot); }
   appear(u: Unit, ms: number): void { this.rec('appear', u.slot, ms); }
