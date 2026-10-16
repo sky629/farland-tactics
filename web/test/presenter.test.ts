@@ -20,9 +20,11 @@ const heroE = apd({ 'F.CAST1A': 'S100 P0 P0', 'F.CAST1B': 'S100 P0 P0' });
 const slime = apd({ 'F.STAND': 'P0', 'B.STAND': 'P0', 'F.DOWN_DAMAGE': 'P0', 'F.MIDDLE_DAMAGE': 'S100 P0 P0', 'F.DEFENSE': 'S100 P0 P0' });
 const walkerB = apd({ 'F.WALK1': 'S100 P0 P0', 'F.WALK2': 'S100 P0 P0' });
 const flyerB = apd({ 'F.FLY1': 'S100 P0 P0', 'F.FLY2': 'S100 P0 P0' });
+const chest = apd({ 'F.STAND': 'P0', 'F.HIDE': 'P0', 'B.STAND': 'P0', 'B.HIDE': 'P0' });
+const healing = apd({ 'HEAL': 'S100 P0 P0' });
 const system = apd({ 'LARGE.M': 'P0', 'HUGE.M': 'P0', 'MOVE': 'P0', 'ATTACK': 'P0', 'CURSOR': 'P0', 'ENEMY': 'P0', 'FRIEND': 'P0', 'POISON': 'P0', 'TURN_NORTH': 'P0', 'TURN_SOUTH': 'P0', 'TURN_EAST': 'P0', 'TURN_WEST': 'P0', 'S.TURN_NORTH': 'P0' });
 const number = apd(Object.fromEntries([...Array(10).keys()].flatMap((d) => [[`POP_${d}`, 'P0'], [`B_POP_${d}`, 'P0']])));
-const files: Record<string, ApdModel> = { char_00a: hero, char_00b: heroB, char_00e: heroE, char_01a: slime, char_02a: hero, char_02b: walkerB, char_04a: hero, char_04b: flyerB, system, number };
+const files: Record<string, ApdModel> = { char_00a: hero, char_00b: heroB, char_00e: heroE, char_01a: slime, char_02a: hero, char_02b: walkerB, char_04a: hero, char_04b: flyerB, char_09a: chest, healing, system, number };
 const provider = { apd: (name: string) => files[name] ?? null };
 
 const entry = { event: 1, label: 'x', map: 'stage49', roster: 49, episode: '', objective: '', heal: true };
@@ -32,6 +34,12 @@ function state(): BattleState {
   return { entry, map, grid: new BattleGrid(map), units: units(h, s), turn: 1, phase: { kind: 'player', sel: { mode: 'idle' } }, rng: fixedRng([0]), lastPath: [], inventory: emptyInventory() };
 }
 const mapModel = (s: BattleState) => new MapModel(s.map, [], null);
+/** item 7 uses magic 1 whose effect APD is "healing"; item 8 uses magic 2 whose effect is "0" (none). */
+const itemTables = tables();
+itemTables.item[7] = { ...itemTables.item[7]!, use_effect: 1 };
+itemTables.item[8] = { ...itemTables.item[8]!, use_effect: 2 };
+itemTables.magic[1] = { ...itemTables.magic[1]!, effect: 'HEALING' };
+itemTables.magic[2] = { ...itemTables.magic[2]!, effect: '0' };
 
 describe('Presenter', () => {
   it('draws body, shadow and no icon for a healthy unit; nothing for an unknown APD', () => {
@@ -134,6 +142,45 @@ describe('Presenter', () => {
     p.update(300 + 50);
     expect(body()).toMatchObject({ model: heroE, flipH: true });
     expect(body().player.timeline.name).toBe('F.CAST1A');
+  });
+  it('an item action plays no cast anim: the effect APD of its use_effect magic appears on the target and the body keeps standing', () => {
+    const s = state();
+    const p = new Presenter(provider, itemTables);
+    p.sync(s);
+    p.enqueue([{ type: 'action', slot: 0, action: 1007, cell: [2, 4], hits: [{ target: 0, kind: 'heal', value: 20, crit: false, popup: '20', statusAfter: 0 }] }]);
+    p.update(0); p.update(50);
+    const sprites = p.scene(mapModel(s), s).sprites;
+    expect(sprites.find((sp) => sp.model === healing)).toMatchObject({ c: 2, r: 4, layer: 5 });
+    expect(sprites.find((sp) => sp.layer === 4 && sp.c === 2)!.player.timeline.name).toBe('F.STAND');
+    let now = 50;
+    while (p.busy && now < 10_000) { p.update(now); now += 50; }
+    expect(p.busy).toBe(false);
+  });
+  it('an item without an effect APD still settles', () => {
+    const s = state();
+    const p = new Presenter(provider, itemTables);
+    p.sync(s);
+    p.enqueue([{ type: 'action', slot: 0, action: 1008, cell: [2, 4], hits: [{ target: 0, kind: 'miss', value: 0, crit: false, popup: 'miss!', statusAfter: 0 }] }]);
+    let now = 0;
+    while (p.busy && now < 10_000) { p.update(now); now += 50; }
+    expect(now).toBeLessThan(10_000);
+  });
+  it('pickup and bagFull show a text popup over the unit; revealed turns a hidden chest into a standing one', () => {
+    const s = state();
+    s.units[20] = unit({ slot: 20, c: 3, r: 4, race: 9, side: 7, id: 8, status: 9 });
+    const p = new Presenter(provider, tables());
+    p.sync(s);
+    expect(p.scene(mapModel(s), s).sprites.find((sp) => sp.model === chest)!.player.timeline.name).toBe('F.HIDE');
+    p.enqueue([{ type: 'revealed', slot: 20 }, { type: 'pickup', slot: 0, item: 7, gold: 0 }, { type: 'bagFull', slot: 0, item: 1 }, { type: 'pickup', slot: 0, item: 0, gold: 50 }]);
+    p.update(0); p.update(1);
+    expect(p.scene(mapModel(s), s).sprites.find((sp) => sp.model === chest)!.player.timeline.name).toBe('F.STAND');
+    const texts = (): string[] => p.scene(mapModel(s), s).texts.map((x) => x.text);
+    p.update(100);
+    expect(texts()).toEqual(['herb 획득']);
+    p.update(POPUP_MS + 60);
+    expect(texts()).toEqual(['더 가질 수 없다']);
+    p.update(POPUP_MS * 2 + 70);
+    expect(texts()).toEqual(['50 Gold']);
   });
   it('an action plays the attack anim, then the reaction anim with a number popup, then settles', () => {
     const s = state();

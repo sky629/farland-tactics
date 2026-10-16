@@ -29,7 +29,7 @@ interface Step { items: Item[]; start: number | null }
 interface Visual { c: number; r: number; dir: Dir; offset: { x: number; y: number } }
 interface Playing { model: ApdModel; player: AnimPlayer }
 
-const clone = (u: Unit): Unit => ({ ...u, acc: [...u.acc], buff: { ...u.buff }, elem: [...u.elem], spells: [...u.spells] });
+const clone = (u: Unit): Unit => ({ ...u, acc: [...u.acc], buff: { ...u.buff }, elem: [...u.elem], spells: [...u.spells], bag: [...u.bag] });
 const timelineMs = (t: Timeline) => t.steps.reduce((n, s) => n + s.totalMs, 0);
 const step = (...items: Item[]): Step => ({ items, start: null });
 
@@ -66,12 +66,10 @@ export class Presenter {
       case 'action': {
         const steps: Step[] = [step({ kind: 'apply', fn: () => { const v = this.visuals.get(e.slot); if (v && (v.c !== e.cell[0] || v.r !== e.cell[1])) this.setDir(e.slot, dirTo(v.c, v.r, e.cell[0], e.cell[1])); } })];
         if (e.action === 0) steps.push(step(this.anim(e.slot, 'ATTACK1')));
-        else {
-          steps.push(step(this.anim(e.slot, 'CAST1A')), step(this.anim(e.slot, 'CAST1B')));
-          const effect = this.tables.magic[e.action]?.effect.toLowerCase();
-          const fx = effect ? this.provider.apd(effect) : null;
-          if (fx && fx.animNames().length > 0) steps.push(step({ kind: 'anim', slot: -1, name: `${effect}:${fx.animNames()[0]!}:${e.cell[0]},${e.cell[1]}`, ms: 0, model: null, player: null }));
-        }
+        else if (e.action < 1000) steps.push(step(this.anim(e.slot, 'CAST1A')), step(this.anim(e.slot, 'CAST1B')));   // items: no cast anim [추정]
+        const effect = this.effectOf(e.action);
+        const fx = effect ? this.provider.apd(effect) : null;
+        if (fx && fx.animNames().length > 0) steps.push(step({ kind: 'anim', slot: -1, name: `${effect}:${fx.animNames()[0]!}:${e.cell[0]},${e.cell[1]}`, ms: 0, model: null, player: null }));
         for (const h of e.hits) {
           const reaction = h.kind === 'miss' ? 'DEFENSE' : h.kind === 'damage' ? (h.statusAfter === 1 ? 'DOWN_DAMAGE' : h.crit ? 'UP_DAMAGE' : 'MIDDLE_DAMAGE') : null;
           const items: Item[] = [{ kind: 'apply', fn: () => this.applyHit(h.target, h.kind, h.value, h.statusAfter) }];
@@ -82,6 +80,9 @@ export class Presenter {
         }
         return steps;
       }
+      case 'revealed': return [step({ kind: 'apply', fn: () => { const u = this.snapshot[e.slot]; if (u) u.status = 0; } })];
+      case 'pickup': return [step({ kind: 'popup', slot: e.slot, text: e.item !== 0 ? `${this.tables.item[e.item]?.name.replace(/_/g, ' ') ?? `아이템 ${e.item}`} 획득` : `${e.gold} Gold`, digits: false })];
+      case 'bagFull': return [step({ kind: 'popup', slot: e.slot, text: '더 가질 수 없다', digits: false })];
       case 'removed': return [step({ kind: 'apply', fn: () => { this.snapshot[e.slot] = null; this.visuals.delete(e.slot); } })];
       case 'exp': return e.gain > 0 ? [step({ kind: 'popup', slot: e.slot, text: `EXP +${e.gain}`, digits: false })] : [];
       case 'levelUp': return [step({ kind: 'popup', slot: e.slot, text: 'LEVEL UP!', digits: false })];
@@ -97,6 +98,13 @@ export class Presenter {
   }
 
   private anim(slot: number, token: string): Item { return { kind: 'anim', slot, name: token, ms: 0, model: null, player: null }; }
+
+  /** Effect APD name (lower-case `magic.effect`) of a spell, or of a consumable's use_effect magic; null when there is none ("0"). */
+  private effectOf(action: number): string | null {
+    const m = action >= 1000 ? this.tables.magic[this.tables.item[action - 1000]?.use_effect ?? 0] : this.tables.magic[action];
+    const name = m?.effect.toLowerCase();
+    return name && name !== '0' ? name : null;
+  }
 
   private setDir(slot: number, dir: Dir): void {
     const v = this.visuals.get(slot), u = this.snapshot[slot];
