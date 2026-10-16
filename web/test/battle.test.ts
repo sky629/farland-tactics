@@ -90,6 +90,13 @@ describe('treasure pickup (battle_rules §4.4)', () => {
     expect(b.state.units[12]).toMatchObject({ side: 7, c: 3, r: 4 });
     expect(b.state.units[0]).toMatchObject({ c: 3, r: 4 });
   });
+  it('a hidden story object (not a chest) is neither taken nor destroyed when stepped on', () => {
+    const b = start(1, flatMap(9), [...roster, chest({ unit_id: 14, status: 9 })]);        // a hidden NPC object (e.g. 잃어버린 어린이) at (3,4)
+    const ev = moveHero(b, 3, 4);
+    expect(types(ev)).toEqual(['moved']);
+    expect(b.state.units[12]).toMatchObject({ id: 14, side: 7, status: 9 });
+    expect(b.state.inventory.gold).toBe(0);
+  });
   it('a hidden chest next to the destination is revealed', () => {
     const b = start(1, flatMap(9), [...roster, chest({ drop_gold: 5, c: 4, r: 4, status: 9 })]);
     const ev = moveHero(b, 3, 4);

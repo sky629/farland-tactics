@@ -202,13 +202,14 @@ export class Battle {
     return events;
   }
 
-  /** FUN_00431170 after a party move: stand on a treasure to take it; stand next to a hidden one to reveal it. */
+  /** FUN_00431170 after a party move: stand on a treasure (id 8) to take it; stand next to a hidden object to reveal it.
+   *  Only treasure objects are taken: a hidden story object (id ≠ 8) can be stood on but must survive for its script. */
   private pickUp(u: Unit): BattleEvent[] {
     const events: BattleEvent[] = [];
     for (const o of liveUnits(this.state.units)) {
       if (o.side !== 7) continue;
       const d = dist(u.c, u.r, o.c, o.r);
-      if (d === 0) {
+      if (d === 0 && o.id === 8) {
         if (o.dropItem === 0) { addGold(this.state.inventory, o.dropGold); events.push({ type: 'pickup', slot: u.slot, item: 0, gold: o.dropGold }); }
         else if (giveItem(this.state.inventory, u, o.dropItem, 1, this.tables.item)) events.push({ type: 'pickup', slot: u.slot, item: o.dropItem, gold: 0 });
         else { events.push({ type: 'bagFull', slot: u.slot, item: o.dropItem }); continue; }
