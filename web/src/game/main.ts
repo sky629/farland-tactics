@@ -7,6 +7,7 @@ import type { BattleEntry, Tables } from '../data/types';
 import { Presenter, type SpriteProvider } from '../field/presenter';
 import { addGold, emptyInventory, giveItem, usableItems } from '../battle/inventory';
 import { animApd } from '../field/unitSprites';
+import { cellCommand } from './battleInput';
 import { VIEW_H, VIEW_W } from '../iso/grid';
 import { MapModel } from '../map/mapModel';
 import { Renderer, type Scene } from '../render/renderer';
@@ -116,23 +117,8 @@ function canvasCell(ev: MouseEvent): [number, number] | null {
 
 function onClick(cell: [number, number]): void {
   if (!battle) return;
-  const s = battle.state;
-  if (s.phase.kind !== 'player') return;
-  const sel = s.phase.sel;
-  const u = s.units.find((x) => x && x.c === cell[0] && x.r === cell[1]) ?? null;
-  switch (sel.mode) {
-    case 'idle': if (u && u.side === 0) dispatch({ type: 'select', slot: u.slot }); break;
-    case 'menu': if (u && u.side === 0 && u.slot !== sel.slot) dispatch({ type: 'select', slot: u.slot }); break;
-    case 'move': dispatch({ type: 'move', c: cell[0], r: cell[1] }); break;
-    case 'target': dispatch({ type: 'act', c: cell[0], r: cell[1] }); break;
-    case 'face': {
-      const me = s.units[sel.slot]!;
-      const d = Math.abs(cell[0] - me.c) + Math.abs(cell[1] - me.r);
-      if (d === 0) dispatch({ type: 'face', dir: me.dir });
-      else if (d === 1) dispatch({ type: 'face', dir: cell[0] > me.c ? 1 : cell[0] < me.c ? 2 : cell[1] > me.r ? 0 : 3 });
-      break;
-    }
-  }
+  const cmd = cellCommand(battle.state, cell);
+  if (cmd) dispatch(cmd);
 }
 
 function frame(now: number): void {
