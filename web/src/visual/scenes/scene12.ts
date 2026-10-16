@@ -28,7 +28,7 @@ export const scene12: SceneDef = { id: 12, parts: [[
   ...caption(0, 592, 48, 24, 216, 2000, 10000),
   ...caption(1, 448, 96, 96, 192, 14000, 20000),
   ...caption(2, 400, 64, 120, 200, 24000, 31000),
-  { op: 'waitFade' }, { op: 'waitUntil', ms: 33000 }, { op: 'hide', obj: 0 },
+  { op: 'waitFade' }, { op: 'waitUntil', ms: 33000 }, { op: 'hide', obj: 0 }, { op: 'fade', dir: 'in', steps: 0 },   // FUN_00419a20(0, 1): the palette comes back at once for the roll
   { op: 'resetClock' }, { op: 'textRoll', ms: 142000 }, ...CREDITS.flatMap(credit), { op: 'waitAlpha', obj: 3 }, { op: 'hide', obj: 3 }, { op: 'waitText' },
   { op: 'waitUntil', ms: 180000 },
   { op: 'show', obj: 0, slot: 20, sx: 0, sy: 0, w: 640, h: 360, dx: 0, dy: 60 }, { op: 'show', obj: 3, slot: 21, sx: 0, sy: 0, w: 640, h: 170, dx: 0, dy: 310 },

@@ -96,6 +96,7 @@ describe('visual scenes (corpus)', () => {
     for (const k of [0, 1, 2, 3, 4, 5, 6]) {
       const start = 33000 + (5 + 20 * k) * 1000;
       expect(at(start + 2000).visible, `picture ${k} shown`).toBe(1);
+      expect(at(start + 2000).fade, `no black fade over picture ${k}`).toBeNull();
       expect(at(start + 18500).visible, `picture ${k} gone`).toBe(0);
     }
     expect(at(185000).visible).toBe(2);
