@@ -1,4 +1,4 @@
-import { costLand, type RaceData, type Tables } from '../data/types';
+import { costLand, type ItemData, type RaceData, type Tables } from '../data/types';
 import { dist, hostile, incap, opposite, stepCell, unitAt, unitsWithin, type BattleGrid, type Dir } from './grid';
 import type { Unit } from './unit';
 
@@ -32,15 +32,18 @@ export class RangeTable {
   }
 }
 
-const flies = (race: RaceData, u: Unit) => race.cost_land0 !== 99 || u.status === 11;
+/** FUN_0041ee30(unit, 11): levitating by status or by an equipped item with status_code 11. */
+export const levitates = (u: Unit, items: ItemData[]): boolean => u.status === 11 || [u.weapon, u.armor, u.acc[0], u.acc[1]].some((i) => items[i]?.status_code === 11);
+const flies = (race: RaceData, u: Unit, items: ItemData[]) => race.cost_land0 !== 99 || levitates(u, items);
 
 /** FUN_00439690(unit, 0) + FUN_00439b40: budget 30, land cost per cell, climb/drop limits, ZOC (file_formats.md §8). */
-export function computeMoveRange(grid: BattleGrid, units: (Unit | null)[], unit: Unit, race: RaceData): RangeTable {
+export function computeMoveRange(grid: BattleGrid, units: (Unit | null)[], unit: Unit, race: RaceData, items: ItemData[] = []): RangeTable {
   const t = new RangeTable(unit.c, unit.r);
   t.setMove(unit.c, unit.r, MOVE_BUDGET);
   if (unit.side === 3 || unit.moved || incap(unit.status)) return t;
   const cost = costLand(race);
-  const fly = flies(race, unit);
+  const levitating = levitates(unit, items);
+  const fly = flies(race, unit, items);
   const inZoc = (c: number, r: number, h: number) => units.some((v) => v && v !== unit && hostile(unit, v) && !incap(v.status)
     && dist(v.c, v.r, c, r) === 1 && Math.abs(grid.height(v.c, v.r) - h) < 8);
   const visit = (c: number, r: number, remaining: number): void => {
@@ -50,9 +53,13 @@ export function computeMoveRange(grid: BattleGrid, units: (Unit | null)[], unit:
       const [nc, nr] = stepCell(c, r, d as Dir);
       const cell = grid.cell(nc, nr);
       if (!cell || t.index(nc, nr) < 0) continue;
-      let k = cell.blocked ? 99 : cell.flag2 !== 0 || unitAt(units, nc, nr) ? 0 : cost[cell.land] ?? 99;
-      if (unit.status === 11 && cell.land === 0 && !cell.blocked) k = race.cost_land1;
+      // FUN_0041f410: flag2 cells and cells holding a non-object unit count as land 0 (99 for ground races, cost_land1 when levitating)
+      const occ = unitAt(units, nc, nr);
+      const land = cell.flag2 !== 0 || (occ && occ.side !== 7) ? 0 : cell.land;
+      let k = cost[land] ?? 99;
+      if (land === 0 && levitating) k = race.cost_land1;
       if (unit.status === 10) k -= 1;
+      if (cell.blocked) k = 99;
       if (k >= 99) continue;
       if (!fly) {
         const dh = cell.h - hc;
@@ -121,11 +128,11 @@ export function canStop(t: RangeTable, units: (Unit | null)[], unit: Unit, c: nu
 }
 
 /** FUN_00438960: from dest back to the unit, always stepping to a neighbour with more move points (ties keep the previous direction). */
-export function pathTo(t: RangeTable, grid: BattleGrid, unit: Unit, race: RaceData, dest: [number, number]): Dir[] {
+export function pathTo(t: RangeTable, grid: BattleGrid, unit: Unit, race: RaceData, dest: [number, number], items: ItemData[] = []): Dir[] {
   let [c, r] = dest;
   const back: Dir[] = [];
   let prevDir = -1;
-  const limit = flies(race, unit) ? 99 : null;
+  const limit = flies(race, unit, items) ? 99 : null;
   while (c !== unit.c || r !== unit.r) {
     if (back.length >= 30) return [];
     let best = -1, bestMove = t.moveAt(c, r);

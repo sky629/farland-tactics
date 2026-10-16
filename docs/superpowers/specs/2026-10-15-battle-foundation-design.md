@@ -253,8 +253,9 @@ Wichmann–Hill 3-LCG: 상태 (s1, s2, s3). `rand(n)`은 0..n−1. 상수와 초
 ```
 중심 move = 30
 unit.side !== 3 && !moved && !행동불능 이면 4방향 재귀:
-  비용 = cell.blocked ? 99 : (cell.flag2 ≠ 0 || 유닛이 서 있음) ? 0 : race.cost_land[land]
-         (부유 상태 0xb 이고 land 0 이면 cost_land1 ; 상태 10 이면 비용 −1)
+  land = (cell.flag2 ≠ 0 || 오브젝트가 아닌 유닛이 서 있음) ? 0 : cell.land        (FUN_0041f410)
+  비용 = race.cost_land[land] ; land 0 이고 부유(상태 11 또는 부유 장비)면 cost_land1 ; 상태 10 이면 −1 ; cell.blocked 면 99
+         → 지상 종족은 다른 유닛이 선 칸과 flag2 칸을 지나가지 못한다(cost_land0 = 99)
   높이: 오를 때 new−cur ≤ climb_max, 내려갈 때 cur−new ≤ drop_max ; 비행 종족(cost_land0 ≠ 99) 또는 부유면 제한 없음
   남은 = 현재 − 비용 ; ≥1 이면 진입, ≥2 이면 계속 ; 더 큰 값으로만 갱신
   ZOC: 적(행동불능 제외, 높이차 < 8)에 인접한 셀은 남은 = 1
@@ -373,11 +374,12 @@ unit.side !== 3 && !moved && !행동불능 이면 4방향 재귀:
 2. 고른 로스터를 원작 `LOAD_UNITS`처럼 적용: 슬롯 10..49 비움 → 레코드마다 `applyRosterUnit`: 파티 id가 이미 있으면 위치·방향·상태만 갱신, 없으면 생성.
 3. **리메이크 편의 규칙**: 파티 유닛의 레벨이 로스터 레코드의 레벨보다 낮으면 `grow(randomize=false)`를 반복해 맞춘다. 첫 전투는 둘 다 Lv2라 영향이 없다. 로스터에 없는 파티 유닛(이야기상 아직 합류 전/이탈)은 그 전투에 두지 않는다 → 로스터의 파티 레코드만 쓴다.
 4. 전투 시작 = `BATTLE_START_HEAL`이면 전 유닛 HP=max, MP=max/2; `BATTLE_START`면 그대로(새 유닛은 생성 시 전회복). 모두 `moved=acted=false`, turn=1.
+5. **리메이크 편의 규칙**: 로스터의 (0, 0)은 "아직 배치하지 않음"이다(17개 전투: 이야기 스크립트가 `SET_POS`로 자리를 정하거나 나중에 증원한다). 파티 유닛이면 배치된 파티 유닛들의 중심에서 가장 가까운 빈 바닥 셀(blocked 아님, land ≠ 0, 비어 있음)에 둔다(배치된 파티가 없으면 맵 중앙 기준). 파티가 아닌 유닛이면 그 전투에서 뺀다. (0, 0)이 아닌 없는 셀에 선 유닛은 `DataError`다.
 
 ## 12. 오류 처리
 
 - `DataLoader`는 로드 시 §5.4의 범위를 다시 검사한다. 위반은 `DataError(file, message)` → 전투 선택 화면에 표시, 그 전투만 비활성.
-- `MapData`에 로스터 좌표가 없으면(`cellAt == −1`) 그 유닛을 `DataError`로 보고하고 전투를 막는다.
+- `MapData`에 로스터 좌표가 없으면(`cellAt == −1`) 그 유닛을 `DataError`로 보고하고 전투를 막는다. 예외는 §11.5의 (0, 0) 자리표시다.
 - 애니·APD 없음은 §9.3의 대체 + 로그(오류 아님).
 - 코어 불변 조건(HP 0..max, 셀당 유닛 1, 슬롯 0..9만 side 0)은 테스트의 `assertInvariants`에서만 검사한다.
 - 명령 거부는 `rejected` 이벤트로만 알린다. 예외를 던지지 않는다.

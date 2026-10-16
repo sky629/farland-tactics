@@ -37,14 +37,19 @@ describe('computeMoveRange (FUN_00439690 / FUN_00439b40)', () => {
     expect(t.moveAt(2, 3)).toBe(0);     // climb 5 > 4
     expect(t.moveAt(3, 2)).toBe(25);    // climb 4 allowed
   });
-  it('a cell next to a hostile unit keeps only 1 move point (ZOC) and flag2 cells cost nothing', () => {
+  it('a cell next to a hostile unit keeps only 1 move point (ZOC); flag2 and occupied cells count as land 0 (impassable on foot)', () => {
     const grid = new BattleGrid(flatMap(7, (c, r) => (c === 3 && r === 4 ? { flag2: 1 } : {})));
     const u = unit({ slot: 0, c: 3, r: 3 });
-    const e = unit({ slot: 10, c: 5, r: 3, side: 4 });
-    const t = computeMoveRange(grid, units(u, e), u, race);
+    const e = unit({ slot: 10, c: 5, r: 3, side: 4 }), ally = unit({ slot: 1, c: 2, r: 3 }), chest = unit({ slot: 20, c: 3, r: 2, id: 8, side: 7 });
+    const t = computeMoveRange(grid, units(u, e, ally, chest), u, race);
     expect(t.moveAt(4, 3)).toBe(1);
-    expect(t.moveAt(3, 4)).toBe(30);
-    expect(t.moveAt(5, 3)).toBe(0);     // every neighbour of the enemy is a ZOC cell (1 point), so its own cell is never reached
+    expect(t.moveAt(3, 4)).toBe(0);     // flag2 → land 0 → cost 99 for a ground race
+    expect(t.moveAt(2, 3)).toBe(0);     // an ally blocks the cell (FUN_0041f410: occupied → land 0)
+    expect(t.moveAt(1, 3)).toBe(10);    // reached around the ally in four steps via (3,2) → (2,2) → (1,2)
+    expect(t.moveAt(3, 2)).toBe(25);    // a treasure object (side 7) does not block
+    expect(t.moveAt(5, 3)).toBe(0);     // the enemy's own cell is land 0 as well
+    const bird = computeMoveRange(grid, units(u, e, ally, chest), { ...u, race: 2 }, RACE({ cost_land0: 4 }));
+    expect(bird.moveAt(3, 4)).toBe(26); // flying races pay cost_land0 on flag2 cells
   });
   it('a unit that already moved, is incapacitated, or has side 3 only owns its cell', () => {
     const grid = new BattleGrid(flatMap(5));

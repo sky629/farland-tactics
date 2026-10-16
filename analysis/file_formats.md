@@ -135,9 +135,9 @@ P 없이 M만 있는 스텝은 직전 스텝의 프레임을 다시 쓴다. 예:
 
 ```
 시작 셀 이동력 = 30 (고정)
-셀 진입 비용   = race.cost_land[land]        (land = cell.land, 단 cell.flag2 != 0 이면 0; 유닛이 서 있으면 0)
+셀 진입 비용   = race.cost_land[land]        (land = cell.land, 단 cell.flag2 != 0 이거나 오브젝트(진영 7)가 아닌 유닛이 서 있으면 land 0 으로 취급
+                 → 지상 종족은 cost_land0 = 99 라 지나갈 수 없다. 비행 종족은 cost_land0, 부유 상태·부유 장비면 cost_land1)
                  cell.blocked != 0 → 99 (진입 불가), 99 = 그 지형 진입 불가
-                 LEVITATE(상태 0xb) 상태면 land 0 셀도 cost_land1 비용으로 진입
                  상태 10(가속으로 추정)이면 비용 -1
 높이 제한      = 오를 때 (new - cur) <= race.climb_max, 내려갈 때 (cur - new) <= race.drop_max
                  필드 모드에서 cost_land0 != 99(비행 종족) 또는 LEVITATE면 제한 없음

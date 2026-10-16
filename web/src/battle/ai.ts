@@ -25,7 +25,7 @@ export function chooseAction(state: BattleState, u: Unit, tables: Tables): AiDec
   const weapon = tables.item[u.weapon]!;
   let mode = u.side === 0 ? 4 : u.side;
   if (mode !== 6 && (u.acted || incap(u.status))) mode = 5;
-  const table = computeMoveRange(grid, units, u, race);
+  const table = computeMoveRange(grid, units, u, race, tables.item);
   const canMove = !u.moved && !incap(u.status);
   const canAct = !u.acted && !incap(u.status);
   const enemies = liveUnits(units).filter((v) => v !== u && v.status !== 9 && hostile(u, v) && v.status !== 1 && v.side !== 7);
@@ -86,7 +86,7 @@ export function chooseAction(state: BattleState, u: Unit, tables: Tables): AiDec
     if (!best || total > totalOf(best) || (total === totalOf(best) && d < bestDist)) { best = s; bestDist = d; }
   }
   const dest: [number, number] = best ? [best.c, best.r] : [u.c, u.r];
-  const path = dest[0] === u.c && dest[1] === u.r ? [] : pathTo(table, grid, u, race, dest);
+  const path = dest[0] === u.c && dest[1] === u.r ? [] : pathTo(table, grid, u, race, dest, tables.item);
   if (!best || best.magicId === 0 || best.magic <= best.attack) {
     if (best?.attackTarget) return { dest, path, action: 0, cell: [best.attackTarget.c, best.attackTarget.r], faceDir: null };
     let near: Unit | null = null;

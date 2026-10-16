@@ -57,6 +57,34 @@ export function startBattle(units: (Unit | null)[], heal: boolean): void {
   }
 }
 
+/** Remake rule (spec §11.5): 17 rosters leave party members at (0, 0) because the story script positions them; put each on the
+ *  nearest free floor cell around the placed party (or around the map centre when nobody is placed). Non-party units are never moved;
+ *  non-party (0, 0) placeholders are dropped by Battle.start. */
+export function placeUnplacedParty(units: (Unit | null)[], grid: BattleGrid): void {
+  const party = liveUnits(units).filter((u) => u.slot < PARTY_SLOTS);
+  const placed = party.filter((u) => grid.cell(u.c, u.r));
+  const unplaced = party.filter((u) => !grid.cell(u.c, u.r));
+  if (unplaced.length === 0) return;
+  const centre: [number, number] = placed.length > 0
+    ? [Math.round(placed.reduce((s, u) => s + u.c, 0) / placed.length), Math.round(placed.reduce((s, u) => s + u.r, 0) / placed.length)]
+    : [Math.trunc(grid.N / 2), Math.trunc(grid.N / 2)];
+  const taken = new Set(liveUnits(units).filter((u) => grid.cell(u.c, u.r)).map((u) => `${u.c},${u.r}`));
+  for (const u of unplaced) {
+    let best: [number, number] | null = null, bestD = Infinity;
+    for (let c = 0; c < grid.N; c++) {
+      for (let r = 0; r < grid.N; r++) {
+        const cell = grid.cell(c, r);
+        if (!cell || cell.blocked !== 0 || cell.land === 0 || taken.has(`${c},${r}`)) continue;
+        const d = dist(c, r, centre[0], centre[1]);
+        if (d < bestD) { bestD = d; best = [c, r]; }
+      }
+    }
+    if (!best) return;
+    u.c = best[0]; u.r = best[1];
+    taken.add(`${best[0]},${best[1]}`);
+  }
+}
+
 /** FUN_0043afd0 dash: party unit, no special flag, last three steps straight toward the target, each step |Δh| ≤ 2, not levitating; bows need an adjacent target. */
 export function isDash(grid: BattleGrid, unit: Unit, path: Dir[], target: [number, number], weapon: ItemData): boolean {
   if (unit.side !== 0 || unit.special || unit.status === 11 || path.length < 3) return false;
@@ -86,6 +114,8 @@ export class Battle {
     for (let s = 0; s < PARTY_SLOTS; s++) if (units[s] && !inRoster.has(units[s]!.id)) units[s] = null;
     syncPartyLevels(units, roster, tables, rng);
     const grid = new BattleGrid(map);
+    for (let s = PARTY_SLOTS; s < MAX_SLOTS; s++) { const u = units[s]; if (u && u.c === 0 && u.r === 0 && !grid.cell(0, 0)) units[s] = null; }   // (0, 0) = placed later by the story script
+    placeUnplacedParty(units, grid);
     for (const u of liveUnits(units)) {
       if (!grid.cell(u.c, u.r)) throw new DataError(`roster/stage${String(entry.roster).padStart(3, '0')}.json`, `unit ${u.slot} (id ${u.id}) stands on a missing cell (${u.c}, ${u.r})`);
     }
@@ -123,7 +153,7 @@ export class Battle {
   }
 
   private rangeFor(u: Unit): RangeTable {
-    const t = computeMoveRange(this.state.grid, this.state.units, u, this.tables.race[u.race]!);
+    const t = computeMoveRange(this.state.grid, this.state.units, u, this.tables.race[u.race]!, this.tables.item);
     markTargets(t, this.state.grid, this.state.units, u, 0, this.tables);
     return t;
   }
@@ -162,7 +192,7 @@ export class Battle {
     if (!u) return reject('no unit selected');
     if (sel.mode !== 'move') return reject('not moving');
     if ((c === u.c && r === u.r) || !canStop(sel.range, this.state.units, u, c, r)) return reject('cannot stop there');
-    const path = pathTo(sel.range, this.state.grid, u, this.tables.race[u.race]!, [c, r]);
+    const path = pathTo(sel.range, this.state.grid, u, this.tables.race[u.race]!, [c, r], this.tables.item);
     if (path.length === 0) return reject('no path');
     u.c = c; u.r = r; u.dir = path[path.length - 1]!; u.moved = true;
     this.state.lastPath = path;

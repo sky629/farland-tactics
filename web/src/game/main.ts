@@ -199,4 +199,12 @@ async function boot(): Promise<void> {
   } catch (e) { showError(e); }
 }
 
+/** Debug hook for scripted browser checks: window.__ft2().dispatch({ type: 'select', slot: 0 }) etc. */
+(window as unknown as { __ft2: () => unknown }).__ft2 = () => ({ battle, presenter, mapModel, camera, dispatch, cellScreen: (c: number, r: number) => {
+  const cell = mapModel?.cellAt(c, r);
+  if (!cell) return null;
+  const rect = canvas.getBoundingClientRect();
+  return { x: rect.left + ((cell.x - camera.x) / VIEW_W) * rect.width, y: rect.top + ((cell.y - camera.y) / VIEW_H) * rect.height };
+} });
+
 void boot();

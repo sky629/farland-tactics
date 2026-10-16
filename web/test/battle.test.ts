@@ -35,6 +35,18 @@ describe('party rules (spec §11)', () => {
     expect(solo.state.units[1]).toBeNull();
     expect(solo.state.phase).toEqual({ kind: 'player', sel: { mode: 'idle' } });
   });
+  it('(0, 0) placeholders: party units are placed next to the placed party, non-party units are dropped', () => {
+    const map = flatMap(9); map.cellAt[0] = -1;                                         // (0, 0) does not exist, as on the real maps
+    const ros = roster.map((r) => (r.unit_id === 2 ? { ...r, c: 0, r: 0 } : r));
+    ros.push({ ...roster[2]!, c: 0, r: 0 });                                             // a reinforcement the script would place later
+    const b = Battle.start(entry, map, roster1, ros, t, 1);
+    const hero2 = b.state.units[1]!;
+    expect(b.state.grid.cell(hero2.c, hero2.r)).not.toBeNull();
+    expect(Math.abs(hero2.c - 2) + Math.abs(hero2.r - 4)).toBeLessThanOrEqual(1);   // around hero 1 at (2,4)
+    expect([hero2.c, hero2.r]).not.toEqual([2, 4]);
+    expect(b.state.units[12]).toBeNull();
+    expect(b.state.units[10]).not.toBeNull();
+  });
   it('rejects a roster unit placed on a missing cell', () => {
     const map = flatMap(9);
     map.cellAt[6 * 9 + 4] = -1;
