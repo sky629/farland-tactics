@@ -81,4 +81,13 @@ describe('Effects', () => {
     expect(cam.x).toBe(160);
     expect(fx.scrollBusy()).toBe(false);
   });
+  it('a scroll whose target lies beyond the camera range ends at the edge instead of waiting forever (event02 CAMERA_SCROLL −1,0 → cell 26,35)', () => {
+    const fx = new Effects();
+    const clamp = (x: number, y: number) => ({ x: Math.min(Math.max(x, 0), 640), y: Math.min(Math.max(y, 0), 480) });
+    fx.startScroll(-1, 0, 26, 35, 50, () => ({ x: 32, y: 976 }));         // target camera (−288, 736): left of the map, below its bottom
+    let cam = { x: 100, y: 200 };
+    for (let t = 50; t <= 20000 && fx.scrollBusy(); t += 50) cam = fx.update(t, cam, clamp);
+    expect(fx.scrollBusy()).toBe(false);
+    expect(cam).toEqual({ x: 0, y: 480 });
+  });
 });

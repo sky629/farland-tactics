@@ -74,10 +74,11 @@ export class Effects {
       if (ticks > 0) {
         s.last += ticks * s.ms;
         let { x, y } = cam;
+        const target = s.target ? clamp(s.target.x, s.target.y) : null;       // the camera can only reach what the map allows
         for (let k = 0; k < ticks && this.scroll; k++) {
           const nx = x + s.dx, ny = y + s.dy;
           const reached = (v: number, target: number, d: number) => (d > 0 ? v >= target : d < 0 ? v <= target : true);
-          if (s.target && reached(nx, s.target.x, s.dx) && reached(ny, s.target.y, s.dy)) { x = s.target.x; y = s.target.y; this.scroll = null; }
+          if (target && reached(nx, target.x, s.dx) && reached(ny, target.y, s.dy)) { x = target.x; y = target.y; this.scroll = null; }
           else { x = nx; y = ny; }
         }
         cam = clamp(x, y);

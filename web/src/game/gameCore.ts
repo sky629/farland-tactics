@@ -57,6 +57,7 @@ export class GameCore implements Host {
   private lastMap = 0;
   private lastRoster = 0;
   private pendingBattle = false;
+  private completed = false;                                                   // WRITE_COMPLETE_FLAG seen: the next script end is the ending
   private hooks: Hook[] = [];
 
   constructor(private readonly res: Resources, readonly stage: Stage) {
@@ -68,7 +69,7 @@ export class GameCore implements Host {
   newGame(): void {
     this.campaign = newCampaign();
     this.vm = new ScriptVm(this.res, this.campaign, this);
-    this.battle = null; this.result = null; this.prevMode = 'title'; this.pendingBattle = false; this.hooks = [];
+    this.battle = null; this.result = null; this.prevMode = 'title'; this.pendingBattle = false; this.completed = false; this.hooks = [];
     this.stage.presenter.sync(this.campaign);
     if (!this.startScript(0, 'begin')) this.mode = 'ended';
   }
@@ -85,7 +86,7 @@ export class GameCore implements Host {
     try { c = decodeSave(bytes, this.res.tables, (w) => this.stage.log('warn', w)); } catch (e) { this.stage.log('warn', e instanceof SaveError ? e.message : String(e)); return false; }
     this.campaign = c;
     this.vm = new ScriptVm(this.res, c, this);
-    this.battle = null; this.result = null; this.hooks = []; this.pendingBattle = false;
+    this.battle = null; this.result = null; this.hooks = []; this.pendingBattle = false; this.completed = false;
     this.stage.closeAll(); this.stage.hideTown();
     this.mode = 'title'; this.prevMode = 'title';
     this.stage.presenter.sync(c);
@@ -289,8 +290,9 @@ export class GameCore implements Host {
   }
   visualBusy(): boolean { return !this.stage.visualDone(); }
   save(slot: number): void { if (slot < 0) return; this.stage.writeSave(slot, this.saveBytes()); this.stage.log('info', `save ${String(slot).padStart(2, '0')}`); }
-  quitComplete(): void { this.mode = 'ended'; this.stage.log('info', 'game complete'); }
-  writeCompleteFlag(): void { this.stage.log('info', 'complete flag'); }
+  quitComplete(): void { this.battle = null; this.mode = 'ended'; this.stage.log('info', 'game complete'); }
+  /** INI CompleteFlag in the original; here it marks the ending: event17 writes it, shows the title picture and ENDs. */
+  writeCompleteFlag(): void { this.completed = true; }
   enterBattle(): void { this.pendingBattle = true; }
   resumeBattle(): void { if (this.battle) this.handle(this.battle.resume()); }
   enterTown(): void { /* the switch happens in scriptEnded('town') */ }
@@ -298,6 +300,7 @@ export class GameCore implements Host {
   enemyPhase(): boolean { return this.battle?.state.phase.kind === 'enemy'; }
   scriptEnded(restore: Restore): void {
     this.stage.closeAll();
+    if (this.completed) { this.quitComplete(); return; }
     if (restore === 'town') { this.toTown(); return; }
     if (restore === 'battle' || this.pendingBattle) {
       if (this.pendingBattle) this.createBattle(true);

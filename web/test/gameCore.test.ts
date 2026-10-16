@@ -93,6 +93,17 @@ describe('GameCore', () => {
   });
 });
 
+describe('ending', () => {
+  it('WRITE_COMPLETE_FLAG then END ends the game (event17 writes the flag, shows the title and ENDs; no GAME_COMPLETE_QUIT)', () => {
+    const stage = new FakeStage();
+    const core = new GameCore(res([prog(0, ['begin', ['WRITE_COMPLETE_FLAG'], ['SHOW_IMAGE', 'title', 1], ['WAIT_FADE'], ['HIDE_IMAGE'], ['END']])]), stage);
+    core.newGame(); core.frame(0); core.frame(1000);
+    expect(core.mode).toBe('ended');
+    expect(stage.calls).toContainEqual(['log', 'info', 'game complete']);
+    expect(stage.calls.some((c) => c[0] === 'log' && c[1] === 'warn')).toBe(false);
+  });
+});
+
 describe('visual scenes (PLAY_VISUAL)', () => {
   it('PLAY_VISUAL 21 starts scene 1 on the stage and the VM waits until the scene is done', () => {
     const stage = new FakeStage();

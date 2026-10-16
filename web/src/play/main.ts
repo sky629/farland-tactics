@@ -60,10 +60,13 @@ function bindAudioControls(): void {
 }
 
 let audioNoted = false;
+let endedShown = false;
 function frame(now: number): void {
   try {
     if (core && stage && panel) {
       core.frame(now);
+      if (core.mode === 'ended' && !endedShown) { endedShown = true; stage.hideTown(); $('title').hidden = false; }   // the ending (or a game over with nowhere to go) returns to the title
+      if (core.mode !== 'ended') endedShown = false;
       if (!audioNoted && stage.audioTried) { audioNoted = true; const note = $('audioNote'); note.hidden = stage.musicReady; note.textContent = '음악 없음: 사운드폰트가 없다. python3 -I tools/ft2_soundfont.py web/public/assets 를 실행한 뒤 새로고침.'; }
       stage.cellMode = core.mode === 'battle';
       const b = core.battle;
