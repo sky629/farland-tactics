@@ -147,6 +147,20 @@ describe('Dialogue', () => {
     root.find('닫기')!.click();
     expect(el(dlg.modal).hidden).toBe(true);
   });
+  it('the party menu offers 저장, which opens the slot picker through the page callback; the load modal can delete a slot', () => {
+    const { root, dlg, ctx } = setup();
+    let saved = 0;
+    dlg.openParty(ctx, { onSave: () => { saved++; } });
+    root.find('저장')!.click();
+    expect(saved).toBe(1);
+    const picked: number[] = [], deleted: number[] = [];
+    dlg.openSaveSlots(slotList(), (s) => picked.push(s));
+    root.find('00 비어 있음')!.click();
+    expect(picked).toEqual([0]);
+    dlg.openLoad(slotList(), { onPick: () => {}, onExport: () => {}, onImport: () => {}, onDelete: (s) => deleted.push(s) });
+    root.find('삭제')!.click();
+    expect(deleted).toEqual([2]);
+  });
   it('closeAll hides windows, modal and episode title', () => {
     const { dlg, ctx } = setup();
     dlg.openWindow('top', 1, null); dlg.openModal('message', 'x', ctx); dlg.showEpisode('제1화');

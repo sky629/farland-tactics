@@ -78,7 +78,7 @@ export class GameCore implements Host {
   /** FUN_004239b0 load: replace the campaign, drop battle and screens, run `Restart` (EVENT00 while in town, else the stage file), resume the music. */
   loadGame(bytes: Uint8Array): boolean {
     let c: Campaign;
-    try { c = decodeSave(bytes); } catch (e) { this.stage.log('warn', e instanceof SaveError ? e.message : String(e)); return false; }
+    try { c = decodeSave(bytes, this.res.tables, (w) => this.stage.log('warn', w)); } catch (e) { this.stage.log('warn', e instanceof SaveError ? e.message : String(e)); return false; }
     this.campaign = c;
     this.vm = new ScriptVm(this.res, c, this);
     this.battle = null; this.result = null; this.hooks = []; this.pendingBattle = false;
@@ -206,19 +206,24 @@ export class GameCore implements Host {
     this.startScript(target.stage, target.label);
   }
 
-  private startBattle(): void {
+  /**
+   * A Battle over the campaign units. `fresh` = BATTLE_START (place the party, round 1, autosave slot 30);
+   * otherwise a FIELD_MODE return with no Battle alive (a loaded mid-battle save): continue from the saved round, no autosave.
+   */
+  private createBattle(fresh: boolean): void {
     const map = this.stage.mapData();
-    if (!map) { this.stage.log('warn', 'BATTLE_START without a loaded map'); this.mode = 'ended'; return; }
+    if (!map) { this.stage.log('warn', `${fresh ? 'BATTLE_START' : 'FIELD_MODE'} without a loaded map`); this.mode = 'ended'; return; }
     const grid = new BattleGrid(map);
-    placeUnplacedParty(this.campaign.units, grid);
+    if (fresh) placeUnplacedParty(this.campaign.units, grid);
     const entry = { event: this.campaign.stage, label: 'script', map: `stage${String(this.lastMap).padStart(2, '0')}`, roster: this.lastRoster, episode: this.campaign.episode, objective: '', heal: false };
-    this.battle = new Battle({ entry, map, grid, units: this.campaign.units, turn: 1, phase: { kind: 'player', sel: { mode: 'idle' } }, rng: this.res.rng, lastPath: [], inventory: this.campaign.inventory }, this.res.tables,
+    const turn = Math.max(this.campaign.turn, 0) + 1;                          // the header counts finished rounds
+    this.battle = new Battle({ entry, map, grid, units: this.campaign.units, turn, phase: { kind: 'player', sel: { mode: 'idle' } }, rng: this.res.rng, lastPath: [], inventory: this.campaign.inventory }, this.res.tables,
       { beforeAction: (a, _action, targets) => this.beforeAction(a, targets), deferSettle: true });
     this.pendingBattle = false; this.result = null; this.hooks = [];
     this.stage.presenter.sync(this.battle.state);
     const first = this.campaign.units.find((u) => u && u.side === 0);
     if (first) this.cameraUnit(first);
-    this.save(30);                                                             // FUN_00423820(30): autosave at battle start
+    if (fresh) this.save(30);                                                  // FUN_00423820(30): autosave at battle start only
   }
 
   private setCamera(x: number, y: number): void {
@@ -284,7 +289,12 @@ export class GameCore implements Host {
   scriptEnded(restore: Restore): void {
     this.stage.closeAll();
     if (restore === 'town') { this.toTown(); return; }
-    if (restore === 'battle' || this.pendingBattle) { if (!this.battle || this.pendingBattle) this.startBattle(); if (this.battle) this.toBattle(); return; }
+    if (restore === 'battle' || this.pendingBattle) {
+      if (this.pendingBattle) this.createBattle(true);
+      else if (!this.battle) this.createBattle(false);                        // FIELD_MODE after a load: resume, do not restart
+      if (this.battle) this.toBattle();
+      return;
+    }
     if (this.prevMode === 'battle' && this.battle) { this.toBattle(); return; }
     if (this.prevMode === 'town') { this.toTown(); return; }
     this.mode = 'ended';

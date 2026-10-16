@@ -1,4 +1,5 @@
 import type { Dir } from '../battle/grid';
+import type { Tables } from '../data/types';
 import { MAX_SLOTS, PARTY_SLOTS, type Unit } from '../battle/unit';
 import { FLAG_COUNT, newCampaign, type Campaign } from '../game/campaign';
 import { decodeCp949, encodeCp949 } from './cp949';
@@ -104,8 +105,20 @@ export function encodeSave(c: Campaign, date: Date, warn: (s: string) => void = 
   return bytes;
 }
 
-/** FUN_004239b0 load: a fresh campaign filled from the file. Runtime-only fields (speaker name, hooks) start empty. */
-export function decodeSave(bytes: Uint8Array): Campaign {
+/** Spec §10: ids the tables do not know become 0 (or leave the spell list), one warning each — a foreign or corrupt save must not crash a frame later. */
+export function sanitizeUnit(u: Unit, tables: Tables, warn: (s: string) => void): void {
+  const who = `unit ${u.slot} (id ${u.id})`;
+  if (u.race >= tables.race.length) { warn(`${who}: race ${u.race} is not in race.dat → 0`); u.race = 0; }
+  const item = (id: number, what: string): number => { if (id >= tables.item.length) { warn(`${who}: ${what} item ${id} is not in item.dat → 0`); return 0; } return id; };
+  u.weapon = item(u.weapon, 'weapon'); u.armor = item(u.armor, 'armor');
+  u.acc = [item(u.acc[0], 'accessory'), item(u.acc[1], 'accessory')];
+  u.bag = u.bag.map((id) => item(id, 'bag'));
+  u.dropItem = item(u.dropItem, 'drop');
+  u.spells = u.spells.filter((s) => { if (s >= tables.magic.length) { warn(`${who}: spell ${s} is not in magic.dat → dropped`); return false; } return true; });
+}
+
+/** FUN_004239b0 load: a fresh campaign filled from the file. Runtime-only fields (speaker name, hooks) start empty. With tables, unknown ids are zeroed (spec §10). */
+export function decodeSave(bytes: Uint8Array, tables?: Tables, warn: (s: string) => void = () => {}): Campaign {
   const v = checked(bytes);
   const c = newCampaign();
   c.stage = v.getUint16(4, true);
@@ -120,7 +133,7 @@ export function decodeSave(bytes: Uint8Array): Campaign {
     if (id !== 0 && count > 0) c.inventory.items.push({ id, count });
   }
   c.message = decodeCp949(bytes.subarray(436, 468));
-  for (let s = 0; s < MAX_SLOTS; s++) c.units[s] = decodeUnit(v, UNITS_AT + s * UNIT_SIZE, s);
+  for (let s = 0; s < MAX_SLOTS; s++) { const u = decodeUnit(v, UNITS_AT + s * UNIT_SIZE, s); if (u && tables) sanitizeUnit(u, tables, warn); c.units[s] = u; }
   for (let i = 0; i < TOWN_FLAGS; i++) c.townFlags[i] = v.getUint32(TOWN_AT + 88 + 4 * i, true);
   const night = v.getUint32(TOWN_AT + 168, true) !== 0, dark = v.getUint32(TOWN_AT + 176, true) !== 0;
   c.townSet = dark ? 3 : night ? 2 : 1;

@@ -73,6 +73,31 @@ describe('GameCore save and load (spec §6)', () => {
     expect(stage.calls.some((x) => x[0] === 'log' && x[1] === 'warn')).toBe(true);
     expect(core.loadGame(new Uint8Array(12))).toBe(false);
   });
+  it('a mid-battle save resumes through FIELD_MODE: the Battle continues from the saved round, no slot-30 autosave, no new placement', () => {
+    const c = newCampaign();
+    applyRoster(c.units, roster, tables(), fixedRng([0]));
+    c.stage = 1; c.turn = 12; c.units[0]!.c = 5; c.units[0]!.r = 6;
+    const { core, stage } = make(['begin', ['END']], ['Restart', ['LOAD_MAP', 49], ['FIELD_MODE'], ['END']]);
+    expect(core.loadGame(encodeSave(c, new Date()))).toBe(true);
+    core.frame(0); core.frame(16);
+    expect(core.mode).toBe('battle');
+    expect(core.battle!.state.turn).toBe(13);                                  // header 12 finished rounds → round 13
+    expect(core.battle!.state.phase).toEqual({ kind: 'player', sel: { mode: 'idle' } });
+    expect(core.battle!.state.units[0]).toMatchObject({ c: 5, r: 6 });
+    expect(stage.saves.has(30)).toBe(false);
+    expect(saveSummary(core.saveBytes()).turn).toBe(12);
+  });
+  it('loadGame zeroes race and item ids the tables do not know, with a warning each', () => {
+    const c = newCampaign();
+    applyRoster(c.units, roster, tables(), fixedRng([0]));
+    c.units[0]!.weapon = 999; c.units[0]!.bag = [777, 0, 0, 0]; c.units[10]!.race = 200; c.units[0]!.spells = [1, 555];
+    const { core, stage } = make(['begin', ['END'], 'Restart', ['TOWN']]);
+    c.turn = -1;
+    expect(core.loadGame(encodeSave(c, new Date()))).toBe(true);
+    expect(core.campaign.units[0]).toMatchObject({ weapon: 0, bag: [0, 0, 0, 0], spells: [1] });
+    expect(core.campaign.units[10]!.race).toBe(0);
+    expect(stage.calls.filter((x) => x[0] === 'log' && x[1] === 'warn').length).toBeGreaterThanOrEqual(4);
+  });
   it('loading while a battle is on discards it: no hooks, no battle, selection gone', () => {
     const { core, stage } = make(['begin', ['LOAD_UNITS', 5], ['LOAD_MAP', 49], ['BATTLE_START_HEAL'], ['END'], 'Restart', ['TOWN']]);
     core.newGame(); core.frame(0);

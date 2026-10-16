@@ -87,7 +87,10 @@ async function boot(): Promise<void> {
     await Promise.all(rosterIds(programs).map(async (n) => { try { rosters.set(n, await data.roster(n)); } catch (e) { showError(e); } }));
     const byStage = new Map(programs.map((p) => [p.stage, p]));
     const res: Resources = { program: (n) => byStage.get(n) ?? null, roster: (n) => rosters.get(n) ?? null, tables, rng: Rng.fromSeed(Date.now() % 1_000_000) };
-    saves = new SaveStore(await IdbBackend.open().catch((e: unknown) => { log('warn', `IndexedDB 를 열 수 없어 세이브는 이 페이지에만 남는다 (${e instanceof Error ? e.message : String(e)})`); return new MemoryBackend(); }));
+    const memory = (why: string) => { log('warn', `IndexedDB 를 열 수 없어 세이브는 이 페이지에만 남는다 (${why})`); return new MemoryBackend(); };
+    const opening = IdbBackend.open().catch((e: unknown) => memory(e instanceof Error ? e.message : String(e)));
+    const timeout = new Promise<MemoryBackend>((resolve) => setTimeout(() => resolve(memory('2초 안에 열리지 않음')), 2000));
+    saves = new SaveStore(await Promise.race([opening, timeout]));           // a hanging open must not keep the title dead
     const bmpSet = new Set(index.bmp);
     const bitmaps = new BitmapCache('assets', bmpSet, (name) => log('warn', `bitmap ${name} failed to load`));
     const dialogue = new Dialogue(document, $('dialogue'), (spk, letter) => { const name = `face${nn(spk)}${letter}`; return bmpSet.has(name) ? `assets/bmp/${name}.png` : null; });
@@ -95,7 +98,7 @@ async function boot(): Promise<void> {
     stage = new BrowserStage(canvas, renderer, assets, bitmaps, dialogue, sprites, tables, {
       onCell: (cell) => { if (core?.battle) { const cmd = cellCommand(core.battle.state, cell); if (cmd) core.dispatch(cmd); } },
       onTownClick: (i) => core?.townSelect(i),
-      onTownMenu: () => dialogue.openParty({ tables, inventory: core!.campaign.inventory, party: core!.campaign.units.slice(0, PARTY_SLOTS) }),
+      onTownMenu: () => dialogue.openParty({ tables, inventory: core!.campaign.inventory, party: core!.campaign.units.slice(0, PARTY_SLOTS) }, { onSave: () => dialogue.openSaveSlots(saveList, (slot) => core!.save(slot)) }),
       onCancel: () => core?.dispatch({ type: 'cancel' }),
       modalContext: () => ({ tables, inventory: core!.campaign.inventory, party: core!.campaign.units.slice(0, PARTY_SLOTS), saves: saveList }),
       writeSave: (slot, bytes) => { void saves?.write(slot, bytes).then(refreshSaves).catch(showError); },
@@ -115,15 +118,20 @@ async function boot(): Promise<void> {
         a.click(); URL.revokeObjectURL(url);
       },
       onImport: async (file: File) => {
-        try {
-          const slot = saveList.findIndex((s) => s === null);
-          if (slot < 0) { log('warn', '빈 슬롯이 없다'); return; }
-          const sum = await saves!.importBytes(slot, new Uint8Array(await file.arrayBuffer()));
-          await refreshSaves();
-          log('info', `${SaveStore.fileName(slot)} ← ${file.name} (${sum.title})`);
-          dialogue.openLoad(saveList, loadHandlers);
-        } catch (e) { showError(e); }
+        const bytes = new Uint8Array(await file.arrayBuffer());
+        const into = async (slot: number) => {
+          try {
+            const sum = await saves!.importBytes(slot, bytes);
+            await refreshSaves();
+            log('info', `${SaveStore.fileName(slot)} ← ${file.name} (${sum.title})`);
+            dialogue.openLoad(saveList, loadHandlers);
+          } catch (e) { showError(e); }
+        };
+        const free = saveList.findIndex((s) => s === null);
+        if (free >= 0) await into(free);
+        else dialogue.openSaveSlots(saveList, (slot) => void into(slot));     // every slot used: pick one to overwrite
       },
+      onDelete: async (slot: number) => { await saves!.remove(slot); await refreshSaves(); dialogue.openLoad(saveList, loadHandlers); },
     };
     $('loadGame').addEventListener('click', () => { void refreshSaves().then(() => dialogue.openLoad(saveList, loadHandlers)); });
     void bitmaps.load('title');

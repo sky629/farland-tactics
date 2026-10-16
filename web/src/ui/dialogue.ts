@@ -26,7 +26,7 @@ export function parseTextTags(line: string): TextRun[] {
 
 /** What the modals need from the game: item/race names, the shared inventory, the party for equipment purchases. */
 export interface ModalContext { tables: Tables; inventory: Inventory; party: (Unit | null)[]; saves?: (SaveSummary | null)[] }
-export interface LoadHandlers { onPick(slot: number): void; onExport(slot: number): void; onImport(file: File): void }
+export interface LoadHandlers { onPick(slot: number): void; onExport(slot: number): void; onImport(file: File): void; onDelete?(slot: number): void }
 
 const two = (n: number) => String(n).padStart(2, '0');
 const slotLabel = (i: number, s: SaveSummary | null): string => `${two(i)} ${s ? s.title || '(제목 없음)' : '비어 있음'}`;
@@ -154,7 +154,7 @@ export class Dialogue {
   }
 
   /** Town right click (spec §9): every party member with level, HP/MP, equipment and bag; 장착/해제 go through equipment.ts. */
-  openParty(ctx: ModalContext): void {
+  openParty(ctx: ModalContext, extra: { onSave?: () => void } = {}): void {
     this.result = null;
     const box = this.modal, items = ctx.tables.item;
     const name = (id: number) => (id === 0 ? '—' : itemName(items[id]!));
@@ -180,10 +180,21 @@ export class Dialogue {
         row.append(eq, bag);
         box.appendChild(row);
       }
-      box.appendChild(this.button('닫기', () => { box.hidden = true; }));
+      const row = this.el('div', 'row');
+      if (extra.onSave) row.appendChild(this.button('저장', () => { box.hidden = true; extra.onSave!(); }));
+      row.appendChild(this.button('닫기', () => { box.hidden = true; }));
+      box.appendChild(row);
     };
     render();
     box.hidden = false;
+  }
+
+  /** The slot picker opened by the page (party menu 저장, import into a used slot): the choice goes to a callback, not to a script. */
+  openSaveSlots(saves: (SaveSummary | null)[], onPick: (slot: number) => void): void {
+    this.result = null;
+    this.modal.replaceChildren();
+    this.slotPicker(saves, (slot) => { this.modal.hidden = true; onPick(slot); }, () => { this.modal.hidden = true; });
+    this.modal.hidden = false;
   }
 
   /** SAVE_GAME with no slot (dialog 0x8F): 32 rows; a used slot asks before it is overwritten. */
@@ -217,7 +228,7 @@ export class Dialogue {
       const b = this.button(slotLabel(i, s), () => { box.hidden = true; h.onPick(i); });
       if (!s) (b as HTMLButtonElement).disabled = true;
       const info = this.slotInfo(s);
-      if (s) info.appendChild(this.button('내보내기', () => h.onExport(i)));
+      if (s) { info.appendChild(this.button('내보내기', () => h.onExport(i))); if (h.onDelete) info.appendChild(this.button('삭제', () => h.onDelete!(i))); }
       list.append(b, info);
     }
     const file = this.doc.createElement('input') as HTMLInputElement;
