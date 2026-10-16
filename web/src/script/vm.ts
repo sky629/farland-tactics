@@ -174,7 +174,7 @@ export class ScriptVm {
       case 'MUSIC': { const n = i(0) ?? -1; this.c.bgm = n; this.host.music(n); return 'next'; }   // the current song is saved in the header
       case 'MUSIC_FADE': this.host.musicFade(idx(0), idx(1) !== 0); return 'next';
       case 'SOUND': this.host.sound((str(a[0]) ?? '').toLowerCase()); return 'next';
-      case 'PLAY_VISUAL': this.host.playVisual(idx(0)); return 'next';
+      case 'PLAY_VISUAL': { if (!this.wait || this.wait.pc !== this.state.pc) { this.host.playVisual(idx(0)); this.wait = { pc: this.state.pc, until: 0 }; } if (this.host.visualBusy()) return 'wait'; this.wait = null; return 'next'; }
       // dialogue
       case 'MSG_TOP': case 'MSG_BOTTOM': {
         const where: Where = ins.op === 'MSG_TOP' ? 'top' : 'bottom';

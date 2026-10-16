@@ -92,3 +92,26 @@ describe('GameCore', () => {
     expect(core.battle!.state.phase.kind === 'player' && core.battle!.state.phase.sel.mode).toBe('menu');
   });
 });
+
+describe('visual scenes (PLAY_VISUAL)', () => {
+  it('PLAY_VISUAL 21 starts scene 1 on the stage and the VM waits until the scene is done', () => {
+    const stage = new FakeStage();
+    const core = new GameCore(res([prog(0, ['begin', ['PLAY_VISUAL', 21], ['SOUND', 'tumble'], ['WAIT_CLICK', 0], ['END']])]), stage);
+    core.newGame(); core.frame(0);
+    expect(stage.calls).toContainEqual(['startVisual', 1, 0]);
+    core.frame(16);
+    expect(stage.calls.some((c) => c[0] === 'playSound')).toBe(false);        // the script has not moved on
+    stage.visual = null;                                                       // the scene ended (or was skipped by a click)
+    core.frame(32);
+    expect(stage.calls).toContainEqual(['playSound', 'tumble']);
+    expect(core.mode).toBe('script');
+  });
+  it('an unknown scene number logs and the script continues at once', () => {
+    const stage = new FakeStage();
+    const core = new GameCore(res([prog(0, ['begin', ['PLAY_VISUAL', 40], ['SOUND', 'tumble'], ['WAIT_CLICK', 0], ['END']])]), stage);
+    core.newGame(); core.frame(0);
+    expect(stage.calls.filter((c) => c[0] === 'startVisual')).toEqual([]);
+    expect(stage.calls.some((c) => c[0] === 'log' && c[1] === 'warn' && String(c[2]).includes('PLAY_VISUAL 40'))).toBe(true);
+    expect(stage.calls).toContainEqual(['playSound', 'tumble']);
+  });
+});

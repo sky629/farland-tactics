@@ -11,6 +11,8 @@ import { findLabel } from '../script/program';
 import { ScriptVm } from '../script/vm';
 import { townLabel } from '../town/town';
 import { clampCamera } from '../viewer/scale';
+import { scenes } from '../visual/scenes';
+import { dispatch, type SceneDef } from '../visual/timeline';
 import { decodeSave, encodeSave, SaveError } from '../save/format';
 import { newCampaign, type Campaign } from './campaign';
 
@@ -26,6 +28,7 @@ export interface Stage {
   takeClick(): boolean;
   writeSave(slot: number, bytes: Uint8Array): void;   // the page stores it (IndexedDB) and refreshes its slot list
   playSound(name: string): void; playMusic(n: number): void; stopMusic(): void; fadeMusic(ms: number, on: boolean): void; musicFadeBusy(): boolean;
+  startVisual(def: SceneDef, part: number): void; visualDone(): boolean;   // a scene plays on the stage; a click there skips it
   log(kind: 'warn' | 'info', text: string): void;
 }
 
@@ -278,7 +281,13 @@ export class GameCore implements Host {
   musicFade(ms: number, on: boolean): void { this.stage.fadeMusic(ms, on); }
   musicFadeBusy(): boolean { return this.stage.musicFadeBusy(); }
   sound(name: string): void { this.stage.playSound(name); }
-  playVisual(n: number): void { this.stage.log('info', `visual scene ${n} skipped`); }
+  /** PLAY_VISUAL n: table 0x449598 picks the scene and its first part; the VM waits on visualBusy() until the stage is done. */
+  playVisual(n: number): void {
+    const d = dispatch(n), def = d ? scenes[d.scene] : undefined;
+    if (!d || !def) { this.stage.log('warn', `PLAY_VISUAL ${n}: 전사된 장면이 없다`); return; }
+    this.stage.startVisual(def, d.part);
+  }
+  visualBusy(): boolean { return !this.stage.visualDone(); }
   save(slot: number): void { if (slot < 0) return; this.stage.writeSave(slot, this.saveBytes()); this.stage.log('info', `save ${String(slot).padStart(2, '0')}`); }
   quitComplete(): void { this.mode = 'ended'; this.stage.log('info', 'game complete'); }
   writeCompleteFlag(): void { this.stage.log('info', 'complete flag'); }

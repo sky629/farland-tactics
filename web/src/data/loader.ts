@@ -1,5 +1,5 @@
 import { loadProgram, type Program } from '../script/program';
-import { assertRecords, BATTLE_FIELDS, ITEM_FIELDS, MAGIC_FIELDS, RACE_FIELDS, ROSTER_FIELDS, type BattleEntry, type RosterUnit, type Tables } from './types';
+import { assertRecords, BATTLE_FIELDS, ITEM_FIELDS, MAGIC_FIELDS, RACE_FIELDS, ROSTER_FIELDS, VISUAL_FIELDS, type BattleEntry, type RosterUnit, type Tables, type VisualRecord } from './types';
 
 export class DataError extends Error {
   override name = 'DataError';
@@ -44,6 +44,13 @@ export class DataLoader {
     assertRecords(recs, ROSTER_FIELDS, `${file}: record`);
     validateRoster(recs as RosterUnit[], await this.tables(), file);
     return recs as RosterUnit[];
+  }
+
+  /** vsllst.dat records (assets/data/visual.json): which bitmap each visual scene slot holds. */
+  async visual(): Promise<VisualRecord[]> {
+    const list = await this.json('visual.json');
+    assertRecords(list, VISUAL_FIELDS, `${this.base}/visual.json: record`);
+    return list as VisualRecord[];
   }
 
   /** Decoded event script of one stage (assets/data/eventNN.json). */

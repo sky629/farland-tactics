@@ -30,7 +30,7 @@ export interface Host {
   showOnly(u: Unit): void; setVisible(u: Unit, on: boolean): void; allVisible(on: boolean): void;
   resetSprites(): void; loadMap(n: number): void; mapBusy(): boolean; unitsChanged(): void;
   music(n: number): void; musicFade(ms: number, on: boolean): void; musicFadeBusy(): boolean; sound(name: string): void;
-  playVisual(n: number): void; save(slot: number): void; quitComplete(): void; writeCompleteFlag(): void;
+  playVisual(n: number): void; visualBusy(): boolean; save(slot: number): void; quitComplete(): void; writeCompleteFlag(): void;
   enterBattle(): void; resumeBattle(): void; enterTown(): void; fieldMode(): void; enemyPhase(): boolean;
   scriptEnded(restore: Restore): void;
   log(kind: 'warn' | 'info', text: string): void;
@@ -86,6 +86,7 @@ export class FakeHost implements Host {
   musicFadeBusy(): boolean { return this.musicFading; }
   sound(name: string): void { this.rec('sound', name); }
   playVisual(n: number): void { this.rec('playVisual', n); }
+  visualBusy(): boolean { return false; }
   save(slot: number): void { this.rec('save', slot); }
   quitComplete(): void { this.rec('quitComplete'); }
   writeCompleteFlag(): void { this.rec('writeCompleteFlag'); }

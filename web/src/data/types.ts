@@ -27,6 +27,9 @@ export interface Tables { race: RaceData[]; item: ItemData[]; magic: MagicData[]
 export const RACE_FIELDS = ['name', 'exp_value', 'hp', 'hp_up', 'mp', 'mp_up', 'str', 'str_up', 'def', 'def_up', 'wis', 'wis_up', 'mgr', 'mgr_up', 'agi', 'agi_up', 'elem0', 'elem1', 'elem2', 'size', 'climb_max', 'drop_max', 'cost_land0', 'cost_land1', 'cost_land2', 'cost_land3', 'cost_land4', 'cost_land5', 'cost_land6', 'cost_land7', 'spell0', 'spell1', 'spell2', 'spell3'] as const;
 export const ITEM_FIELDS = ['name', 'price', 'hp_heal', 'mp_heal', 'atk', 'def', 'wis', 'mgr', 'agi', 'elem0', 'elem1', 'elem2', 'range_min', 'range_max', 'slot', 'use_effect', 'weapon_type', 'status_code', 'race_mask'] as const;
 export const MAGIC_FIELDS = ['name', 'learn_level', 'mp_cost', 'elem0', 'elem1', 'elem2', 'range_min', 'range_max', 'effect', 'effect_no', 'target', 'shape', 'learn_mask', 'short'] as const;
+/** One vsllst.dat record (assets/data/visual.json): the bitmap a visual scene slot holds. */
+export interface VisualRecord { scene: number; step: number; slot: number; name: string; pal: number[] }
+export const VISUAL_FIELDS = ['scene', 'step', 'slot', 'name'];
 export const ROSTER_FIELDS = ['unit_id', 'race', 'level', 'dir', 'c', 'r', 'status', 'side', 'weapon', 'armor', 'drop_item', 'drop_gold'] as const;
 export const BATTLE_FIELDS = ['event', 'label', 'map', 'roster', 'episode', 'objective', 'heal'] as const;
 

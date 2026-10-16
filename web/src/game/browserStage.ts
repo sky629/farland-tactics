@@ -20,6 +20,9 @@ import { HOTSPOTS, hitTest, layerFrame, townLayerKey, townLayers } from '../town
 import type { Dialogue, ModalContext } from '../ui/dialogue';
 import { clampCamera } from '../viewer/scale';
 import type { Stage } from './gameCore';
+import type { VisualRecord } from '../data/types';
+import { VisualPlayer } from '../visual/player';
+import type { SceneDef, VisualImage } from '../visual/timeline';
 import type { SpriteCache } from './spriteCache';
 
 type Phase = { kind: 'player'; sel: Selection } | { kind: 'enemy'; queue: number[] } | { kind: 'end'; result: 'victory' | 'defeat' };
@@ -60,11 +63,18 @@ export class BrowserStage implements Stage {
   /** Town sheets as keyed bitmaps (layer 0 opaque, 1..4 color-keyed); null while loading or missing. */
   private readonly sheets = new Map<string, { bmp: IndexedBitmaps; key: number | null } | null>();
   private drag: { x: number; y: number; cx: number; cy: number } | null = null;
+  /** Visual scenes: the player, the slot → bitmap names per scene, and keyed images per (name, key). */
+  private readonly player = new VisualPlayer();
+  private readonly visualNames = new Map<number, Map<number, string>>();
+  private readonly visualImages = new Map<string, VisualImage | null>();
+  private visualScene = 0;
 
   constructor(private readonly canvas: HTMLCanvasElement, private readonly renderer: Renderer, private readonly assets: AssetLoader,
     private readonly bitmaps: BitmapCache, private readonly dialogue: Dialogue, sprites: SpriteCache, tables: Tables, private readonly hooks: StageHooks,
-    private readonly audioAssets: { wave: Set<string>; midi: Set<number> } = { wave: new Set(), midi: new Set() }) {
+    private readonly audioAssets: { wave: Set<string>; midi: Set<number> } = { wave: new Set(), midi: new Set() }, visualList: VisualRecord[] = []) {
     this.presenter = new Presenter(sprites, tables);
+    for (const r of visualList) { if (!this.visualNames.has(r.scene)) this.visualNames.set(r.scene, new Map()); this.visualNames.get(r.scene)!.set(r.slot, r.name); }
+    this.player.onSound = (name) => this.playSound(name);
     this.bind();
   }
 
@@ -74,6 +84,11 @@ export class BrowserStage implements Stage {
     this.lastNow = now;
     this.gate.update(now);
     const fx = this.effects.snapshot(now);
+    if (this.player.playing) {                                                 // the scene owns the screen; the script's fade state waits underneath
+      const f = this.player.update(now);
+      this.renderer.draw({ map: null, sprites: [], camera: { x: 0, y: 0 }, overlay: OVERLAY_OFF, seeThrough: false, fx: { fade: f.fade, tint: null, image: null, shake: null }, backdrop: f.backdrop });
+      return;
+    }
     if (this.town) { this.renderer.draw({ map: null, sprites: [], camera: { x: 0, y: 0 }, overlay: OVERLAY_OFF, seeThrough: false, fx, backdrop: this.townBackdrop(now) }); return; }
     if (!this.mapModel) { this.renderer.draw({ map: null, sprites: [], camera: this.camera, overlay: OVERLAY_OFF, seeThrough: false, fx }); return; }
     const { sprites, texts } = this.presenter.scene(this.mapModel, { units, phase });
@@ -139,6 +154,7 @@ export class BrowserStage implements Stage {
       const drag = this.drag; this.drag = null;
       if (drag && Math.hypot(e.clientX - drag.x, e.clientY - drag.y) > 3) return;
       if (e.target !== c) return;
+      if (this.player.playing) { this.player.skip(); return; }
       const p = this.canvasPoint(e);
       if (this.town) {
         const i = hitTest(p.x, p.y, this.town.flags);
@@ -164,6 +180,7 @@ export class BrowserStage implements Stage {
       if ((e.target as HTMLElement).tagName === 'INPUT') return;
       if (e.key === 'Shift') this.seeThrough = true;
       if (e.key === 'Escape') this.hooks.onCancel();
+      if (e.key === 'Enter' && this.player.playing) { this.player.skip(); return; }
       if (e.key === 'Enter' && !this.cellMode && !this.town) this.dialogue.noteClick();
       const step = e.shiftKey ? 64 : 16;
       const d: Record<string, [number, number]> = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] };
@@ -236,6 +253,32 @@ export class BrowserStage implements Stage {
   stopMusic(): void { this.gate.stopMusic(); }
   fadeMusic(ms: number, on: boolean): void { this.gate.fadeMusic(ms, on, this.lastNow); }
   musicFadeBusy(): boolean { return this.gate.fadeBusy(); }
+
+  // ---- Stage: visual scenes ----
+  startVisual(def: SceneDef, part: number): void {
+    this.visualScene = def.id;
+    this.player.start(def, part, { get: (slot, key) => this.visualImage(slot, key) }, this.lastNow);
+  }
+  visualDone(): boolean { return !this.player.playing; }
+  get visualPlaying(): boolean { return this.player.playing; }
+  /** Slot image of the current scene with the object's color key; null while it loads or when the list has no such slot. */
+  private visualImage(slot: number, key: number | null): VisualImage | null {
+    const name = this.visualNames.get(this.visualScene)?.get(slot);
+    if (!name) return null;
+    const id = `${name}/${key ?? 'opaque'}`;
+    if (!this.visualImages.has(id)) {
+      this.visualImages.set(id, null);
+      void (async () => {
+        try {
+          const img = await this.assets.image('bmp', name);
+          const bmp = new IndexedBitmaps(img);
+          await bmp.prepare(key);
+          this.visualImages.set(id, { image: bmp.get(key), w: img.width, h: img.height });
+        } catch (e) { this.hooks.log('warn', `${name}: ${e instanceof Error ? e.message : String(e)}`); }
+      })();
+    }
+    return this.visualImages.get(id) ?? null;
+  }
 
   // ---- Stage: pictures and town ----
   bitmap(name: string): CanvasImageSource | null { return this.bitmaps.get(name); }

@@ -4,6 +4,7 @@ import { dispatch, sheet, slides, type Cmd, type SceneDef, type VisualImages } f
 
 const img = (w: number, h: number) => ({ image: { w, h } as unknown as CanvasImageSource, w, h });
 const images = (sizes: Record<number, [number, number]>): VisualImages => ({ get: (slot) => (sizes[slot] ? img(...sizes[slot]!) : null) });
+const keyed = (sizes: Record<number, [number, number]>, seen: (number | null)[]): VisualImages => ({ get: (slot, key) => { seen.push(key); return sizes[slot] ? img(...sizes[slot]!) : null; } });
 const scene = (...parts: Cmd[][]): SceneDef => ({ id: 1, parts });
 
 describe('VisualPlayer', () => {
@@ -107,6 +108,12 @@ describe('VisualPlayer', () => {
     p.start(scene([{ op: 'anim', fx: 2, obj: 4, x: 0, y: 0, frames: sheet(3, 10, 10, 10, 10, 100), loop: false }, { op: 'waitEffect', fx: 2 }, { op: 'end' }]), 0, images({ 3: [10, 10] }), 0);
     expect(p.update(0).done).toBe(true);
     expect(p.update(0).backdrop).toEqual([]);                                  // defined only: nothing shown
+  });
+  it('object 0 is asked for opaquely, the others with key 249 unless key says otherwise (FUN_00401880 / FUN_00419da0)', () => {
+    const p = new VisualPlayer(), seen: (number | null)[] = [];
+    p.start(scene([{ op: 'show', obj: 0, slot: 0, sx: 0, sy: 0, w: 10, h: 10, dx: 0, dy: 0 }, { op: 'show', obj: 3, slot: 1, sx: 0, sy: 0, w: 10, h: 10, dx: 0, dy: 0 }, { op: 'key', obj: 3, key: 253 }, { op: 'wait', ms: 10 }]), 0, keyed({ 0: [10, 10], 1: [10, 10] }, seen), 0);
+    p.update(0);
+    expect(seen).toEqual([null, 253]);
   });
   it('clip limits a piece and hide removes it', () => {
     const p = new VisualPlayer();

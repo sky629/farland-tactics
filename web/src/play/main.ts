@@ -98,6 +98,7 @@ async function boot(): Promise<void> {
     if (!(index as { data?: boolean }).data || !index.events || !index.bmp) throw new AssetError('assets/index.json', 'no story data: run tools/ft2_export.py again');
     const tables: Tables = await data.tables();
     const programs = await Promise.all(index.events.map((n) => data.event(n)));
+    const visualList = await data.visual().catch((e: unknown) => { showError(e); return []; });
     const rosters = new Map<number, RosterUnit[]>();
     await Promise.all(rosterIds(programs).map(async (n) => { try { rosters.set(n, await data.roster(n)); } catch (e) { showError(e); } }));
     const byStage = new Map(programs.map((p) => [p.stage, p]));
@@ -118,7 +119,7 @@ async function boot(): Promise<void> {
       modalContext: () => ({ tables, inventory: core!.campaign.inventory, party: core!.campaign.units.slice(0, PARTY_SLOTS), saves: saveList }),
       writeSave: (slot, bytes) => { void saves?.write(slot, bytes).then(refreshSaves).catch(showError); },
       log,
-    }, { wave: new Set(index.wave ?? []), midi: new Set(index.midi ?? []) });
+    }, { wave: new Set(index.wave ?? []), midi: new Set(index.midi ?? []) }, visualList);
     core = new GameCore(res, stage);
     panel = new Panel(document, { onStart: () => {}, onCommand: (cmd) => core?.dispatch(cmd) }, tables);
     bindAudioControls();
@@ -156,6 +157,6 @@ async function boot(): Promise<void> {
 }
 
 /** Debug hook for scripted browser checks: window.__ft2().core.mode, .campaign.flags, .vm.state … */
-(window as unknown as { __ft2: () => unknown }).__ft2 = () => ({ core, campaign: core?.campaign, vm: core?.vm, battle: core?.battle, stage, mode: core?.mode, saves, saveList, music: stage ? { ready: stage.musicReady, current: stage.currentMusic } : null });
+(window as unknown as { __ft2: () => unknown }).__ft2 = () => ({ core, campaign: core?.campaign, vm: core?.vm, battle: core?.battle, stage, mode: core?.mode, saves, saveList, music: stage ? { ready: stage.musicReady, current: stage.currentMusic } : null, visual: stage?.visualPlaying ?? false });
 
 void boot();

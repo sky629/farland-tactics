@@ -2,6 +2,7 @@ import type { MapData } from '../../src/assets/types';
 import { Effects } from '../../src/field/effects';
 import { Presenter } from '../../src/field/presenter';
 import type { Stage } from '../../src/game/gameCore';
+import type { SceneDef } from '../../src/visual/timeline';
 import type { ModalKind, Where } from '../../src/script/host';
 import { flatMap, tables } from './battleFixtures';
 import { provider } from './presenterFixtures';
@@ -41,5 +42,8 @@ export class FakeStage implements Stage {
   fadeMusic(ms: number, on: boolean): void { this.rec('fadeMusic', ms, on); }
   musicFadeBusy(): boolean { return this.fading; }
   writeSave(slot: number, bytes: Uint8Array): void { this.rec('writeSave', slot, bytes.length); this.saves.set(slot, bytes); }
+  visual: { id: number; part: number } | null = null;
+  startVisual(def: SceneDef, part: number): void { this.rec('startVisual', def.id, part); this.visual = { id: def.id, part }; }
+  visualDone(): boolean { return this.visual === null; }
   log(kind: 'warn' | 'info', text: string): void { this.rec('log', kind, text); }
 }

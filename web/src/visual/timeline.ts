@@ -12,6 +12,7 @@ export type Cmd =
   | { op: 'show'; obj: number; slot: number; sx: number; sy: number; w: number; h: number; dx: number; dy: number }   // FUN_00419c70
   | { op: 'hide'; obj: number }                                                                    // FUN_00419fe0
   | { op: 'pos'; obj: number; x: number; y: number }                                               // FUN_00419ec0: base position added to the shown offset
+  | { op: 'key'; obj: number; key: number | null }                                                 // FUN_00419da0: color key (null = opaque); reset gives object 0 null, the others 249
   | { op: 'clip'; obj: number; x: number; y: number; w: number; h: number }                        // FUN_00419f10: screen-space window [추정]
   | { op: 'move'; obj: number; from: [number, number]; to: [number, number]; ms: number }         // FUN_0041a2b0 / FUN_0041a380
   | { op: 'waitMove'; obj: number }                                                                // FUN_0041a270
@@ -40,7 +41,7 @@ export function slides(slots: number[], w: number, h: number, ms: number): Frame
 }
 export interface VisualImage { image: CanvasImageSource; w: number; h: number }
 /** Slot images of the current scene; null while loading or when the bitmap is missing. */
-export interface VisualImages { get(slot: number): VisualImage | null }
+export interface VisualImages { get(slot: number, key: number | null): VisualImage | null }
 
 /** Table 0x449058: when each opening part ends, in ms since the scene started (part 17 ends by itself). */
 export const OPENING_PART_END_MS: number[] = [9000, 24000, 32000, 45000, 53000, 57000, 62000, 66000, 71000, 76000, 85000, 93000, 97000, 103000, 108000, 128000, 139000];

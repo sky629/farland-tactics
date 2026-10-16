@@ -4,7 +4,8 @@ import type { AnimCmd, Cmd, Frame, SceneDef, VisualImages } from './timeline';
 
 export interface VisualFrame { backdrop: Backdrop[]; fade: { color: 'black'; alpha: number } | null; done: boolean }
 
-interface Obj { slot: number; sx: number; sy: number; w: number; h: number; dx: number; dy: number; base: [number, number]; clip: { x: number; y: number; w: number; h: number } | null; visible: boolean }
+interface Obj { slot: number; sx: number; sy: number; w: number; h: number; dx: number; dy: number; base: [number, number]; key: number | null; clip: { x: number; y: number; w: number; h: number } | null; visible: boolean }
+const COLOR_KEY = 249;                                                        // FUN_00401880: objects 1..9; object 0 is opaque
 interface Move { from: [number, number]; to: [number, number]; start: number; ms: number }
 interface Effect { def: AnimCmd; start: number | null; total: number }
 type Fade = { from: number; to: number; start: number; ms: number };
@@ -78,6 +79,7 @@ export class VisualPlayer {
       case 'show': this.showOn(c.obj, c, c.dx, c.dy); this.moves.delete(c.obj); return true;
       case 'hide': { const o = this.objs.get(c.obj); if (o) o.visible = false; return true; }
       case 'pos': this.obj(c.obj).base = [c.x, c.y]; return true;
+      case 'key': this.obj(c.obj).key = c.key; return true;
       case 'clip': { const o = this.objs.get(c.obj); if (o) o.clip = { x: c.x, y: c.y, w: c.w, h: c.h }; return true; }
       case 'move': this.moves.set(c.obj, { from: c.from, to: c.to, start: now, ms: c.ms }); return true;
       case 'waitMove': { const m = this.moves.get(c.obj); return !m || now - m.start >= m.ms; }
@@ -107,7 +109,7 @@ export class VisualPlayer {
 
   private obj(id: number): Obj {
     let o = this.objs.get(id);
-    if (!o) { o = { slot: -1, sx: 0, sy: 0, w: 0, h: 0, dx: 0, dy: 0, base: [0, 0], clip: null, visible: false }; this.objs.set(id, o); }
+    if (!o) { o = { slot: -1, sx: 0, sy: 0, w: 0, h: 0, dx: 0, dy: 0, base: [0, 0], key: id === 0 ? null : COLOR_KEY, clip: null, visible: false }; this.objs.set(id, o); }
     return o;
   }
   private showOn(id: number, f: Frame | { slot: number; sx: number; sy: number; w: number; h: number }, dx: number, dy: number): void {
@@ -141,7 +143,7 @@ export class VisualPlayer {
   }
 
   private piece(o: Obj, id: number, now: number): Backdrop | null {
-    const img = this.images.get(o.slot);
+    const img = this.images.get(o.slot, o.key);
     if (!img) return null;
     let [dx, dy] = [o.dx, o.dy];
     const m = this.moves.get(id);
