@@ -1,3 +1,4 @@
+import { loadProgram, type Program } from '../script/program';
 import { assertRecords, BATTLE_FIELDS, ITEM_FIELDS, MAGIC_FIELDS, RACE_FIELDS, ROSTER_FIELDS, type BattleEntry, type RosterUnit, type Tables } from './types';
 
 export class DataError extends Error {
@@ -43,6 +44,11 @@ export class DataLoader {
     assertRecords(recs, ROSTER_FIELDS, `${file}: record`);
     validateRoster(recs as RosterUnit[], await this.tables(), file);
     return recs as RosterUnit[];
+  }
+
+  /** Decoded event script of one stage (assets/data/eventNN.json). */
+  async event(n: number): Promise<Program> {
+    return loadProgram(n, await this.json(`event${String(n).padStart(2, '0')}.json`));
   }
 
   battles(): Promise<BattleEntry[]> {
