@@ -60,13 +60,13 @@ describe('visual scenes (corpus)', () => {
     for (const r of list) if (r.scene === sceneId) sizes.set(r.slot, pngSize(r.name));
     return { get: (slot) => { const s = sizes.get(slot); return s ? { image: {} as CanvasImageSource, w: s[0], h: s[1] } : null; } };
   }
-  function trace(sceneId: number, untilMs: number, stepMs = 100): { starts: number[]; frames: { t: number; pieces: number; fade: number | null }[]; doneAt: number | null } {
+  function trace(sceneId: number, untilMs: number, stepMs = 100): { starts: number[]; frames: { t: number; pieces: number; visible: number; fade: number | null }[]; doneAt: number | null } {
     const p = new VisualPlayer(); p.start(scenes[sceneId]!, 0, sceneImages(sceneId), 0);
-    const starts = [0]; const frames: { t: number; pieces: number; fade: number | null }[] = []; let doneAt: number | null = null;
+    const starts = [0]; const frames: { t: number; pieces: number; visible: number; fade: number | null }[] = []; let doneAt: number | null = null;
     for (let t = 0; t <= untilMs; t += stepMs) {
       const f = p.update(t);
       if (p.part >= starts.length) starts.push(t);
-      frames.push({ t, pieces: f.backdrop.length, fade: f.fade?.alpha ?? null });
+      frames.push({ t, pieces: f.backdrop.length, visible: f.backdrop.filter((b) => (b.alpha ?? 1) >= 0.5).length, fade: f.fade?.alpha ?? null });
       if (f.done) { doneAt = t; break; }
     }
     return { starts, frames, doneAt };
@@ -89,11 +89,15 @@ describe('visual scenes (corpus)', () => {
     expect(at(60000).pieces).toBeGreaterThan(0);                                // part 5
     expect(at(130000).pieces).toBeGreaterThan(0);                               // part 16 panorama
   });
-  it('ending 1 keeps a credit picture on screen through the staff roll and ends on the closing pictures', () => {
+  it('ending 1 shows the seven credit pictures on the table (33 s + 5, 25, …, 125 s; 17 s each) and ends on the closing pictures', () => {
     const { frames, doneAt } = trace(12, 210000, 500);
     const at = (t: number) => frames.find((f) => f.t >= t)!;
-    for (const t of [40000, 80000, 120000, 150000, 175000]) { expect(at(t).pieces, `t ${t}`).toBe(1); expect(at(t).fade ?? 0, `fade at ${t}`).toBeLessThan(1); }
-    expect(at(185000).pieces).toBe(2);
+    for (const k of [0, 1, 2, 3, 4, 5, 6]) {
+      const start = 33000 + (5 + 20 * k) * 1000;
+      expect(at(start + 2000).visible, `picture ${k} shown`).toBe(1);
+      expect(at(start + 18500).visible, `picture ${k} gone`).toBe(0);
+    }
+    expect(at(185000).visible).toBe(2);
     expect(doneAt).toBe(200000);
   });
   it('ending 2 plays its six parts on the scene clock', () => {

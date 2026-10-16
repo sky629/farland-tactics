@@ -9,7 +9,7 @@ import { rectVisible } from './culling';
 export interface PlacedSprite { model: ApdModel; player: AnimPlayer; c: number; r: number; layer: number; offset?: { x: number; y: number }; flipH?: boolean }
 export interface Overlay { grid: boolean; height: boolean; land: boolean; blocked: boolean }
 export interface SceneText { x: number; y: number; text: string }   // map pixels, centered
-export interface Backdrop { image: CanvasImageSource; sx: number; sy: number; w: number; h: number; dx: number; dy: number }   // screen-space image pieces (town layers)
+export interface Backdrop { image: CanvasImageSource; sx: number; sy: number; w: number; h: number; dx: number; dy: number; alpha?: number }   // screen-space image pieces (town layers, visual scenes); alpha < 1 = a dissolve
 export interface Scene { map: MapModel | null; sprites: PlacedSprite[]; camera: { x: number; y: number }; overlay: Overlay; seeThrough: boolean; texts?: SceneText[]; fx?: FxSnapshot; backdrop?: Backdrop[] }
 
 /** Within one diagonal row the original sorts by the sprite's layer field (+0x48); equal layers keep placement order. */
@@ -64,7 +64,11 @@ export class Renderer {
     const { ctx } = this;
     ctx.fillStyle = '#000';
     ctx.fillRect(0, 0, VIEW_W, VIEW_H);
-    for (const b of scene.backdrop ?? []) ctx.drawImage(b.image, b.sx, b.sy, b.w, b.h, b.dx, b.dy, b.w, b.h);
+    for (const b of scene.backdrop ?? []) {
+      if (b.alpha !== undefined) ctx.globalAlpha = b.alpha;
+      ctx.drawImage(b.image, b.sx, b.sy, b.w, b.h, b.dx, b.dy, b.w, b.h);
+      if (b.alpha !== undefined) ctx.globalAlpha = 1;
+    }
     const map = scene.map;
     if (map) {
       const gfx = this.mapBitmaps.get(map);

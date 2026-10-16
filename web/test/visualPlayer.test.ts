@@ -84,6 +84,15 @@ describe('VisualPlayer', () => {
     expect(f.backdrop).toHaveLength(1);
     expect(p.update(500).done).toBe(true);
   });
+  it('alpha ramps an object over time and survives its animation changing frames (dissolve FUN_0041a0b0)', () => {
+    const p = new VisualPlayer();
+    p.start(scene([{ op: 'anim', fx: 0, obj: 3, x: 0, y: 0, frames: sheet(1, 20, 10, 10, 10, 100), loop: true }, { op: 'effect', fx: 0, on: true }, { op: 'alpha', obj: 3, from: 0, to: 1, ms: 1000 }, { op: 'waitAlpha', obj: 3 }, { op: 'end' }]), 0, images({ 1: [20, 10] }), 0);
+    expect(p.update(0).backdrop).toEqual([]);                                  // alpha 0: nothing to draw
+    expect(p.update(500).backdrop[0]).toMatchObject({ sx: 10, alpha: 0.5 });  // the frame changed, the ramp went on
+    const f = p.update(1000);
+    expect(f.backdrop[0]!.alpha).toBeUndefined();                               // fully opaque pieces carry no alpha
+    expect(f.done).toBe(true);
+  });
   it('a frame may carry its own position (FUN_0041a970 lists)', () => {
     const p = new VisualPlayer();
     p.start(scene([{ op: 'anim', fx: 0, obj: 3, x: 0, y: 0, frames: [{ slot: 1, sx: 0, sy: 0, w: 10, h: 10, ms: 100, x: 160, y: 386 }, { slot: 1, sx: 0, sy: 0, w: 10, h: 10, ms: 100 }], loop: false }, { op: 'effect', fx: 0, on: true }, { op: 'waitEffect', fx: 0 }, { op: 'end' }]), 0, images({ 1: [10, 10] }), 0);

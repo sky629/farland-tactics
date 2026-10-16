@@ -16,6 +16,8 @@ export type Cmd =
   | { op: 'clip'; obj: number; x: number; y: number; w: number; h: number }                        // FUN_00419f10: screen-space window [추정]
   | { op: 'move'; obj: number; from?: [number, number]; by: [number, number]; ms: number }        // FUN_0041a2b0 / FUN_0041a380: from `from` (slot given) or where it is (slot −1), by a delta; images larger than the screen pan their source window
   | { op: 'waitMove'; obj: number }                                                                // FUN_0041a270
+  | { op: 'alpha'; obj: number; from: number; to: number; ms: number }                             // FUN_0041a0b0 dissolve / FUN_0041c6c0 picture fade as an opacity ramp [추정]
+  | { op: 'waitAlpha'; obj: number }
   | { op: 'fade'; dir: 'in' | 'out'; steps: number }                                               // FUN_00419a20(steps, 1) in; (steps, 2|4) out [추정: to black]
   | { op: 'waitFade' }                                                                             // FUN_00419aa0 / thunk_FUN_004184d0
   | { op: 'wait'; ms: number }                                                                     // FUN_004024f0: part clock ≥ ms (DAT_00449688)

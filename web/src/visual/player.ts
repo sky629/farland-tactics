@@ -5,7 +5,7 @@ import type { AnimCmd, Cmd, Frame, SceneDef, VisualImages } from './timeline';
 
 export interface VisualFrame { backdrop: Backdrop[]; fade: { color: 'black'; alpha: number } | null; done: boolean }
 
-interface Obj { slot: number; sx: number; sy: number; w: number; h: number; dx: number; dy: number; base: [number, number]; key: number | null; clip: { x: number; y: number; w: number; h: number } | null; visible: boolean }
+interface Obj { slot: number; sx: number; sy: number; w: number; h: number; dx: number; dy: number; base: [number, number]; key: number | null; clip: { x: number; y: number; w: number; h: number } | null; visible: boolean; alpha: { from: number; to: number; start: number; ms: number } | null }
 const COLOR_KEY = 249;                                                        // FUN_00401880: objects 1..9; object 0 is opaque
 interface Move { from: [number, number] | null; by: [number, number]; start: number; ms: number; at: { pos: [number, number]; src: [number, number] } }
 interface Effect { def: AnimCmd; start: number | null; total: number }
@@ -92,13 +92,15 @@ export class VisualPlayer {
   private exec(c: Cmd, now: number): boolean {
     switch (c.op) {
       case 'order': this.order = [...c.ids]; return true;
-      case 'show': this.showOn(c.obj, c, c.dx, c.dy); this.moves.delete(c.obj); return true;
+      case 'show': this.showOn(c.obj, c, c.dx, c.dy); this.moves.delete(c.obj); this.obj(c.obj).alpha = null; return true;   // a new picture starts opaque; a dissolve follows explicitly
       case 'hide': { const o = this.objs.get(c.obj); if (o) o.visible = false; return true; }
       case 'pos': this.obj(c.obj).base = [c.x, c.y]; return true;
       case 'key': this.obj(c.obj).key = c.key; return true;
       case 'clip': { const o = this.objs.get(c.obj); if (o) o.clip = { x: c.x, y: c.y, w: c.w, h: c.h }; return true; }
       case 'move': { const o = this.obj(c.obj); this.settleMove(c.obj, now); this.moves.set(c.obj, { from: c.from ?? null, by: c.by, start: now, ms: c.ms, at: { pos: [o.dx, o.dy], src: [o.sx, o.sy] } }); return true; }
       case 'waitMove': { const m = this.moves.get(c.obj); return !m || now - m.start >= m.ms; }
+      case 'alpha': this.obj(c.obj).alpha = { from: c.from, to: c.to, start: now, ms: c.ms }; return true;
+      case 'waitAlpha': { const a = this.objs.get(c.obj)?.alpha; return !a || now - a.start >= a.ms; }
       case 'fade': {
         const to = c.dir === 'in' ? 0 : 1, from = c.dir === 'in' ? 1 : this.fadeLevel;
         if (c.steps <= 0) { this.fadeState = null; this.fadeLevel = to; return true; }
@@ -126,7 +128,7 @@ export class VisualPlayer {
 
   private obj(id: number): Obj {
     let o = this.objs.get(id);
-    if (!o) { o = { slot: -1, sx: 0, sy: 0, w: 0, h: 0, dx: 0, dy: 0, base: [0, 0], key: id === 0 ? null : COLOR_KEY, clip: null, visible: false }; this.objs.set(id, o); }
+    if (!o) { o = { slot: -1, sx: 0, sy: 0, w: 0, h: 0, dx: 0, dy: 0, base: [0, 0], key: id === 0 ? null : COLOR_KEY, clip: null, visible: false, alpha: null }; this.objs.set(id, o); }
     return o;
   }
   private showOn(id: number, f: Frame | { slot: number; sx: number; sy: number; w: number; h: number }, dx: number, dy: number): void {
@@ -194,7 +196,18 @@ export class VisualPlayer {
       sx += x0 - dx; sy += y0 - dy; w = x1 - x0; h = y1 - y0; dx = x0; dy = y0;
     }
     if (w <= 0 || h <= 0) return null;
-    return { image: img.image, sx, sy, w, h, dx: Math.round(dx), dy: Math.round(dy) };
+    const alpha = this.alphaOf(o, now);
+    if (alpha <= 0) return null;
+    const piece: Backdrop = { image: img.image, sx, sy, w, h, dx: Math.round(dx), dy: Math.round(dy) };
+    if (alpha < 1) piece.alpha = alpha;
+    return piece;
+  }
+
+  private alphaOf(o: Obj, now: number): number {
+    const a = o.alpha;
+    if (!a) return 1;
+    const t = a.ms <= 0 ? 1 : Math.min(Math.max((now - a.start) / a.ms, 0), 1);
+    return Math.round((a.from + (a.to - a.from) * t) * 1000) / 1000;
   }
 
   private fadeAt(now: number): VisualFrame['fade'] {
