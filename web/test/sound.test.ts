@@ -4,13 +4,12 @@ import type { AudioOut, Voice } from '../src/audio/types';
 
 class FakeVoice implements Voice { done = false; stopped = false; stop(): void { this.stopped = true; this.done = true; } }
 class FakeOut implements AudioOut {
-  voices: { name: string; voice: FakeVoice; gain: number }[] = [];
+  voices: { name: string; voice: FakeVoice }[] = [];
   decoded: string[] = [];
-  gains: Record<string, number> = {};
-  now(): number { return 0; }
+  volume = 1;
   async decode(name: string): Promise<unknown | null> { this.decoded.push(name); return name === 'missing' ? null : { name }; }
-  play(buffer: unknown, gain: number): Voice { const v = new FakeVoice(); this.voices.push({ name: (buffer as { name: string }).name, voice: v, gain }); return v; }
-  setGain(kind: 'music' | 'sound', v: number): void { this.gains[kind] = v; }
+  play(buffer: unknown): Voice { const v = new FakeVoice(); this.voices.push({ name: (buffer as { name: string }).name, voice: v }); return v; }
+  setVolume(v: number): void { this.volume = v; }
 }
 const flush = () => new Promise((r) => setTimeout(r, 0));
 
@@ -42,13 +41,14 @@ describe('SoundPlayer (FUN_0040d950 channel rules)', () => {
     expect(out.voices[2]!.voice.stopped).toBe(true);
     expect(out.voices).toHaveLength(3);
   });
-  it('decodes each file once, warns once for an unknown name, and applies the volume', async () => {
+  it('decodes each file once, warns once for an unknown name, and sets the volume on the effects bus', async () => {
     const out = new FakeOut(), log: string[] = [];
     const p = new SoundPlayer(out, new Set(['hit', 'missing']), (k, s) => log.push(`${k}:${s}`));
     p.volume = 0.5;
     p.play('hit'); p.play('hit'); p.play('nope'); p.play('nope'); p.play('missing'); await flush();
     expect(out.decoded).toEqual(['hit', 'missing']);
-    expect(out.voices.map((v) => v.gain)).toEqual([0.5, 0.5]);
+    expect(out.voices).toHaveLength(2);
+    expect(out.volume).toBe(0.5);                                              // the bus, so running sounds follow the slider too
     expect(log.filter((l) => l.startsWith('warn'))).toHaveLength(2);           // 'nope' once, 'missing' (decode failed) once
     p.play('nope'); p.play('missing'); await flush();
     expect(log.filter((l) => l.startsWith('warn'))).toHaveLength(2);

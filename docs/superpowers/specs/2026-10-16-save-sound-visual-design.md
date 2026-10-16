@@ -1,6 +1,6 @@
 # 하위 프로젝트 5 — 세이브·소리·비주얼 씬 설계
 
-날짜: 2026-10-16 · 상태: 계획 A(세이브) 구현 완료 — main `769b3ed`(리뷰 Critical 1·Important 5 수정) · 계획 B(소리)·C(비주얼 씬) 진행 중 · 선행: 하위 프로젝트 4 (main `0c807eb`)
+날짜: 2026-10-16 · 상태: 계획 A(세이브) 구현 완료 — main `769b3ed`(리뷰 Critical 1·Important 5 수정) · 계획 B(소리) 구현 완료(리뷰 Critical 1·Important 4 수정) · 계획 C(비주얼 씬) 진행 중 — `docs/superpowers/plans/2026-10-16-visual-scenes.md` · 선행: 하위 프로젝트 4 (main `0c807eb`)
 
 ## 1. 목표와 완료 기준
 

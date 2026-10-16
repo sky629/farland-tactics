@@ -17,7 +17,7 @@ describe('MusicPlayer (MUSIC / MUSIC_FADE / WAIT_MUSIC_FADE)', () => {
     m.play(6);
     expect(s.calls).toEqual([['gain', 1], ['play', 6, true]]);
     m.play(6);
-    expect(s.calls).toHaveLength(2);
+    expect(s.calls.filter((c) => c[0] === 'play')).toHaveLength(1);           // not restarted (the gain is re-applied)
     expect(m.current).toBe(6);
     m.play(-1);
     expect(s.calls.at(-1)).toEqual(['stop']);
@@ -63,6 +63,17 @@ describe('MusicPlayer (MUSIC / MUSIC_FADE / WAIT_MUSIC_FADE)', () => {
     expect(s.calls.at(-1)).toEqual(['play', 7, true]);
     m.update(3000);
     expect(m.current).toBe(7);                                                 // the old fade did not stop the new song
+  });
+  it('the same song during a fade-out cancels the fade and keeps playing', () => {
+    const s = new FakeSynth(), m = new MusicPlayer(s, () => {});
+    m.play(6); m.fade(2000, false, 0); m.update(1000);
+    expect(s.gain).toBeCloseTo(0.5, 5);
+    m.play(6);
+    expect(m.fadeBusy()).toBe(false);
+    expect(s.gain).toBe(1);
+    expect(s.calls.filter((c) => c[0] === 'play')).toHaveLength(1);           // not restarted
+    m.update(3000);
+    expect(m.current).toBe(6);
   });
   it('without a ready synth, MUSIC logs once and nothing plays; fades are no-ops that never block', () => {
     const s = new FakeSynth(), log: string[] = []; s.ready = false;

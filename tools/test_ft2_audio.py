@@ -1,8 +1,11 @@
+import contextlib
 import hashlib
+import io
 import tempfile
 import unittest
 from pathlib import Path
 
+import ft2_soundfont
 from ft2_export import Report, export_audio
 from ft2_soundfont import SoundfontError, fetch_soundfont
 
@@ -32,7 +35,7 @@ class ExportAudio(unittest.TestCase):
 
 
 class Soundfont(unittest.TestCase):
-    def test_downloads_checks_the_hash_and_skips_when_present(self):
+    def test_downloads_checks_the_hash_and_keeps_a_verified_copy(self):
         with tempfile.TemporaryDirectory() as tmp:
             blob = b'RIFF fake soundfont'
             src = Path(tmp) / 'gm.sf3'; src.write_bytes(blob)
@@ -41,7 +44,23 @@ class Soundfont(unittest.TestCase):
             self.assertEqual(out, dest / 'sf2' / 'gm.sf3')
             self.assertEqual(out.read_bytes(), blob)
             src.write_bytes(b'changed')
-            self.assertEqual(fetch_soundfont(src.as_uri(), dest, hashlib.sha256(blob).hexdigest()).read_bytes(), blob)   # already there: untouched
+            self.assertEqual(fetch_soundfont(src.as_uri(), dest, hashlib.sha256(blob).hexdigest()).read_bytes(), blob)   # verified copy: untouched
+
+    def test_an_existing_copy_with_the_wrong_hash_is_fetched_again(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            blob = b'RIFF the real one'
+            src = Path(tmp) / 'gm.sf3'; src.write_bytes(blob)
+            dest = Path(tmp) / 'assets'; (dest / 'sf2').mkdir(parents=True); (dest / 'sf2' / 'gm.sf3').write_bytes(b'RIFF truncated')
+            self.assertEqual(fetch_soundfont(src.as_uri(), dest, hashlib.sha256(blob).hexdigest()).read_bytes(), blob)
+
+    def test_the_default_hash_is_pinned(self):
+        self.assertRegex(ft2_soundfont.DEFAULT_SHA256, r'^[0-9a-f]{64}$')
+
+    def test_a_failed_download_is_an_error_line_not_a_traceback(self):
+        with tempfile.TemporaryDirectory() as tmp, contextlib.redirect_stderr(io.StringIO()) as err:
+            rc = ft2_soundfont.main(['ft2_soundfont.py', str(Path(tmp) / 'assets'), '--url', (Path(tmp) / 'nowhere.sf3').as_uri()])
+        self.assertEqual(rc, 1)
+        self.assertTrue(err.getvalue().startswith('error:'), err.getvalue())
 
     def test_hash_mismatch_removes_the_file(self):
         with tempfile.TemporaryDirectory() as tmp:

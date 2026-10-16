@@ -16,12 +16,15 @@ class Slot implements Voice {
  * asset index lacks or a file that fails to decode warns once.
  */
 export class SoundPlayer {
-  volume = 1;
+  private vol = 1;
   private readonly channels: (Slot | null)[] = new Array<Slot | null>(CHANNELS).fill(null);
   private readonly cache = new Map<string, Promise<unknown | null>>();
   private readonly warned = new Set<string>();
 
   constructor(private readonly out: AudioOut, private readonly known: Set<string>, private readonly log: (kind: 'warn' | 'info', text: string) => void) {}
+
+  get volume(): number { return this.vol; }
+  set volume(v: number) { this.vol = Math.min(Math.max(v, 0), 1); this.out.setVolume(this.vol); }
 
   play(raw: string): void {
     const fixed = raw.startsWith('*');
@@ -35,7 +38,7 @@ export class SoundPlayer {
     void this.buffer(name).then((buf) => {
       if (slot.cancelled) return;
       if (!buf) { slot.cancelled = true; this.warnOnce(name, `효과음 ${name}.wav 를 읽지 못했다`); return; }
-      slot.voice = this.out.play(buf, this.volume);
+      slot.voice = this.out.play(buf);
     });
   }
 

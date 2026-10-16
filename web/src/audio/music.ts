@@ -21,10 +21,10 @@ export class MusicPlayer {
   play(n: number): void {
     if (n < 0) { this.stop(); return; }
     if (!this.synth.ready) { if (!this.warned) { this.warned = true; this.log('warn', '음악을 재생할 수 없다: 신디사이저 또는 사운드폰트가 없다'); } return; }
-    if (n === this.song) return;
-    this.fadeState = null; this.level = 1;
-    this.song = n;
+    this.fadeState = null; this.level = 1;                                     // every MUSIC clears the fade (FUN_0042e8c0)
     this.applyGain();
+    if (n === this.song) return;                                               // the same song is not restarted [추정]
+    this.song = n;
     this.synth.play(n, true);
   }
 

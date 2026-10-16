@@ -1,5 +1,6 @@
 import type { AssetLoader } from '../assets/loader';
 import { BitmapCache } from '../assets/bitmaps';
+import { AudioGate } from '../audio/gate';
 import { MusicPlayer } from '../audio/music';
 import { SoundPlayer } from '../audio/sound';
 import { SpessaSynth } from '../audio/spessa';
@@ -41,18 +42,15 @@ export interface StageHooks {
  * asset loading for maps and bitmaps. Mode-specific routing of clicks is decided by the page through `cellMode`.
  */
 /** The audio side exists only after the first user gesture (browser autoplay policy). */
-interface Audio { out: WebAudioOut; sounds: SoundPlayer; synth: SpessaSynth; music: MusicPlayer }
+interface Audio { out: WebAudioOut; synth: SpessaSynth }
 
 export class BrowserStage implements Stage {
   readonly presenter: Presenter;
   readonly effects = new Effects();
   camera = { x: 0, y: 0 };
   private audio: Audio | null = null;
-  private unlocking: Promise<void> | null = null;
-  private synthSettled = false;                                                // init finished (ready or not)
-  private pendingMusic: number | null = null;
+  private readonly gate = new AudioGate();
   private lastNow = 0;
-  volumes = { music: 1, sound: 1 };
   /** true while the battle owns clicks (cells); false while a script may be waiting for a click. */
   cellMode = false;
   seeThrough = false;
@@ -74,8 +72,7 @@ export class BrowserStage implements Stage {
   /** One frame: town layers, or the field with the presenter's sprites; the script effects on top. */
   draw(now: number, units: (Unit | null)[], phase: Phase): void {
     this.lastNow = now;
-    if (this.audio && this.pendingMusic !== null && this.synthSettled) { const n = this.pendingMusic; this.pendingMusic = null; this.audio.music.play(n); }
-    this.audio?.music.update(now);
+    this.gate.update(now);
     const fx = this.effects.snapshot(now);
     if (this.town) { this.renderer.draw({ map: null, sprites: [], camera: { x: 0, y: 0 }, overlay: OVERLAY_OFF, seeThrough: false, fx, backdrop: this.townBackdrop(now) }); return; }
     if (!this.mapModel) { this.renderer.draw({ map: null, sprites: [], camera: this.camera, overlay: OVERLAY_OFF, seeThrough: false, fx }); return; }
@@ -211,39 +208,34 @@ export class BrowserStage implements Stage {
   takeClick(): boolean { return this.dialogue.takeClick(); }
 
   // ---- Stage: sound ----
-  /** First user gesture: create the AudioContext, the effects bus and the MIDI synthesizer; start the music a script asked for meanwhile. */
-  unlockAudio(): Promise<void> {
-    if (this.audio) return Promise.resolve();
-    this.unlocking ??= (async () => {
-      try {
-        const ctx = new AudioContext();
-        await ctx.resume();
-        const out = new WebAudioOut(ctx);
-        const log = (k: 'warn' | 'info', t: string) => this.hooks.log(k, t);
-        const synth = new SpessaSynth(ctx, 'assets', log);
-        const audio: Audio = { out, sounds: new SoundPlayer(out, this.audioAssets.wave, log), synth, music: new MusicPlayer(synth, log) };
-        audio.sounds.volume = this.volumes.sound; audio.music.volume = this.volumes.music;
-        this.audio = audio;                                                    // effects work now; the synthesizer finishes on its own
-        void synth.init(this.audioAssets.midi).finally(() => { this.synthSettled = true; });
-      } catch (e) { this.hooks.log('warn', `소리를 켤 수 없다: ${e instanceof Error ? e.message : String(e)}`); this.synthSettled = true; }
-    })();
-    return this.unlocking;
+  /**
+   * First user gesture, synchronously: the AudioContext, the effects bus and the sound player exist before this returns, so
+   * the sounds of the very next frame play; the MIDI synthesizer loads its soundfont in the background and the gate holds the
+   * music until then (AudioGate).
+   */
+  unlockAudio(): void {
+    if (this.audio) return;
+    const log = (k: 'warn' | 'info', t: string) => this.hooks.log(k, t);
+    let ctx: AudioContext;
+    try { ctx = new AudioContext(); } catch (e) { log('warn', `소리를 켤 수 없다: ${e instanceof Error ? e.message : String(e)}`); this.gate.synthSettled(); return; }
+    const out = new WebAudioOut(ctx), synth = new SpessaSynth(ctx, 'assets', log);
+    this.audio = { out, synth };
+    this.gate.unlock({ sounds: new SoundPlayer(out, this.audioAssets.wave, log), music: new MusicPlayer(synth, log) });
+    void ctx.resume();
+    void synth.init(this.audioAssets.midi).finally(() => this.gate.synthSettled());
   }
   /** The browser tab came back: resume a suspended context. */
   resumeAudio(): void { void this.audio?.out.ctx.resume(); }
-  setVolumes(music: number, sound: number): void {
-    this.volumes = { music, sound };
-    if (this.audio) { this.audio.music.volume = music; this.audio.sounds.volume = sound; }
-  }
+  setVolumes(music: number, sound: number): void { this.gate.setVolumes(music, sound); }
   get musicReady(): boolean { return this.audio?.synth.ready ?? false; }
-  /** true once unlockAudio has finished (so the page can show the soundfont notice exactly once). */
-  get audioTried(): boolean { return this.synthSettled; }
-  get currentMusic(): number { return this.audio?.music.current ?? this.pendingMusic ?? -1; }
-  playSound(name: string): void { this.audio?.sounds.play(name); }
-  playMusic(n: number): void { if (this.audio) this.audio.music.play(n); else this.pendingMusic = n; }
-  stopMusic(): void { this.pendingMusic = null; this.audio?.music.stop(); }
-  fadeMusic(ms: number, on: boolean): void { this.audio?.music.fade(ms, on, this.lastNow); }
-  musicFadeBusy(): boolean { return this.audio?.music.fadeBusy() ?? false; }
+  /** true once the synthesizer init settled (so the page can show the soundfont notice exactly once). */
+  get audioTried(): boolean { return this.gate.settled; }
+  get currentMusic(): number { return this.gate.current; }
+  playSound(name: string): void { this.gate.playSound(name); }
+  playMusic(n: number): void { this.gate.playMusic(n); }
+  stopMusic(): void { this.gate.stopMusic(); }
+  fadeMusic(ms: number, on: boolean): void { this.gate.fadeMusic(ms, on, this.lastNow); }
+  musicFadeBusy(): boolean { return this.gate.fadeBusy(); }
 
   // ---- Stage: pictures and town ----
   bitmap(name: string): CanvasImageSource | null { return this.bitmaps.get(name); }

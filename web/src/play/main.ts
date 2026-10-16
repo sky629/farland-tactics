@@ -122,11 +122,11 @@ async function boot(): Promise<void> {
     core = new GameCore(res, stage);
     panel = new Panel(document, { onStart: () => {}, onCommand: (cmd) => core?.dispatch(cmd) }, tables);
     bindAudioControls();
-    $('newGame').addEventListener('click', () => { void stage!.unlockAudio(); $('title').hidden = true; $('error').textContent = ''; core!.newGame(); });
+    $('newGame').addEventListener('click', () => { stage!.unlockAudio(); $('title').hidden = true; $('error').textContent = ''; core!.newGame(); });
     document.addEventListener('visibilitychange', () => { if (!document.hidden) stage?.resumeAudio(); });
     await refreshSaves();
     const loadHandlers = {
-      onPick: async (slot: number) => { void stage!.unlockAudio(); const bytes = await saves!.read(slot); if (bytes && core!.loadGame(bytes)) { $('title').hidden = true; $('error').textContent = ''; } },
+      onPick: async (slot: number) => { stage!.unlockAudio(); const bytes = await saves!.read(slot); if (bytes && core!.loadGame(bytes)) { $('title').hidden = true; $('error').textContent = ''; } },
       onExport: async (slot: number) => {
         const bytes = await saves!.read(slot);
         if (!bytes) return;
