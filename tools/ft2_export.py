@@ -317,6 +317,37 @@ def export_visual(src: Path, dst: Path, report: Report) -> int:
     return len(records)
 
 
+def export_staff(src: Path, dst: Path, report: Report) -> int:
+    """DATA/staff.lst (CP949 staff roll with /TOKEN/ markup) → data/staff.json: [{text, size, font, bold, gap} | {space}].
+    Tokens: /MINCHO/ /GOTIC/ font, /SIZE:n/, /BOLD/, /LINESPACE:n/ (gap under a line), /SPACESIZE:n/ and /SPACE/ (a blank gap);
+    /FONTCOL/ /DECOCOL/ /POSX/ /POSY/ are colours and margins the web page fixes. `//` lines are comments."""
+    data_dir = src / 'DATA'
+    lst = next((p for p in data_dir.iterdir() if p.name.lower() == 'staff.lst'), None) if data_dir.is_dir() else None
+    if lst is None:
+        report.error('no DATA/staff.lst')
+        return 0
+    font, size, bold, gap, space = 'mincho', 24, False, 6, 12
+    out: list[dict] = []
+    for raw in lst.read_bytes().decode('cp949', 'replace').splitlines():
+        line = raw.rstrip()
+        if not line.strip() or line.startswith('//'):
+            continue
+        if line.startswith('/'):
+            for name, arg in re.findall(r'/([A-Z]+)(?::(\d+))?/', line):
+                if name == 'MINCHO': font = 'mincho'
+                elif name == 'GOTIC': font = 'gotic'
+                elif name == 'BOLD': bold = True
+                elif name == 'SIZE': size = int(arg)
+                elif name == 'LINESPACE': gap = int(arg)
+                elif name == 'SPACESIZE': space = int(arg)
+                elif name == 'SPACE': out.append(dict(space=space))
+            continue
+        out.append(dict(text=line.strip(), size=size, font=font, bold=bold, gap=gap))
+    (dst / 'data').mkdir(parents=True, exist_ok=True)
+    (dst / 'data' / 'staff.json').write_text(json.dumps(out, ensure_ascii=False), encoding='utf-8')
+    return len(out)
+
+
 def main(argv: list[str]) -> int:
     if len(argv) != 3:
         raise SystemExit(__doc__)
@@ -332,10 +363,11 @@ def main(argv: list[str]) -> int:
         report.error('no bmp directory')
     audio = export_audio(game, out, report)
     visual = export_visual(game, out, report)
+    staff = export_staff(game, out, report)
     out.mkdir(parents=True, exist_ok=True)
     (out / 'index.json').write_text(json.dumps(dict(format=FORMAT, maps=maps, sprites=sprites, data=True, events=events, bmp=bmps, wave=audio['wave'], midi=audio['midi'])), encoding='utf-8')
     pngs = sum(1 for d in ('map', 'sprite', 'bmp') for _ in (out / d).glob('*.png'))
-    print(f'maps {len(maps)}, sprites {len(sprites)}, events {len(events)}, bmp {len(bmps)}, pngs {pngs}, wave {len(audio["wave"])}, midi {len(audio["midi"])}, visual {visual}, warnings {len(report.warnings)}, errors {len(report.errors)}')
+    print(f'maps {len(maps)}, sprites {len(sprites)}, events {len(events)}, bmp {len(bmps)}, pngs {pngs}, wave {len(audio["wave"])}, midi {len(audio["midi"])}, visual {visual}, staff {staff}, warnings {len(report.warnings)}, errors {len(report.errors)}')
     print(f'tables race {counts["race"]}, item {counts["item"]}, magic {counts["magic"]}, rosters {counts["rosters"]}, battles {counts["battles"]}')
     for w in report.warnings:
         print('warning:', w)

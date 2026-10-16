@@ -1,5 +1,5 @@
 import { loadProgram, type Program } from '../script/program';
-import { assertRecords, BATTLE_FIELDS, ITEM_FIELDS, MAGIC_FIELDS, RACE_FIELDS, ROSTER_FIELDS, VISUAL_FIELDS, type BattleEntry, type RosterUnit, type Tables, type VisualRecord } from './types';
+import { assertRecords, BATTLE_FIELDS, ITEM_FIELDS, MAGIC_FIELDS, RACE_FIELDS, ROSTER_FIELDS, VISUAL_FIELDS, type BattleEntry, type RosterUnit, type StaffLine, type Tables, type VisualRecord } from './types';
 
 export class DataError extends Error {
   override name = 'DataError';
@@ -51,6 +51,13 @@ export class DataLoader {
     const list = await this.json('visual.json');
     assertRecords(list, VISUAL_FIELDS, `${this.base}/visual.json: record`);
     return list as VisualRecord[];
+  }
+
+  /** The ending's staff roll (assets/data/staff.json). */
+  async staff(): Promise<StaffLine[]> {
+    const list = await this.json('staff.json');
+    if (!Array.isArray(list)) throw new DataError(`${this.base}/staff.json`, 'not a list');
+    return list as StaffLine[];
   }
 
   /** Decoded event script of one stage (assets/data/eventNN.json). */

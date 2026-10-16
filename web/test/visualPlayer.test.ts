@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { VisualPlayer } from '../src/visual/player';
-import { dispatch, sheet, slides, type Cmd, type SceneDef, type VisualImages } from '../src/visual/timeline';
+import { dispatch, sheet, slides, type Cmd, type SceneDef, type TextLine, type VisualImages } from '../src/visual/timeline';
 
 const img = (w: number, h: number) => ({ image: { w, h } as unknown as CanvasImageSource, w, h });
 const images = (sizes: Record<number, [number, number]>): VisualImages => ({ get: (slot) => (sizes[slot] ? img(...sizes[slot]!) : null) });
@@ -91,6 +91,20 @@ describe('VisualPlayer', () => {
     expect(p.update(500).backdrop[0]).toMatchObject({ sx: 10, alpha: 0.5 });  // the frame changed, the ramp went on
     const f = p.update(1000);
     expect(f.backdrop[0]!.alpha).toBeUndefined();                               // fully opaque pieces carry no alpha
+    expect(f.done).toBe(true);
+  });
+  it('the staff roll climbs from the bottom edge to above the top over its time; lines outside the screen are not emitted (FUN_0041bfa0)', () => {
+    const p = new VisualPlayer();
+    const lines: TextLine[] = [{ text: 'A', size: 24, font: 'mincho', bold: true, gap: 6 }, { space: 12 }, { text: 'B', size: 16, font: 'gotic', bold: false, gap: 6 }];
+    p.start(scene([{ op: 'textRoll', ms: 1000 }, { op: 'waitText' }, { op: 'end' }]), 0, images({}), 0, lines);
+    const t0 = p.update(0).texts;
+    expect(t0).toEqual([]);                                                    // everything still below the screen
+    const t5 = p.update(500).texts;                                            // total height 24+6+12+16+6 = 64 → the roll travels 480+64 = 544 px
+    expect(t5.map((t) => t.text)).toEqual(['A', 'B']);
+    expect(t5[0]).toMatchObject({ x: 320, y: 480 - 272, size: 24, font: 'mincho', bold: true });
+    expect(t5[1]!.y).toBe(480 - 272 + 24 + 6 + 12);
+    const f = p.update(1000);
+    expect(f.texts).toEqual([]);
     expect(f.done).toBe(true);
   });
   it('a frame may carry its own position (FUN_0041a970 lists)', () => {

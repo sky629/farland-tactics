@@ -1,9 +1,9 @@
 import { FADE_STEP_MS } from '../field/effects';
 import { VIEW_H, VIEW_W } from '../iso/grid';
 import type { Backdrop } from '../render/renderer';
-import type { AnimCmd, Cmd, Frame, SceneDef, VisualImages } from './timeline';
+import type { AnimCmd, Cmd, Frame, SceneDef, ScreenText, TextLine, VisualImages } from './timeline';
 
-export interface VisualFrame { backdrop: Backdrop[]; fade: { color: 'black'; alpha: number } | null; done: boolean }
+export interface VisualFrame { backdrop: Backdrop[]; texts: ScreenText[]; fade: { color: 'black'; alpha: number } | null; done: boolean }
 
 interface Obj { slot: number; sx: number; sy: number; w: number; h: number; dx: number; dy: number; base: [number, number]; key: number | null; clip: { x: number; y: number; w: number; h: number } | null; visible: boolean; alpha: { from: number; to: number; start: number; ms: number } | null }
 const COLOR_KEY = 249;                                                        // FUN_00401880: objects 1..9; object 0 is opaque
@@ -39,6 +39,8 @@ export class VisualPlayer {
   private readonly effects = new Map<number, Effect>();
   private fadeState: Fade | null = null;
   private fadeLevel = 0;                                                       // 0 clear … 1 black when no fade runs
+  private lines: TextLine[] = [];
+  private roll: { start: number; ms: number } | null = null;
 
   get playing(): boolean { return this.def !== null && !this.finished; }
   /** Index of the part being played (tests, debugging). */
@@ -46,8 +48,8 @@ export class VisualPlayer {
   /** true when the scene ended by skip() rather than by itself. */
   get skipped(): boolean { return this.wasSkipped; }
 
-  start(def: SceneDef, part: number, images: VisualImages, now: number): void {
-    this.def = def; this.images = images;
+  start(def: SceneDef, part: number, images: VisualImages, now: number, lines: TextLine[] = []): void {
+    this.def = def; this.images = images; this.lines = lines; this.roll = null;
     this.sceneStart = now;
     this.finished = part >= def.parts.length; this.wasSkipped = false;
     this.fadeState = null; this.fadeLevel = 0;
@@ -66,10 +68,10 @@ export class VisualPlayer {
   skip(): void { if (this.def && !this.finished) { this.finished = true; this.wasSkipped = true; } }
 
   update(now: number): VisualFrame {
-    if (!this.def) return { backdrop: [], fade: null, done: true };
+    if (!this.def) return { backdrop: [], texts: [], fade: null, done: true };
     if (!this.finished) this.run(now);
-    if (this.wasSkipped) return { backdrop: [], fade: null, done: true };
-    return { backdrop: this.compose(now), fade: this.fadeAt(now), done: this.finished };
+    if (this.wasSkipped) return { backdrop: [], texts: [], fade: null, done: true };
+    return { backdrop: this.compose(now), texts: this.rollTexts(now), fade: this.fadeAt(now), done: this.finished };
   }
 
   // ---- command loop ----
@@ -122,6 +124,8 @@ export class VisualPlayer {
       }
       case 'waitEffect': { const e = this.effects.get(c.fx); return !e || e.start === null || (!e.def.loop && now - e.start >= e.total); }
       case 'sound': this.onSound?.(c.name); return true;
+      case 'textRoll': this.roll = { start: now, ms: Math.max(c.ms, 1) }; return true;
+      case 'waitText': return !this.roll || now - this.roll.start >= this.roll.ms;
       case 'end': this.finished = true; return true;
     }
   }
@@ -201,6 +205,22 @@ export class VisualPlayer {
     const piece: Backdrop = { image: img.image, sx, sy, w, h, dx: Math.round(dx), dy: Math.round(dy) };
     if (alpha < 1) piece.alpha = alpha;
     return piece;
+  }
+
+  /** The staff roll: the whole list climbs from y = screen bottom to −height over the roll's time; only lines on screen are emitted. */
+  private rollTexts(now: number): ScreenText[] {
+    const r = this.roll;
+    if (!r || this.lines.length === 0) return [];
+    const height = this.lines.reduce((s, l) => s + ('space' in l ? l.space : l.size + l.gap), 0);
+    const t = Math.min(Math.max((now - r.start) / r.ms, 0), 1);
+    let y = VIEW_H - (VIEW_H + height) * t;
+    const out: ScreenText[] = [];
+    for (const l of this.lines) {
+      if ('space' in l) { y += l.space; continue; }
+      if (y + l.size > 0 && y < VIEW_H) out.push({ text: l.text, x: VIEW_W / 2, y: Math.round(y), size: l.size, font: l.font, bold: l.bold });
+      y += l.size + l.gap;
+    }
+    return out;
   }
 
   private alphaOf(o: Obj, now: number): number {

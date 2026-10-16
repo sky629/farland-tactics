@@ -102,6 +102,7 @@ async function boot(): Promise<void> {
     const tables: Tables = await data.tables();
     const programs = await Promise.all(index.events.map((n) => data.event(n)));
     const visualList = await data.visual().catch((e: unknown) => { showError(e); return []; });
+    const staff = await data.staff().catch((e: unknown) => { showError(e); return []; });
     const rosters = new Map<number, RosterUnit[]>();
     await Promise.all(rosterIds(programs).map(async (n) => { try { rosters.set(n, await data.roster(n)); } catch (e) { showError(e); } }));
     const byStage = new Map(programs.map((p) => [p.stage, p]));
@@ -122,7 +123,7 @@ async function boot(): Promise<void> {
       modalContext: () => ({ tables, inventory: core!.campaign.inventory, party: core!.campaign.units.slice(0, PARTY_SLOTS), saves: saveList }),
       writeSave: (slot, bytes) => { void saves?.write(slot, bytes).then(refreshSaves).catch(showError); },
       log,
-    }, { wave: new Set(index.wave ?? []), midi: new Set(index.midi ?? []) }, visualList);
+    }, { wave: new Set(index.wave ?? []), midi: new Set(index.midi ?? []) }, visualList, staff);
     core = new GameCore(res, stage);
     panel = new Panel(document, { onStart: () => {}, onCommand: (cmd) => core?.dispatch(cmd) }, tables);
     bindAudioControls();

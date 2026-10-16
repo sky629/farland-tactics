@@ -22,7 +22,7 @@ import { clampCamera } from '../viewer/scale';
 import type { Stage } from './gameCore';
 import type { VisualRecord } from '../data/types';
 import { VisualPlayer } from '../visual/player';
-import type { SceneDef, VisualImage } from '../visual/timeline';
+import type { SceneDef, TextLine, VisualImage } from '../visual/timeline';
 import type { VisualFrame } from '../visual/player';
 import type { SpriteCache } from './spriteCache';
 
@@ -72,7 +72,7 @@ export class BrowserStage implements Stage {
 
   constructor(private readonly canvas: HTMLCanvasElement, private readonly renderer: Renderer, private readonly assets: AssetLoader,
     private readonly bitmaps: BitmapCache, private readonly dialogue: Dialogue, sprites: SpriteCache, tables: Tables, private readonly hooks: StageHooks,
-    private readonly audioAssets: { wave: Set<string>; midi: Set<number> } = { wave: new Set(), midi: new Set() }, visualList: VisualRecord[] = []) {
+    private readonly audioAssets: { wave: Set<string>; midi: Set<number> } = { wave: new Set(), midi: new Set() }, visualList: VisualRecord[] = [], private readonly staff: TextLine[] = []) {
     this.presenter = new Presenter(sprites, tables);
     for (const r of visualList) { if (!this.visualNames.has(r.scene)) this.visualNames.set(r.scene, new Map()); this.visualNames.get(r.scene)!.set(r.slot, r.name); }
     this.player.onSound = (name) => this.playSound(name);
@@ -87,7 +87,7 @@ export class BrowserStage implements Stage {
     const fx = this.effects.snapshot(now);
     if (this.player.playing) {                                                 // the scene owns the screen; the script's fade state waits underneath
       const f = this.player.update(now);
-      this.renderer.draw({ map: null, sprites: [], camera: { x: 0, y: 0 }, overlay: OVERLAY_OFF, seeThrough: false, fx: { fade: f.fade, tint: null, image: null, shake: null }, backdrop: f.backdrop });
+      this.renderer.draw({ map: null, sprites: [], camera: { x: 0, y: 0 }, overlay: OVERLAY_OFF, seeThrough: false, fx: { fade: f.fade, tint: null, image: null, shake: null }, backdrop: f.backdrop, screenTexts: f.texts });
       if (f.done) this.endVisual(f, now);
       return;
     }
@@ -261,7 +261,7 @@ export class BrowserStage implements Stage {
     if (!this.visualNames.has(def.id)) { this.hooks.log('warn', `비주얼 씬 ${def.id}: 장면 목록(visual.json)에 그림이 없다 — 변환기를 다시 돌린다`); return; }   // without it the scene would be minutes of black
     this.visualScene = def.id;
     this.visualImages.clear();                                                 // the original frees each part's images (FUN_00401000)
-    this.player.start(def, part, { get: (slot, key) => this.visualImage(slot, key) }, this.lastNow);
+    this.player.start(def, part, { get: (slot, key) => this.visualImage(slot, key) }, this.lastNow, this.staff);
   }
   /**
    * The scene is over: its last picture stays as the script's SHOW_IMAGE picture until HIDE_IMAGE (every PLAY_VISUAL is

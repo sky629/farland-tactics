@@ -28,9 +28,15 @@ export type Cmd =
   | { op: 'effect'; fx: number; on: boolean }                                                      // FUN_0041a890
   | { op: 'waitEffect'; fx: number }                                                               // FUN_0041a910: running and not finished
   | { op: 'sound'; name: string }                                                                  // FUN_0041dc50 + FUN_0041dca0(ch, 1)
+  | { op: 'textRoll'; ms: number }                                                                 // FUN_0041bfa0: the staff roll (start()'s lines) climbs from the bottom edge to above the top in ms [추정 speed]
+  | { op: 'waitText' }                                                                             // FUN_0041bf90
   | { op: 'end' };                                                                                 // FUN_00402070
 
 export interface SceneDef { id: number; parts: Cmd[][] }
+/** One line of the staff roll (data/staff.json from DATA/staff.lst): text with its font, or a blank gap. */
+export type TextLine = { text: string; size: number; font: 'mincho' | 'gotic'; bold: boolean; gap: number } | { space: number };
+/** A text item of a frame: centred at x, baseline-top at y, in screen pixels. */
+export interface ScreenText { text: string; x: number; y: number; size: number; font: 'mincho' | 'gotic'; bold: boolean }
 
 /** FUN_0041aac0: a sheet of `sheetW`×`sheetH` cut into `cw`×`ch` cells, row by row, `ms` per cell. */
 export function sheet(slot: number, sheetW: number, sheetH: number, cw: number, ch: number, ms: number): Frame[] {

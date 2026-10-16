@@ -2,6 +2,7 @@ import type { FxSnapshot } from '../field/effects';
 import { IndexedBitmaps } from '../gfx/indexed';
 import { TILE_H, TILE_W, VIEW_H, VIEW_W } from '../iso/grid';
 import { bgPosition, type MapModel, type PlacedCell } from '../map/mapModel';
+import type { ScreenText } from '../visual/timeline';
 import type { AnimPlayer } from '../sprite/animPlayer';
 import type { ApdModel, DrawCommand } from '../sprite/apdModel';
 import { rectVisible } from './culling';
@@ -10,7 +11,7 @@ export interface PlacedSprite { model: ApdModel; player: AnimPlayer; c: number; 
 export interface Overlay { grid: boolean; height: boolean; land: boolean; blocked: boolean }
 export interface SceneText { x: number; y: number; text: string }   // map pixels, centered
 export interface Backdrop { image: CanvasImageSource; sx: number; sy: number; w: number; h: number; dx: number; dy: number; alpha?: number }   // screen-space image pieces (town layers, visual scenes); alpha < 1 = a dissolve
-export interface Scene { map: MapModel | null; sprites: PlacedSprite[]; camera: { x: number; y: number }; overlay: Overlay; seeThrough: boolean; texts?: SceneText[]; fx?: FxSnapshot; backdrop?: Backdrop[] }
+export interface Scene { map: MapModel | null; sprites: PlacedSprite[]; camera: { x: number; y: number }; overlay: Overlay; seeThrough: boolean; texts?: SceneText[]; fx?: FxSnapshot; backdrop?: Backdrop[]; screenTexts?: ScreenText[] }
 
 /** Within one diagonal row the original sorts by the sprite's layer field (+0x48); equal layers keep placement order. */
 export function sortRow(sprites: PlacedSprite[]): PlacedSprite[] {
@@ -69,6 +70,7 @@ export class Renderer {
       ctx.drawImage(b.image, b.sx, b.sy, b.w, b.h, b.dx, b.dy, b.w, b.h);
       if (b.alpha !== undefined) ctx.globalAlpha = 1;
     }
+    if (scene.screenTexts?.length) this.drawScreenTexts(scene.screenTexts);
     const map = scene.map;
     if (map) {
       const gfx = this.mapBitmaps.get(map);
@@ -132,6 +134,19 @@ export class Renderer {
     ctx.translate(c.flipH ? x + c.w : x, c.flipV ? y + c.h : y);
     ctx.scale(c.flipH ? -1 : 1, c.flipV ? -1 : 1);
     ctx.drawImage(bmp, c.sx, c.sy, c.w, c.h, 0, 0, c.w, c.h);
+    ctx.restore();
+  }
+
+  /** Staff-roll lines: white on a black shadow (staff.lst FONTCOL 243 / DECOCOL 244), 명조 = serif, 고딕 = sans. */
+  private drawScreenTexts(texts: ScreenText[]): void {
+    const { ctx } = this;
+    ctx.save();
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    for (const t of texts) {
+      ctx.font = `${t.bold ? 'bold ' : ''}${t.size}px ${t.font === 'mincho' ? "'Noto Serif KR', 'Apple Myungjo', 'Batang', serif" : "'Noto Sans KR', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif"}`;
+      ctx.fillStyle = '#000'; ctx.fillText(t.text, t.x + 1, t.y + 1);
+      ctx.fillStyle = '#fff'; ctx.fillText(t.text, t.x, t.y);
+    }
     ctx.restore();
   }
 

@@ -29,7 +29,7 @@ export const scene12: SceneDef = { id: 12, parts: [[
   ...caption(1, 448, 96, 96, 192, 14000, 20000),
   ...caption(2, 400, 64, 120, 200, 24000, 31000),
   { op: 'waitFade' }, { op: 'waitUntil', ms: 33000 }, { op: 'hide', obj: 0 },
-  { op: 'resetClock' }, ...CREDITS.flatMap(credit), { op: 'waitAlpha', obj: 3 }, { op: 'hide', obj: 3 },
+  { op: 'resetClock' }, { op: 'textRoll', ms: 142000 }, ...CREDITS.flatMap(credit), { op: 'waitAlpha', obj: 3 }, { op: 'hide', obj: 3 }, { op: 'waitText' },
   { op: 'waitUntil', ms: 180000 },
   { op: 'show', obj: 0, slot: 20, sx: 0, sy: 0, w: 640, h: 360, dx: 0, dy: 60 }, { op: 'show', obj: 3, slot: 21, sx: 0, sy: 0, w: 640, h: 170, dx: 0, dy: 310 },
   { op: 'fade', dir: 'in', steps: 16 },

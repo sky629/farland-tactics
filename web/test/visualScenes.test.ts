@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { scenes } from '../src/visual/scenes';
 import { VisualPlayer } from '../src/visual/player';
-import type { VisualImages } from '../src/visual/timeline';
+import type { TextLine, VisualImages } from '../src/visual/timeline';
 import { OPENING_PART_END_MS, dispatch, type Cmd } from '../src/visual/timeline';
 
 const ASSETS = join(__dirname, '../public/assets');
@@ -60,13 +60,14 @@ describe('visual scenes (corpus)', () => {
     for (const r of list) if (r.scene === sceneId) sizes.set(r.slot, pngSize(r.name));
     return { get: (slot) => { const s = sizes.get(slot); return s ? { image: {} as CanvasImageSource, w: s[0], h: s[1] } : null; } };
   }
-  function trace(sceneId: number, untilMs: number, stepMs = 100): { starts: number[]; frames: { t: number; pieces: number; visible: number; fade: number | null }[]; doneAt: number | null } {
-    const p = new VisualPlayer(); p.start(scenes[sceneId]!, 0, sceneImages(sceneId), 0);
-    const starts = [0]; const frames: { t: number; pieces: number; visible: number; fade: number | null }[] = []; let doneAt: number | null = null;
+  function trace(sceneId: number, untilMs: number, stepMs = 100): { starts: number[]; frames: { t: number; pieces: number; visible: number; texts: number; fade: number | null }[]; doneAt: number | null } {
+    const staff: TextLine[] = Array.from({ length: 60 }, (_, i) => (i % 4 === 3 ? { space: 12 } : { text: `line ${i}`, size: 24, font: 'mincho' as const, bold: true, gap: 6 }));
+    const p = new VisualPlayer(); p.start(scenes[sceneId]!, 0, sceneImages(sceneId), 0, staff);
+    const starts = [0]; const frames: { t: number; pieces: number; visible: number; texts: number; fade: number | null }[] = []; let doneAt: number | null = null;
     for (let t = 0; t <= untilMs; t += stepMs) {
       const f = p.update(t);
       if (p.part >= starts.length) starts.push(t);
-      frames.push({ t, pieces: f.backdrop.length, visible: f.backdrop.filter((b) => (b.alpha ?? 1) >= 0.5).length, fade: f.fade?.alpha ?? null });
+      frames.push({ t, pieces: f.backdrop.length, visible: f.backdrop.filter((b) => (b.alpha ?? 1) >= 0.5).length, texts: f.texts.length, fade: f.fade?.alpha ?? null });
       if (f.done) { doneAt = t; break; }
     }
     return { starts, frames, doneAt };
@@ -98,6 +99,8 @@ describe('visual scenes (corpus)', () => {
       expect(at(start + 18500).visible, `picture ${k} gone`).toBe(0);
     }
     expect(at(185000).visible).toBe(2);
+    for (const t of [60000, 100000, 150000]) expect(at(t).texts, `staff roll at ${t}`).toBeGreaterThan(0);
+    expect(at(30000).texts).toBe(0);
     expect(doneAt).toBe(200000);
   });
   it('ending 2 plays its six parts on the scene clock', () => {
