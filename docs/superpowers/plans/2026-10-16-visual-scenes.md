@@ -142,9 +142,10 @@ export type Cmd =
   | { op: 'wait'; ms: number }                                                                     // FUN_004024f0: ms since the last wait ended
   | { op: 'waitUntil'; ms: number }                                                                // FUN_00402050 / FUN_0041dbc0: ms since the scene clock reset
   | { op: 'resetClock' }                                                                           // DAT_00449674 = now
-  | { op: 'tiles'; obj: number; kind: 0 | 3 | 4; x: number; y: number; cw: number; ch: number; slots: number[]; ms: number }   // FUN_0041aac0 (one slot) / FUN_0041aa20 (list)
-  | { op: 'effect'; obj: number; on: boolean }                                                     // FUN_0041a890
-  | { op: 'waitEffect'; obj: number }                                                              // FUN_0041a910
+  | { op: 'pos'; obj: number; x: number; y: number }                                               // FUN_00419ec0 base position
+  | { op: 'anim'; fx: number; obj: number; x: number; y: number; frames: Frame[]; loop: boolean }  // FUN_0041aac0 (sheet(...)) / FUN_0041aa20 (slides(...))
+  | { op: 'effect'; fx: number; on: boolean }                                                      // FUN_0041a890
+  | { op: 'waitEffect'; fx: number }                                                               // FUN_0041a910
   | { op: 'sound'; name: string }                                                                  // FUN_0041dc50 + FUN_0041dca0(ch, 1)
   | { op: 'end' };                                                                                 // FUN_00402070
 export interface SceneDef { id: number; parts: Cmd[][] }
@@ -163,7 +164,7 @@ export class VisualPlayer {
 }
 ```
 
-재생 규칙: 명령은 순서대로 즉시 실행하고, `wait*` 명령은 조건이 참이 될 때까지 그 명령에 머문다(한 `update` 에서 여러 명령 소비 가능). 부가 끝나면 다음 부로; `end` 또는 마지막 명령 뒤 → `done`. 시계는 둘: **부 시계**(부 시작과 `resetClock` 에서 0; `wait ms` = 부 시계 ≥ ms — 원작 `DAT_00449688`/`DAT_00449674`, 하위 단계 사이에 리셋되지 않는다 [관찰 FUN_004052a0, FUN_00406a60]) 와 **장면 시계**(`waitUntil ms` — `FUN_0041dbc0`). 오브젝트는 show 조각과 타일 효과를 둘 다 가질 수 있다(장면 1 은 obj 0 에 배경과 효과를 함께 건다). 이동은 선형 보간, 끝나면 `to` 에 고정. 페이드: in = alpha 1→0, out = 0→1, `steps×30 ms`, steps 0 = 즉시; 페이드아웃 뒤 alpha 1 유지. 타일: `tiles` 는 효과를 정의만 하고 `effect on` 이 시작; kind 3 = 시작 뒤 `t/ms` 비율만큼의 셀(행 우선)이 보임; kind 4 = 반대로 사라짐; kind 0 = `slots` 를 `ms` 간격으로 순서대로 바꿔 보임(마지막에서 멈춤). `waitEffect` 는 효과 끝까지. `show` 의 조각은 이미지 크기로 클립(원작과 같음). `skip()` → `done`, 이후 `update` 는 빈 backdrop + 같은 done.
+재생 규칙: 명령은 순서대로 즉시 실행하고, `wait*` 명령은 조건이 참이 될 때까지 그 명령에 머문다(한 `update` 에서 여러 명령 소비 가능). 부가 끝나면 다음 부로; `end` 또는 마지막 명령 뒤 → `done`. 시계는 둘: **부 시계**(부 시작과 `resetClock` 에서 0; `wait ms` = 부 시계 ≥ ms — 원작 `DAT_00449688`/`DAT_00449674`, 하위 단계 사이에 리셋되지 않는다 [관찰 FUN_004052a0, FUN_00406a60]) 와 **장면 시계**(`waitUntil ms` — `FUN_0041dbc0`). 이동은 선형 보간, 끝나면 `to` 에 고정. 페이드: in = alpha 1→0, out = 0→1, `steps×30 ms`, steps 0 = 즉시; 페이드아웃 뒤 alpha 1 유지. 애니메이션: `anim` 은 정의만 하고 `effect on` 이 시작; 매 프레임 경과 시간으로 프레임을 골라 오브젝트에 보인다(1회면 끝난 뒤 마지막 프레임 유지, 반복이면 `effect off` 까지). `waitEffect` 는 1회 효과가 끝날 때까지(정의만 된 효과는 바로 통과). `show` 의 조각은 이미지 크기로 클립(원작과 같음). `skip()` → `done`, 이후 `update` 는 빈 backdrop + 같은 done.
 
 - [ ] **Step 1: 실패하는 테스트**
 
@@ -227,23 +228,7 @@ describe('VisualPlayer', () => {
     expect(p.update(1150).done).toBe(false);   // part 1 waits for 300 since the scene start
     expect(p.update(1300).done).toBe(true);
   });
-  it('tiles kind 3 reveals half of the cells half way through', () => {
-    const p = new VisualPlayer();
-    p.start(scene([{ op: 'tiles', obj: 0, kind: 3, x: 0, y: 0, cw: 10, ch: 10, slots: [1], ms: 1000 }, { op: 'effect', obj: 0, on: true }, { op: 'waitEffect', obj: 0 }, { op: 'end' }]), 0, images({ 1: [40, 10] }), 0);
-    expect(p.update(0).backdrop).toHaveLength(0);
-    expect(p.update(500).backdrop).toHaveLength(2);
-    const f = p.update(1000);
-    expect(f.backdrop).toHaveLength(4);
-    expect(f.done).toBe(true);
-  });
-  it('tiles kind 0 cycles through its slots and stops on the last', () => {
-    const p = new VisualPlayer();
-    p.start(scene([{ op: 'tiles', obj: 2, kind: 0, x: 0, y: 0, cw: 10, ch: 10, slots: [1, 2, 3], ms: 600 }, { op: 'effect', obj: 2, on: true }, { op: 'waitEffect', obj: 2 }, { op: 'wait', ms: 1000 }]), 0, images({ 1: [10, 10], 2: [20, 10], 3: [30, 10] }), 0);
-    expect(p.update(0).backdrop[0]!.w).toBe(10);      // slot 1 for the first 200 ms
-    expect(p.update(250).backdrop[0]!.w).toBe(20);    // slot 2
-    expect(p.update(600).backdrop[0]!.w).toBe(30);    // slot 3, and the effect is over
-    expect(p.update(900).backdrop[0]!.w).toBe(30);    // stays on the last slot
-  });
+  // 애니메이션 테스트: 시트 프레임 진행·마지막 프레임 유지, 반복 효과 정지, 슬라이드 교체, 시작 안 한 효과의 waitEffect — 구현 파일 test/visualPlayer.test.ts 참조
   it('sound reports its name once', () => {
     const p = new VisualPlayer(); const heard: string[] = [];
     p.onSound = (n) => heard.push(n);
@@ -295,7 +280,7 @@ describe('dispatch', () => {
 - Consumes: Task 2 `Cmd`, `SceneDef`, `dispatch`.
 - Produces: `scenes: Record<number, SceneDef>` (`index.ts`).
 
-전사 규칙: 각 파일 머리말 주석에 원작 래퍼·본체·설정 함수 주소와 [추정] 항목. 설정 함수의 `FUN_00419c70` 호출은 `show`, `FUN_00419e40` 는 `order`, `FUN_0041aac0(obj, kind, x, y, cw, ch, p7, p8, slot)` 는 `tiles{slots:[slot], ms: p7 × cells}` [추정: p7 = 셀당 ms], `FUN_0041aa20(obj, kind, x, y, sx, sy, w, h, p, q, list)` 는 `tiles{slots: list, cw: w, ch: h, ms: p × list.length}` [추정], `FUN_0041dc50(ch, name)` + `FUN_0041dca0(ch,1)` 는 `sound`, 본체의 sub-step 들은 `wait*`/`effect`/`fade`. 장면 10(FUN_004068a0)·11(FUN_00406b90) 의 설정 함수는 이 작업에서 디컴파일한다(REA `procedure_pseudo_code`).
+전사 규칙: 각 파일 머리말 주석에 원작 래퍼·본체·설정 함수 주소와 [추정] 항목. 설정 함수의 `FUN_00419c70` 호출은 `show`, `FUN_00419e40` 는 `order`, `FUN_00419ec0` 는 `pos`, `FUN_0041aac0(fx, obj, x, y, cw, ch, ms, repeat, slot)` 는 `anim{frames: sheet(slot, W, H, cw, ch, ms), loop: repeat === 0}`(W×H 는 PNG 크기), `FUN_0041aa20(fx, obj, x, y, sx, sy, w, h, ms, repeat, list)` 는 `anim{frames: slides(list, w, h, ms)}`, `FUN_0041dc50(ch, name)` + `FUN_0041dca0(ch,1)` 는 `sound`(채널 정지는 생략 [추정: 짧은 소리]), 본체의 sub-step 들은 `wait*`/`effect`/`fade`. 설정 함수는 REA `batch_decompile` 로 읽는다.
 
 - [ ] **Step 1: 실패하는 테스트**
 
@@ -323,7 +308,7 @@ describe('visual scenes (corpus)', () => {
   it('every slot a scene shows exists in the list and its bitmap is exported', () => {
     for (const def of Object.values(scenes)) {
       def.parts.forEach((cmds, part) => {
-        const slots = cmds.flatMap((c: Cmd) => c.op === 'show' ? [c.slot] : c.op === 'tiles' ? c.slots : []);
+        const slots = cmds.flatMap((c: Cmd) => c.op === 'show' ? [c.slot] : c.op === 'anim' ? c.frames.map((f) => f.slot) : []);
         for (const slot of slots) {
           const rec = list.find((r) => r.scene === def.id && r.slot === slot && r.step <= part);
           expect(rec, `scene ${def.id} part ${part} slot ${slot}`).toBeDefined();
@@ -353,13 +338,13 @@ import type { SceneDef } from '../timeline';
 export const scene01: SceneDef = { id: 1, parts: [[
   { op: 'order', ids: [0, 3] },
   { op: 'show', obj: 0, slot: 0, sx: 0, sy: 0, w: 640, h: 480, dx: 0, dy: 0 },
-  { op: 'tiles', obj: 0, kind: 3, x: 336, y: 48, cw: 144, ch: 176, slots: [1], ms: 100 * cells },
+  { op: 'anim', fx: 0, obj: 3, x: 336, y: 48, frames: sheet(1, 1008, 352, 144, 176, 100), loop: false },
   { op: 'fade', dir: 'in', steps: 8 }, { op: 'waitFade' }, { op: 'wait', ms: 3000 },
-  { op: 'effect', obj: 0, on: true }, { op: 'waitEffect', obj: 0 }, { op: 'waitUntil', ms: 6000 },
+  { op: 'effect', fx: 0, on: true }, { op: 'waitEffect', fx: 0 }, { op: 'waitUntil', ms: 6000 },
   { op: 'end' },
 ]] };
 ```
-(obj 0 은 배경 전체 이미지와 타일 효과를 함께 가진다 — 원작 그대로. `FUN_00402070(0)` 뒤의 화면 전환은 스크립트의 FADE 가 맡는다.) 나머지 장면도 같은 식.
+(`FUN_00402070(0)` 뒤의 화면 전환은 스크립트의 FADE 가 맡는다.) 나머지 장면도 같은 식.
 
 - [ ] **Step 4: GREEN** — 코퍼스 테스트 PASS; `npm run check`.
 - [ ] **Step 5: 커밋** — `git add web/src/visual/scenes web/test/visualScenes.test.ts && git commit -m "feat(web): visual scenes 1, 3, 4, 6, 7, 9, 10, 11 transcribed"`

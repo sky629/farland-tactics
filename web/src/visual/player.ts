@@ -1,12 +1,12 @@
 import { FADE_STEP_MS } from '../field/effects';
 import type { Backdrop } from '../render/renderer';
-import type { Cmd, SceneDef, TilesCmd, VisualImages } from './timeline';
+import type { AnimCmd, Cmd, Frame, SceneDef, VisualImages } from './timeline';
 
 export interface VisualFrame { backdrop: Backdrop[]; fade: { color: 'black'; alpha: number } | null; done: boolean }
 
-interface Obj { slot: number; sx: number; sy: number; w: number; h: number; dx: number; dy: number; clip: { x: number; y: number; w: number; h: number } | null; visible: boolean }
+interface Obj { slot: number; sx: number; sy: number; w: number; h: number; dx: number; dy: number; base: [number, number]; clip: { x: number; y: number; w: number; h: number } | null; visible: boolean }
 interface Move { from: [number, number]; to: [number, number]; start: number; ms: number }
-interface Effect { def: TilesCmd; start: number | null }
+interface Effect { def: AnimCmd; start: number | null; total: number }
 type Fade = { from: number; to: number; start: number; ms: number };
 
 const OBJECTS = 10;
@@ -14,8 +14,9 @@ const OBJECTS = 10;
 /**
  * Plays a SceneDef: commands run in order, `wait*` commands hold until their condition is true, parts follow each other,
  * `end` (or running out of commands) finishes the scene. Two clocks as in the original: the part clock (reset at each
- * part start and by `resetClock`) for `wait`, the scene clock for `waitUntil`. Tile effects are approximations [추정]:
- * kind 3 reveals cells in grid order, kind 4 hides them in grid order, kind 0 cycles through its slots.
+ * part start and by `resetClock`) for `wait`, the scene clock for `waitUntil`. An effect is a frame animation on an
+ * object (FUN_0041d6e0 steps the frame when its ms have passed, FUN_0041d640 shows it on the object): once, or looping
+ * until `effect off`; the object keeps the last frame shown.
  */
 export class VisualPlayer {
   onSound?: (name: string) => void;
@@ -73,9 +74,10 @@ export class VisualPlayer {
   /** Runs one command; false when it is a wait whose condition is not yet true. */
   private exec(c: Cmd, now: number): boolean {
     switch (c.op) {
-      case 'order': this.order = [...c.ids, ...this.order.filter((id) => !c.ids.includes(id))]; return true;
-      case 'show': this.objs.set(c.obj, { slot: c.slot, sx: c.sx, sy: c.sy, w: c.w, h: c.h, dx: c.dx, dy: c.dy, clip: this.objs.get(c.obj)?.clip ?? null, visible: true }); this.moves.delete(c.obj); return true;
+      case 'order': this.order = [...c.ids]; return true;
+      case 'show': this.showOn(c.obj, c, c.dx, c.dy); this.moves.delete(c.obj); return true;
       case 'hide': { const o = this.objs.get(c.obj); if (o) o.visible = false; return true; }
+      case 'pos': this.obj(c.obj).base = [c.x, c.y]; return true;
       case 'clip': { const o = this.objs.get(c.obj); if (o) o.clip = { x: c.x, y: c.y, w: c.w, h: c.h }; return true; }
       case 'move': this.moves.set(c.obj, { from: c.from, to: c.to, start: now, ms: c.ms }); return true;
       case 'waitMove': { const m = this.moves.get(c.obj); return !m || now - m.start >= m.ms; }
@@ -89,22 +91,51 @@ export class VisualPlayer {
       case 'wait': return now - this.partStart >= c.ms;
       case 'resetClock': this.partStart = now; return true;
       case 'waitUntil': return now - this.sceneStart >= c.ms;
-      case 'tiles': this.effects.set(c.obj, { def: c, start: null }); return true;
-      case 'effect': { const e = this.effects.get(c.obj); if (e) e.start = c.on ? now : null; if (!c.on) this.effects.delete(c.obj); return true; }
-      case 'waitEffect': { const e = this.effects.get(c.obj); return !e || e.start === null || now - e.start >= e.def.ms; }
+      case 'anim': this.effects.set(c.fx, { def: c, start: null, total: c.frames.reduce((s, f) => s + f.ms, 0) }); return true;
+      case 'effect': {
+        const e = this.effects.get(c.fx);
+        if (!e) return true;
+        if (c.on) { e.start = now; this.applyFrame(e, now); }
+        else { if (e.start !== null) this.applyFrame(e, now); this.effects.delete(c.fx); }
+        return true;
+      }
+      case 'waitEffect': { const e = this.effects.get(c.fx); return !e || e.start === null || (!e.def.loop && now - e.start >= e.total); }
       case 'sound': this.onSound?.(c.name); return true;
       case 'end': this.finished = true; return true;
     }
   }
 
+  private obj(id: number): Obj {
+    let o = this.objs.get(id);
+    if (!o) { o = { slot: -1, sx: 0, sy: 0, w: 0, h: 0, dx: 0, dy: 0, base: [0, 0], clip: null, visible: false }; this.objs.set(id, o); }
+    return o;
+  }
+  private showOn(id: number, f: Frame | { slot: number; sx: number; sy: number; w: number; h: number }, dx: number, dy: number): void {
+    const o = this.obj(id);
+    o.slot = f.slot; o.sx = f.sx; o.sy = f.sy; o.w = f.w; o.h = f.h; o.dx = dx; o.dy = dy; o.visible = true;
+  }
+  /** The frame an effect shows at `now` goes onto its object (FUN_0041d640). */
+  private applyFrame(e: Effect, now: number): void {
+    const d = e.def;
+    let t = now - e.start!;
+    if (d.loop && e.total > 0) t %= e.total;
+    let i = 0;
+    while (i < d.frames.length - 1 && t >= d.frames[i]!.ms) { t -= d.frames[i]!.ms; i++; }
+    const f = d.frames[i];
+    if (f) this.showOn(d.obj, f, d.x, d.y);
+  }
+
   // ---- picture ----
   private compose(now: number): Backdrop[] {
+    for (const [fx, e] of this.effects) {
+      if (e.start === null) continue;
+      this.applyFrame(e, now);
+      if (!e.def.loop && now - e.start >= e.total) this.effects.delete(fx);   // over: the object keeps the last frame
+    }
     const out: Backdrop[] = [];
     for (const id of this.order) {
       const o = this.objs.get(id);
       if (o && o.visible) { const b = this.piece(o, id, now); if (b) out.push(b); }
-      const e = this.effects.get(id);
-      if (e) out.push(...this.cells(e, now));
     }
     return out;
   }
@@ -115,6 +146,7 @@ export class VisualPlayer {
     let [dx, dy] = [o.dx, o.dy];
     const m = this.moves.get(id);
     if (m) { const t = Math.min(Math.max((now - m.start) / m.ms, 0), 1); dx = m.from[0] + (m.to[0] - m.from[0]) * t; dy = m.from[1] + (m.to[1] - m.from[1]) * t; }
+    dx += o.base[0]; dy += o.base[1];
     let sx = o.sx, sy = o.sy, w = Math.min(o.w, img.w - o.sx), h = Math.min(o.h, img.h - o.sy);
     if (o.clip) {                                                              // keep the part of the destination inside the window
       const x0 = Math.max(dx, o.clip.x), y0 = Math.max(dy, o.clip.y), x1 = Math.min(dx + w, o.clip.x + o.clip.w), y1 = Math.min(dy + h, o.clip.y + o.clip.h);
@@ -123,26 +155,6 @@ export class VisualPlayer {
     }
     if (w <= 0 || h <= 0) return null;
     return { image: img.image, sx, sy, w, h, dx: Math.round(dx), dy: Math.round(dy) };
-  }
-
-  private cells(e: Effect, now: number): Backdrop[] {
-    const d = e.def;
-    const t = e.start === null ? 0 : Math.min(Math.max((now - e.start) / d.ms, 0), 1);
-    if (d.kind === 0) {                                                        // one image at a time, in slot order
-      const k = Math.min(d.slots.length - 1, Math.floor(t * d.slots.length));
-      const img = this.images.get(d.slots[k]!);
-      return img ? [{ image: img.image, sx: 0, sy: 0, w: img.w, h: img.h, dx: d.x, dy: d.y }] : [];
-    }
-    const img = this.images.get(d.slots[0]!);
-    if (!img) return [];
-    const cols = Math.max(1, Math.ceil(img.w / d.cw)), rows = Math.max(1, Math.ceil(img.h / d.ch)), n = cols * rows;
-    const shown = d.kind === 3 ? Math.round(t * n) : n - Math.round(t * n);  // kind 3 reveals, kind 4 hides
-    const out: Backdrop[] = [];
-    for (let k = 0; k < shown; k++) {
-      const cx = (k % cols) * d.cw, cy = Math.floor(k / cols) * d.ch;
-      out.push({ image: img.image, sx: cx, sy: cy, w: Math.min(d.cw, img.w - cx), h: Math.min(d.ch, img.h - cy), dx: d.x + cx, dy: d.y + cy });
-    }
-    return out;
   }
 
   private fadeAt(now: number): VisualFrame['fade'] {

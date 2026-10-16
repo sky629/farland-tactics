@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { VisualPlayer } from '../src/visual/player';
-import { dispatch, type Cmd, type SceneDef, type VisualImages } from '../src/visual/timeline';
+import { dispatch, sheet, slides, type Cmd, type SceneDef, type VisualImages } from '../src/visual/timeline';
 
 const img = (w: number, h: number) => ({ image: { w, h } as unknown as CanvasImageSource, w, h });
 const images = (sizes: Record<number, [number, number]>): VisualImages => ({ get: (slot) => (sizes[slot] ? img(...sizes[slot]!) : null) });
@@ -19,10 +19,17 @@ describe('VisualPlayer', () => {
     p.start(scene([{ op: 'show', obj: 0, slot: 0, sx: 0, sy: 0, w: 640, h: 480, dx: 0, dy: 0 }, { op: 'show', obj: 3, slot: 1, sx: 0, sy: 0, w: 10, h: 10, dx: 5, dy: 6 }, { op: 'wait', ms: 100 }]), 0, images({ 1: [10, 10] }), 0);
     expect(p.update(0).backdrop.map((b) => b.dx)).toEqual([5]);
   });
-  it('order decides the drawing order', () => {
+  it('order lists the objects that are drawn, first drawn first', () => {
     const p = new VisualPlayer();
-    p.start(scene([{ op: 'order', ids: [3, 0] }, { op: 'show', obj: 0, slot: 0, sx: 0, sy: 0, w: 10, h: 10, dx: 0, dy: 0 }, { op: 'show', obj: 3, slot: 1, sx: 0, sy: 0, w: 10, h: 10, dx: 1, dy: 0 }, { op: 'wait', ms: 1 }]), 0, images({ 0: [10, 10], 1: [10, 10] }), 0);
-    expect(p.update(0).backdrop.map((b) => b.dx)).toEqual([1, 0]);
+    p.start(scene([{ op: 'order', ids: [3, 0] }, { op: 'show', obj: 0, slot: 0, sx: 0, sy: 0, w: 10, h: 10, dx: 0, dy: 0 }, { op: 'show', obj: 3, slot: 1, sx: 0, sy: 0, w: 10, h: 10, dx: 1, dy: 0 }, { op: 'show', obj: 5, slot: 1, sx: 0, sy: 0, w: 10, h: 10, dx: 2, dy: 0 }, { op: 'wait', ms: 1 }]), 0, images({ 0: [10, 10], 1: [10, 10] }), 0);
+    expect(p.update(0).backdrop.map((b) => b.dx)).toEqual([1, 0]);           // object 5 is not in the list
+  });
+  it('pos adds a base position to the shown offset and to moves (FUN_00419ec0)', () => {
+    const p = new VisualPlayer();
+    p.start(scene([{ op: 'pos', obj: 3, x: 0, y: 72 }, { op: 'show', obj: 3, slot: 1, sx: 0, sy: 0, w: 400, h: 408, dx: -108, dy: 0 }, { op: 'wait', ms: 10 }, { op: 'move', obj: 3, from: [-192, 0], to: [-48, 0], ms: 1000 }, { op: 'waitMove', obj: 3 }, { op: 'end' }]), 0, images({ 1: [400, 408] }), 0);
+    expect(p.update(0).backdrop[0]).toMatchObject({ dx: -108, dy: 72 });
+    p.update(10);
+    expect(p.update(510).backdrop[0]).toMatchObject({ dx: -120, dy: 72 });
   });
   it('move interpolates and waitMove holds until the end', () => {
     const p = new VisualPlayer();
@@ -66,31 +73,40 @@ describe('VisualPlayer', () => {
     expect(p.update(1150).done).toBe(false);   // part 1 waits for 300 since the scene start
     expect(p.update(1300).done).toBe(true);
   });
-  it('tiles kind 3 reveals half of the cells half way through', () => {
+  it('an animation steps through its sheet frames on its object; the object keeps the last frame (FUN_0041d6e0)', () => {
     const p = new VisualPlayer();
-    p.start(scene([{ op: 'tiles', obj: 0, kind: 3, x: 0, y: 0, cw: 10, ch: 10, slots: [1], ms: 1000 }, { op: 'effect', obj: 0, on: true }, { op: 'waitEffect', obj: 0 }, { op: 'end' }]), 0, images({ 1: [40, 10] }), 0);
-    expect(p.update(0).backdrop).toHaveLength(0);
-    expect(p.update(500).backdrop).toHaveLength(2);
-    const f = p.update(1000);
-    expect(f.backdrop).toHaveLength(4);
-    expect(f.done).toBe(true);
+    const frames = sheet(1, 40, 10, 10, 10, 100);                              // 4 frames, 100 ms each
+    expect(frames.map((f) => f.sx)).toEqual([0, 10, 20, 30]);
+    p.start(scene([{ op: 'order', ids: [0, 3] }, { op: 'anim', fx: 0, obj: 3, x: 336, y: 48, frames, loop: false }, { op: 'effect', fx: 0, on: true }, { op: 'waitEffect', fx: 0 }, { op: 'wait', ms: 1000 }]), 0, images({ 1: [40, 10] }), 0);
+    expect(p.update(0).backdrop).toEqual([{ image: expect.anything(), sx: 0, sy: 0, w: 10, h: 10, dx: 336, dy: 48 }]);
+    expect(p.update(150).backdrop[0]).toMatchObject({ sx: 10 });
+    expect(p.update(350).backdrop[0]).toMatchObject({ sx: 30 });
+    expect(p.update(399).done).toBe(false);
+    expect(p.update(900).backdrop[0]).toMatchObject({ sx: 30 });              // over, last frame stays
+    expect(p.update(1000).done).toBe(true);
   });
-  it('tiles kind 4 hides the cells over time', () => {
+  it('a looping animation repeats until effect off, which keeps the frame of that moment', () => {
     const p = new VisualPlayer();
-    p.start(scene([{ op: 'tiles', obj: 0, kind: 4, x: 0, y: 0, cw: 10, ch: 10, slots: [1], ms: 1000 }, { op: 'wait', ms: 10 }, { op: 'effect', obj: 0, on: true }, { op: 'waitEffect', obj: 0 }, { op: 'wait', ms: 1500 }]), 0, images({ 1: [40, 10] }), 0);
-    expect(p.update(0).backdrop).toHaveLength(4);       // defined but not started: all cells visible
-    expect(p.update(10).backdrop).toHaveLength(4);      // starts now
-    expect(p.update(510).backdrop).toHaveLength(2);
-    expect(p.update(1010).backdrop).toHaveLength(0);
-    expect(p.update(1500).backdrop).toHaveLength(0);
+    p.start(scene([{ op: 'anim', fx: 1, obj: 4, x: 0, y: 0, frames: sheet(2, 20, 10, 10, 10, 100), loop: true }, { op: 'effect', fx: 1, on: true }, { op: 'wait', ms: 500 }, { op: 'effect', fx: 1, on: false }, { op: 'waitEffect', fx: 1 }, { op: 'wait', ms: 900 }]), 0, images({ 2: [20, 10] }), 0);
+    expect(p.update(0).backdrop[0]).toMatchObject({ sx: 0 });
+    expect(p.update(150).backdrop[0]).toMatchObject({ sx: 10 });
+    expect(p.update(450).backdrop[0]).toMatchObject({ sx: 0 });               // 4th step, wrapped
+    expect(p.update(500).backdrop[0]).toMatchObject({ sx: 10 });              // stopped on frame 5 mod 2
+    expect(p.update(800).backdrop[0]).toMatchObject({ sx: 10 });
   });
-  it('tiles kind 0 cycles through its slots and stops on the last', () => {
+  it('a slide animation swaps whole images in slot order', () => {
     const p = new VisualPlayer();
-    p.start(scene([{ op: 'tiles', obj: 2, kind: 0, x: 0, y: 0, cw: 10, ch: 10, slots: [1, 2, 3], ms: 600 }, { op: 'effect', obj: 2, on: true }, { op: 'waitEffect', obj: 2 }, { op: 'wait', ms: 1000 }]), 0, images({ 1: [10, 10], 2: [20, 10], 3: [30, 10] }), 0);
+    p.start(scene([{ op: 'anim', fx: 0, obj: 0, x: 0, y: 0, frames: slides([1, 2, 3], 640, 480, 200), loop: false }, { op: 'effect', fx: 0, on: true }, { op: 'waitEffect', fx: 0 }, { op: 'wait', ms: 1000 }]), 0, images({ 1: [10, 10], 2: [20, 10], 3: [30, 10] }), 0);
     expect(p.update(0).backdrop[0]!.w).toBe(10);      // slot 1 for the first 200 ms
     expect(p.update(250).backdrop[0]!.w).toBe(20);    // slot 2
     expect(p.update(600).backdrop[0]!.w).toBe(30);    // slot 3, and the effect is over
     expect(p.update(900).backdrop[0]!.w).toBe(30);    // stays on the last slot
+  });
+  it('waitEffect passes for an effect that was never started', () => {
+    const p = new VisualPlayer();
+    p.start(scene([{ op: 'anim', fx: 2, obj: 4, x: 0, y: 0, frames: sheet(3, 10, 10, 10, 10, 100), loop: false }, { op: 'waitEffect', fx: 2 }, { op: 'end' }]), 0, images({ 3: [10, 10] }), 0);
+    expect(p.update(0).done).toBe(true);
+    expect(p.update(0).backdrop).toEqual([]);                                  // defined only: nothing shown
   });
   it('clip limits a piece and hide removes it', () => {
     const p = new VisualPlayer();
