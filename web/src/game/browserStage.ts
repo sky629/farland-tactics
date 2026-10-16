@@ -3,7 +3,7 @@ import { BitmapCache } from '../assets/bitmaps';
 import { AudioGate } from '../audio/gate';
 import { MusicPlayer } from '../audio/music';
 import { SoundPlayer } from '../audio/sound';
-import { SpessaSynth } from '../audio/spessa';
+import { SpessaSynth, type SynthFailure } from '../audio/spessa';
 import { WebAudioOut } from '../audio/webAudio';
 import type { MapData } from '../assets/types';
 import type { Selection } from '../battle/types';
@@ -247,6 +247,8 @@ export class BrowserStage implements Stage {
   resumeAudio(): void { void this.audio?.out.ctx.resume(); }
   setVolumes(music: number, sound: number): void { this.gate.setVolumes(music, sound); }
   get musicReady(): boolean { return this.audio?.synth.ready ?? false; }
+  /** Why music is silent after init settled (null = it plays, or no AudioContext at all). */
+  get musicFailure(): SynthFailure { return this.audio?.synth.failure ?? null; }
   /** true once the synthesizer init settled (so the page can show the soundfont notice exactly once). */
   get audioTried(): boolean { return this.gate.settled; }
   get currentMusic(): number { return this.gate.current; }
@@ -261,6 +263,7 @@ export class BrowserStage implements Stage {
     if (!this.visualNames.has(def.id)) { this.hooks.log('warn', `비주얼 씬 ${def.id}: 장면 목록(visual.json)에 그림이 없다 — 변환기를 다시 돌린다`); return; }   // without it the scene would be minutes of black
     this.visualScene = def.id;
     this.visualImages.clear();                                                 // the original frees each part's images (FUN_00401000)
+    for (const slot of this.visualNames.get(def.id)!.keys()) this.visualImage(slot, slot === 0 ? null : 249);   // preload (FUN_00401f70); object 0 shows slot 0 in every transcribed scene
     this.player.start(def, part, { get: (slot, key) => this.visualImage(slot, key) }, this.lastNow, this.staff, this.sprites);
   }
   /**

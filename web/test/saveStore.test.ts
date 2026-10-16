@@ -18,6 +18,13 @@ describe('SaveStore', () => {
     await store.remove(3);
     expect((await store.summaries())[3]).toBeNull();
   });
+  it('a slot whose bytes are not a save file is listed as broken, not as empty', async () => {
+    const backend = new MemoryBackend();
+    await backend.put(5, new Uint8Array(100));
+    const s = await new SaveStore(backend).summaries();
+    expect(s[5]).toMatchObject({ broken: true });
+    expect(s[4]).toBeNull();
+  });
   it('refuses bytes that are not a save file and slots outside 0..31', async () => {
     const store = new SaveStore(new MemoryBackend());
     await expect(store.write(1, new Uint8Array(10))).rejects.toBeInstanceOf(SaveError);

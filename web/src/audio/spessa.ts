@@ -18,8 +18,17 @@ const withTimeout = <T,>(p: Promise<T>, ms: number, what: string): Promise<T> =>
  * MIDI through spessasynth_lib (AudioWorklet) with the GM soundfont at assets/sf2/gm.sf3.
  * `ready` stays false — and every call is a no-op — when the soundfont or the worklet is missing; the MusicPlayer logs once.
  */
+export type SynthFailure = 'soundfont' | 'synth' | null;
+/** The panel note after init settled: what is missing and what to do; null when music plays. */
+export function synthNotice(failure: SynthFailure): string | null {
+  if (failure === 'soundfont') return '음악 없음: 사운드폰트가 없다. python3 -I tools/ft2_soundfont.py web/public/assets 를 실행한 뒤 새로고침.';
+  if (failure === 'synth') return '음악 없음: 이 브라우저에서 MIDI 합성기를 만들지 못했다(AudioWorklet). 효과음은 난다.';
+  return null;
+}
+
 export class SpessaSynth implements Synth {
   ready = false;
+  failure: SynthFailure = null;
   private synth: WorkletSynthesizer | null = null;
   private seq: Sequencer | null = null;
   private gain = 1;
@@ -35,7 +44,7 @@ export class SpessaSynth implements Synth {
     try {
       const sf = await fetch(`${this.base}/sf2/gm.sf3`);
       const bank = sf.ok ? await sf.arrayBuffer() : null;
-      if (!bank || !isSoundfont(bank)) { this.log('warn', '음악: 사운드폰트가 없다 — python3 -I tools/ft2_soundfont.py web/public/assets 로 받는다'); return false; }
+      if (!bank || !isSoundfont(bank)) { this.failure = 'soundfont'; this.log('warn', '음악: 사운드폰트가 없다 — python3 -I tools/ft2_soundfont.py web/public/assets 로 받는다'); return false; }
       await this.ctx.audioWorklet.addModule(workletUrl);
       const synth = new WorkletSynthesizer(this.ctx);
       synth.connect(this.ctx.destination);                                     // the worklet is not connected by default
@@ -47,6 +56,7 @@ export class SpessaSynth implements Synth {
       this.ready = true;
       return true;
     } catch (e) {
+      this.failure = 'synth';
       this.log('warn', `음악 합성기를 만들지 못했다: ${e instanceof Error ? e.message : String(e)}`);
       return false;
     }

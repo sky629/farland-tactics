@@ -17,7 +17,9 @@ const TOWN_AT = HEADER_SIZE + MAX_SLOTS * UNIT_SIZE;
 
 export class SaveError extends Error { override name = 'SaveError'; }
 
-export interface SaveSummary { stage: number; title: string; turn: number; date: Date | null; bgm: number; gold: number; message: string }
+export interface SaveSummary { stage: number; title: string; turn: number; date: Date | null; bgm: number; gold: number; message: string; broken?: true }
+/** A slot that holds bytes which are not a save file: shown as 손상됨, cannot be loaded, can be exported or deleted. */
+export const BROKEN_SUMMARY: SaveSummary = { stage: 0, title: '손상됨', turn: -1, date: null, bgm: 0, gold: 0, message: '', broken: true };
 
 function checked(bytes: Uint8Array): DataView {
   if (bytes.length !== SAVE_SIZE) throw new SaveError(`세이브 파일은 ${SAVE_SIZE} 바이트여야 한다 (${bytes.length})`);

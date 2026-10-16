@@ -77,7 +77,7 @@ describe('Dialogue', () => {
     root.find('닫기')!.click();
     expect(dlg.takeModalResult()).toBe(0);
   });
-  it('shop modal lists items with price and owned count; 구매 buys through shop.buy; 닫기 → 1', () => {
+  it('shop modal lists items with price and owned count; 구매 buys through shop.buy; 유니트 일람 opens the party and comes back; 돌아오기 → 1', () => {
     const { root, dlg, ctx } = setup();
     ctx.tables.item[1]!.price = 30; ctx.tables.item[7]!.price = 10;
     dlg.openModal('shop', [1, 7], ctx);
@@ -93,7 +93,12 @@ describe('Dialogue', () => {
     for (let i = 0; i < 7; i++) root.find('구매 herb')!.click();                 // 60 Gold buys six more; the seventh fails
     expect(root.find('골드가 부족하다.')).not.toBeNull();
     expect(dlg.takeModalResult()).toBeNull();
-    root.find('닫기')!.click();
+    root.find('유니트 일람')!.click();                                            // dialog 150's third button: the party list
+    expect(root.find('파티')).not.toBeNull();
+    root.find('닫기')!.click();                                                  // back to the shop, not out of it
+    expect(root.find('상점')).not.toBeNull();
+    expect(dlg.takeModalResult()).toBeNull();
+    root.find('돌아오기')!.click();
     expect(dlg.takeModalResult()).toBe(1);
   });
   it('party menu lists each member with equipment and bag; 장착 and 해제 move items between them', () => {

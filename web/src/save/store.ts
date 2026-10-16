@@ -1,4 +1,4 @@
-import { SaveError, saveSummary, type SaveSummary } from './format';
+import { BROKEN_SUMMARY, SaveError, saveSummary, type SaveSummary } from './format';
 
 export const SLOT_COUNT = 32;   // save00..save31; 30 and 31 are the original's autosaves
 
@@ -59,7 +59,7 @@ export class SaveStore {
     for (const slot of await this.backend.keys()) {
       if (slot < 0 || slot >= SLOT_COUNT) continue;
       const bytes = await this.backend.get(slot);
-      if (bytes) { try { out[slot] = saveSummary(bytes); } catch { out[slot] = null; } }
+      if (bytes) { try { out[slot] = saveSummary(bytes); } catch { out[slot] = BROKEN_SUMMARY; } }
     }
     return out;
   }

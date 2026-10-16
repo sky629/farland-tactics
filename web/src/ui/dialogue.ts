@@ -29,7 +29,7 @@ export interface ModalContext { tables: Tables; inventory: Inventory; party: (Un
 export interface LoadHandlers { onPick(slot: number): void; onExport(slot: number): void; onImport(file: File): void; onDelete?(slot: number): void }
 
 const two = (n: number) => String(n).padStart(2, '0');
-const slotLabel = (i: number, s: SaveSummary | null): string => `${two(i)} ${s ? s.title || '(제목 없음)' : '비어 있음'}`;
+const slotLabel = (i: number, s: SaveSummary | null): string => `${two(i)} ${s ? (s.broken ? '손상됨' : s.title || '(제목 없음)') : '비어 있음'}`;
 const dateText = (d: Date | null): string => (d ? `${d.getFullYear()}-${two(d.getMonth() + 1)}-${two(d.getDate())} ${two(d.getHours())}:${two(d.getMinutes())}` : '');
 interface ResultPayload { gold: number; param: number; levelUps: { slot: number; from: number; to: number }[] }
 
@@ -150,11 +150,12 @@ export class Dialogue {
       }
     };
     refresh();
-    box.append(this.el('div', 'title', '상점'), gold, who, list, note, this.button('닫기', done));
+    const party_ = this.button('유니트 일람', () => this.openParty(ctx, { onClose: () => { box.replaceChildren(); this.shop(ids, ctx, done); box.hidden = false; } }));   // dialog 150: 사기 · 유니트 일람 · 돌아오기 (the original has no selling)
+    box.append(this.el('div', 'title', '상점'), gold, who, list, note, this.el('div', 'row'), party_, this.button('돌아오기', done));
   }
 
   /** Town right click (spec §9): every party member with level, HP/MP, equipment and bag; 장착/해제 go through equipment.ts. */
-  openParty(ctx: ModalContext, extra: { onSave?: () => void } = {}): void {
+  openParty(ctx: ModalContext, extra: { onSave?: () => void; onClose?: () => void } = {}): void {
     this.result = null;
     const box = this.modal, items = ctx.tables.item;
     const name = (id: number) => (id === 0 ? '—' : itemName(items[id]!));
@@ -182,7 +183,7 @@ export class Dialogue {
       }
       const row = this.el('div', 'row');
       if (extra.onSave) row.appendChild(this.button('저장', () => { box.hidden = true; extra.onSave!(); }));
-      row.appendChild(this.button('닫기', () => { box.hidden = true; }));
+      row.appendChild(this.button('닫기', () => { if (extra.onClose) extra.onClose(); else box.hidden = true; }));
       box.appendChild(row);
     };
     render();
@@ -213,7 +214,7 @@ export class Dialogue {
   }
   private slotInfo(s: SaveSummary | null): HTMLElement {
     const info = this.el('div', 'info');
-    if (s) info.append(this.el('span', 'date', dateText(s.date)), this.el('span', 'gold', `${s.gold} Gold`), this.el('span', 'stage', `스테이지 ${s.stage}`));
+    if (s && !s.broken) info.append(this.el('span', 'date', dateText(s.date)), this.el('span', 'gold', `${s.gold} Gold`), this.el('span', 'stage', `스테이지 ${s.stage}`));
     return info;
   }
 
@@ -226,7 +227,7 @@ export class Dialogue {
     for (let i = 0; i < 32; i++) {
       const s = saves[i] ?? null;
       const b = this.button(slotLabel(i, s), () => { box.hidden = true; h.onPick(i); });
-      if (!s) (b as HTMLButtonElement).disabled = true;
+      if (!s || s.broken) (b as HTMLButtonElement).disabled = true;                 // a broken slot cannot be loaded; it can still be exported or deleted
       const info = this.slotInfo(s);
       if (s) { info.appendChild(this.button('내보내기', () => h.onExport(i))); if (h.onDelete) info.appendChild(this.button('삭제', () => h.onDelete!(i))); }
       list.append(b, info);

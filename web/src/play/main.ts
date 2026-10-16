@@ -1,4 +1,5 @@
 import { BitmapCache } from '../assets/bitmaps';
+import { synthNotice } from '../audio/spessa';
 import { AssetError, AssetLoader } from '../assets/loader';
 import { Rng } from '../battle/rng';
 import type { BattleEvent } from '../battle/types';
@@ -67,7 +68,7 @@ function frame(now: number): void {
       core.frame(now);
       if (core.mode === 'ended' && !endedShown) { endedShown = true; stage.hideTown(); $('title').hidden = false; }   // the ending (or a game over with nowhere to go) returns to the title
       if (core.mode !== 'ended') endedShown = false;
-      if (!audioNoted && stage.audioTried) { audioNoted = true; const note = $('audioNote'); note.hidden = stage.musicReady; note.textContent = '음악 없음: 사운드폰트가 없다. python3 -I tools/ft2_soundfont.py web/public/assets 를 실행한 뒤 새로고침.'; }
+      if (!audioNoted && stage.audioTried) { audioNoted = true; const note = $('audioNote'); const text = synthNotice(stage.musicFailure); note.hidden = text === null; note.textContent = text ?? ''; }
       stage.cellMode = core.mode === 'battle';
       const b = core.battle;
       stage.draw(now, core.campaign.units, b?.state.phase ?? IDLE);
@@ -101,6 +102,7 @@ async function boot(): Promise<void> {
     if (!(index as { data?: boolean }).data || !index.events || !index.bmp) throw new AssetError('assets/index.json', 'no story data: run tools/ft2_export.py again');
     const tables: Tables = await data.tables();
     const programs = await Promise.all(index.events.map((n) => data.event(n)));
+    if (!index.wave || !index.midi) log('warn', '자산 목록이 오래됐다(wave/midi 없음): python3 -I tools/ft2_export.py 를 다시 돌리면 소리가 난다');
     const visualList = await data.visual().catch((e: unknown) => { showError(e); return []; });
     const staff = await data.staff().catch((e: unknown) => { showError(e); return []; });
     const rosters = new Map<number, RosterUnit[]>();

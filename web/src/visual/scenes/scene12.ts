@@ -32,6 +32,7 @@ export const scene12: SceneDef = { id: 12, parts: [[
   { op: 'resetClock' }, { op: 'textRoll', ms: 142000 }, ...CREDITS.flatMap(credit), { op: 'waitAlpha', obj: 3 }, { op: 'hide', obj: 3 }, { op: 'waitText' },
   { op: 'waitUntil', ms: 180000 },
   { op: 'show', obj: 0, slot: 20, sx: 0, sy: 0, w: 640, h: 360, dx: 0, dy: 60 }, { op: 'show', obj: 3, slot: 21, sx: 0, sy: 0, w: 640, h: 170, dx: 0, dy: 310 },
+  { op: 'move', obj: 3, by: [0, 170], ms: 4000 },                              // FUN_0041a2b0(3, −1, 0, 170, 0, 170, 4000): the strip slides down and away
   { op: 'fade', dir: 'in', steps: 16 },
   { op: 'waitUntil', ms: 200000 },
   { op: 'end' },
