@@ -3,7 +3,8 @@
 
 Usage: python3 -I tools/ft2_export.py GAME_DIR OUT_DIR
 Writes OUT_DIR/index.json, OUT_DIR/map/<name>.json|.png, OUT_DIR/sprite/<name>.json|.png,
-OUT_DIR/data/{race,item,magic}.json, data/roster/stageNNN.json, data/battles.json.
+OUT_DIR/data/{race,item,magic}.json, data/roster/stageNNN.json, data/battles.json,
+data/eventNN.json (decoded scripts), bmp/<name>.png (all bitmaps).
 Names are lower-case stems. PNGs are 8-bit indexed with the palette and no transparency;
 the renderer applies color keys (docs/superpowers/specs/2026-10-14-rendering-foundation-design.md §5, §6).
 Exit code 1 when an error was reported. Missing referenced files are warnings.
@@ -17,7 +18,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # keep sibling imports working under -I
 from ft2_apd import parse as parse_apd  # noqa: E402
 from ft2_map import parse as parse_map  # noqa: E402
-from ft2_event_disasm import disassemble  # noqa: E402
+from ft2_event_disasm import decode_program, disassemble  # noqa: E402
 from ft2_szdd import bmp8_to_png, szdd_decompress  # noqa: E402
 from ft2_tables import item as parse_item, magic as parse_magic, race as parse_race, stage as parse_stage  # noqa: E402
 
@@ -95,6 +96,34 @@ def export_bmps(src: Path, dst: Path, report: Report) -> dict[str, tuple[int, in
         w, h = struct.unpack_from('<ii', bmp, 18)
         sizes[name] = (w, abs(h))
     return sizes
+
+
+def event_json(program: dict) -> dict:
+    """Web form of a decoded event file: symbols by name, EXT instructions flattened to their sub-opcode name."""
+    code = []
+    for ins in program["code"]:
+        code.append({"at": ins["at"], "op": ins.get("sub") or ins["op"], "args": ins["args"]})
+    return {"symbols": {name: off for name, off in program["symbols"]}, "code": code}
+
+
+def export_events(game: Path, out: Path, report: Report) -> list[int]:
+    """DATA/EVENTnn.dat → data/eventnn.json (structured decode). Returns the stage numbers."""
+    data_dir = next((p for p in game.iterdir() if p.is_dir() and p.name.lower() == 'data'), None)
+    if data_dir is None:
+        report.error('no DATA directory')
+        return []
+    (out / 'data').mkdir(parents=True, exist_ok=True)
+    stages: list[int] = []
+    for p in sorted(data_dir.iterdir()):
+        m = re.fullmatch(r'event(\d\d)\.dat', p.name.lower())
+        if not m:
+            continue
+        program = decode_program(p.read_bytes())
+        for err in program['stats']['errors']:
+            report.error(f'{p.name}: {err}')
+        (out / 'data' / f'event{m.group(1)}.json').write_text(json.dumps(event_json(program), ensure_ascii=False), encoding='utf-8')
+        stages.append(int(m.group(1)))
+    return stages
 
 
 def rect_inside(left: int, top: int, right: int, bottom: int, size: tuple[int, int]) -> bool:
@@ -243,10 +272,15 @@ def main(argv: list[str]) -> int:
     maps = export_maps(game, out, report)
     sprites = export_sprites(game, out, report)
     counts = export_data(game, out, report)
+    events = export_events(game, out, report)
+    bmp_dir = next((p for p in game.iterdir() if p.is_dir() and p.name.lower() == 'bmp'), None)
+    bmps = sorted(export_bmps(bmp_dir, out / 'bmp', report)) if bmp_dir else []
+    if bmp_dir is None:
+        report.error('no bmp directory')
     out.mkdir(parents=True, exist_ok=True)
-    (out / 'index.json').write_text(json.dumps(dict(format=FORMAT, maps=maps, sprites=sprites, data=True)), encoding='utf-8')
-    pngs = sum(1 for d in ('map', 'sprite') for _ in (out / d).glob('*.png'))
-    print(f'maps {len(maps)}, sprites {len(sprites)}, pngs {pngs}, warnings {len(report.warnings)}, errors {len(report.errors)}')
+    (out / 'index.json').write_text(json.dumps(dict(format=FORMAT, maps=maps, sprites=sprites, data=True, events=events, bmp=bmps)), encoding='utf-8')
+    pngs = sum(1 for d in ('map', 'sprite', 'bmp') for _ in (out / d).glob('*.png'))
+    print(f'maps {len(maps)}, sprites {len(sprites)}, events {len(events)}, bmp {len(bmps)}, pngs {pngs}, warnings {len(report.warnings)}, errors {len(report.errors)}')
     print(f'tables race {counts["race"]}, item {counts["item"]}, magic {counts["magic"]}, rosters {counts["rosters"]}, battles {counts["battles"]}')
     for w in report.warnings:
         print('warning:', w)

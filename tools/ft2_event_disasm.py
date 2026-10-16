@@ -220,52 +220,57 @@ def parse_symbols(data):
     return syms, pc
 
 
-def decode_operands(data, pc, spec, labels_lower, out):
-    """Decode operands per spec; append text to out; return new pc."""
+def decode_operands(data, pc, spec, labels_lower):
+    """Decode operands per spec. Returns (args, pc, info).
+
+    args: n/u -> int, s/L -> str, F -> [speaker, letter|None], V -> letter str, Z -> [int...];
+    an X (extended) operand sets info['sub'] and appends the sub-opcode's operands.
+    info: {'sub', 'unsupported', 'missing' (labels not in the table), 'skipped' (unit id 0 cut the rest)}.
+    """
+    args = []
+    info = {"sub": None, "unsupported": False, "missing": [], "skipped": False}
     for code in spec:
         if code == "n":
             v, pc = read_number(data, pc)
-            out.append(str(v))
+            args.append(v)
         elif code == "u":
             v, pc = read_number(data, pc)
-            out.append("u%d" % v if v != 24 else "u24(target)")
+            args.append(v)
             if v == 0:
                 # Unit id 0 never resolves (FUN_0041f5f0 skips empty slots), and
                 # every handler reads its remaining operands inside the
                 # `if (unit != NULL)` block, so the game skips them too.
-                out.append("; u0: rest skipped")
+                info["skipped"] = True
                 break
         elif code == "s":
             raw, pc = read_cstr(data, pc)
-            out.append(quote(raw))
+            args.append(decode_text(raw))
         elif code == "L":
             raw, pc = read_cstr(data, pc)
             name = raw.decode("ascii", "backslashreplace")
-            if name.lower() in labels_lower:
-                out.append("@" + name)
-            else:
-                out.append("@" + name + "(?)")
+            if name.lower() not in labels_lower:
+                info["missing"].append(name)
+            args.append(name)
         elif code == "F":
             v, pc = read_number(data, pc)
             if v == 0:
-                out.append("close")
+                args.append([0, None])
             else:
                 if pc + 2 > len(data):
                     raise DecodeError("face bytes past EOF at 0x%x" % pc)
                 letter, pad = data[pc], data[pc + 1]
                 pc += 2
-                out.append("spk%d" % v)
-                out.append("face'%s'" % chr(letter) if 0x20 <= letter < 0x7F else "face0x%02x" % letter)
                 if pad != 0:
-                    out.append("pad0x%02x" % pad)
+                    raise DecodeError("face pad byte 0x%02x at 0x%x" % (pad, pc - 1))
+                args.append([v, chr(letter) if 0x20 <= letter < 0x7F else "0x%02x" % letter])
         elif code == "V":
             if pc + 2 > len(data):
                 raise DecodeError("variant bytes past EOF at 0x%x" % pc)
             letter, pad = data[pc], data[pc + 1]
             pc += 2
-            out.append("var'%s'" % chr(letter) if 0x20 <= letter < 0x7F else "var0x%02x" % letter)
             if pad != 0:
-                out.append("pad0x%02x" % pad)
+                raise DecodeError("variant pad byte 0x%02x at 0x%x" % (pad, pc - 1))
+            args.append(chr(letter) if 0x20 <= letter < 0x7F else "0x%02x" % letter)
         elif code == "X":
             sub, pc = read_number(data, pc)
             ent = EXT_OPS.get(sub)
@@ -274,67 +279,81 @@ def decode_operands(data, pc, spec, labels_lower, out):
                 ent = EXT99_OPS.get(sub2)
                 if ent is None:
                     raise DecodeError("unknown ext99 sub-opcode %d" % sub2)
-                out.append(ent[0] + "(unsupported)")
+                info["unsupported"] = True
                 stats_unsupported.append(pc)
             elif ent is None:
-                out.append("UNKNOWN_EXT_%d" % sub)
                 raise DecodeError("unknown ext opcode %d" % sub)
-            else:
-                out.append(ent[0])
-            pc = decode_operands(data, pc, ent[1], labels_lower, out)
+            info["sub"] = ent[0]
+            sub_args, pc, sub_info = decode_operands(data, pc, ent[1], labels_lower)
+            args.extend(sub_args)
+            info["missing"].extend(sub_info["missing"])
+            info["skipped"] = sub_info["skipped"]
         elif code == "Z":
             items = []
             while True:
                 v, pc = read_number(data, pc)
                 if v == 0:
                     break
-                items.append(str(v))
-            out.append("[" + ", ".join(items) + "]")
+                items.append(v)
+            args.append(items)
         else:
             raise AssertionError(code)
-    return pc
+    return args, pc, info
 
 
-def disassemble(data, show_raw=False):
+SPEC_BY_NAME = {name: spec for name, spec in MAIN_OPS.values()}
+SPEC_BY_NAME.update({name: spec for name, spec in EXT_OPS.values()})
+SPEC_BY_NAME.update({name: spec for name, spec in EXT99_OPS.values()})
+
+
+def decode_program(data):
+    """Structured decode of one event file.
+
+    Returns {'symbols': [[name, offset], ...], 'body': table_end,
+             'code': [{'at', 'end', 'op', 'sub'?, 'args', 'missing'?, 'skipped'?, 'unsupported'?}, ...],
+             'stats': {'instr', 'unknown', 'db', 'errors', 'unsupported', 'missing_labels'}}.
+    'op' is the main mnemonic; an EXT instruction carries the sub-opcode name in 'sub'.
+    """
     syms, body = parse_symbols(data)
-    by_off = {}
-    for name, off in syms:
-        by_off.setdefault(off, []).append(name)
     labels_lower = {name.lower() for name, _ in syms}
-
-    lines = []
-    starts = set()
-    stats = {"instr": 0, "unknown": 0, "db": 0, "errors": [], "unsupported": 0}
+    code = []
+    stats = {"instr": 0, "unknown": 0, "db": 0, "errors": [], "unsupported": 0, "missing_labels": []}
     del stats_unsupported[:]
     pc = body
     while pc < len(data):
-        for name in by_off.get(pc, ()):
-            lines.append("%s:" % name)
         start = pc
-        starts.add(start)
         b = data[pc]
         if b != 0xFF:
-            lines.append("  0x%04x: DB 0x%02x" % (pc, b))
+            code.append({"at": start, "end": pc + 1, "op": "DB", "args": [b]})
             stats["db"] += 1
             pc += 1
             continue
         if pc + 1 >= len(data):
-            lines.append("  0x%04x: DB 0xff  ; truncated" % pc)
+            code.append({"at": start, "end": pc + 1, "op": "DB", "args": [0xFF], "truncated": True})
             stats["db"] += 1
             pc += 1
             continue
         op = data[pc + 1]
         pc += 2
-        out = []
+        ins = {"at": start, "op": None, "args": []}
         try:
             if op in MAIN_OPS:
                 name, spec = MAIN_OPS[op]
-                pc = decode_operands(data, pc, spec, labels_lower, out)
+                args, pc, info = decode_operands(data, pc, spec, labels_lower)
+                ins["args"] = args
+                if info["sub"]:
+                    ins["sub"] = info["sub"]
+                if info["missing"]:
+                    ins["missing"] = info["missing"]
+                    stats["missing_labels"].extend("0x%04x: %s" % (start, m) for m in info["missing"])
+                if info["skipped"]:
+                    ins["skipped"] = True
+                if info["unsupported"]:
+                    ins["unsupported"] = True
             elif op == 0xFF:
                 name = "END"                      # ff ff: switch default -> script end
-            elif op == 0x24 or op >= 0x40:
-                # 0x24 is handled above; any other value >= 0x40 also hits the
-                # switch default (script end) but is not used by the data files.
+            elif op >= 0x40:
+                # any value >= 0x40 hits the switch default (script end) but is not used by the data files.
                 name = "END(default op 0x%02x)" % op
                 stats["unknown"] += 1
             else:
@@ -345,16 +364,70 @@ def disassemble(data, show_raw=False):
             name = "UNKNOWN_0x%02x" % op
             stats["unknown"] += 1
             pc = len(data)  # cannot resync safely
+        ins["op"] = name
+        ins["end"] = pc
         stats["instr"] += 1
-        text = "  0x%04x: %s" % (start, name)
+        code.append(ins)
+    stats["unsupported"] = len(stats_unsupported)
+    return {"symbols": [[n, o] for n, o in syms], "body": body, "code": code, "stats": stats}
+
+
+def _format_args(ins):
+    """Text operands of one decoded instruction, in the disassembler's listing format."""
+    spec = SPEC_BY_NAME.get(ins.get("sub") or ins["op"], "")
+    out = []
+    if ins.get("sub"):
+        out.append(ins["sub"] + ("(unsupported)" if ins.get("unsupported") else ""))
+    missing = set(ins.get("missing", ()))
+    args = ins["args"]
+    for code, v in zip(spec, args):
+        if code == "n":
+            out.append(str(v))
+        elif code == "u":
+            out.append("u%d" % v if v != 24 else "u24(target)")
+            if v == 0:
+                out.append("; u0: rest skipped")
+        elif code == "s":
+            out.append('"' + v.replace("\\", "\\\\").replace('"', '\\"') + '"')
+        elif code == "L":
+            out.append("@" + v + ("(?)" if v in missing else ""))
+        elif code == "F":
+            if v[0] == 0:
+                out.append("close")
+            else:
+                out.append("spk%d" % v[0])
+                out.append("face%s" % v[1] if v[1].startswith("0x") else "face'%s'" % v[1])
+        elif code == "V":
+            out.append("var%s" % v if v.startswith("0x") else "var'%s'" % v)
+        elif code == "Z":
+            out.append("[" + ", ".join(str(x) for x in v) + "]")
+    return out
+
+
+def disassemble(data, show_raw=False):
+    prog = decode_program(data)
+    syms, body = prog["symbols"], prog["body"]
+    by_off = {}
+    for name, off in syms:
+        by_off.setdefault(off, []).append(name)
+    lines = []
+    starts = set()
+    for ins in prog["code"]:
+        for name in by_off.get(ins["at"], ()):
+            lines.append("%s:" % name)
+        starts.add(ins["at"])
+        if ins["op"] == "DB":
+            lines.append("  0x%04x: DB 0x%02x%s" % (ins["at"], ins["args"][0], "  ; truncated" if ins.get("truncated") else ""))
+            continue
+        text = "  0x%04x: %s" % (ins["at"], ins["op"])
+        out = _format_args(ins)
         if out:
             text += " " + ", ".join(out)
         if show_raw:
-            text += "   ; " + data[start:pc].hex(" ")
+            text += "   ; " + data[ins["at"]:ins["end"]].hex(" ")
         lines.append(text)
     bad_syms = [(n, o) for n, o in syms if o not in starts]
-    stats["unsupported"] = len(stats_unsupported)
-    return syms, body, lines, stats, bad_syms
+    return syms, body, lines, prog["stats"], bad_syms
 
 
 def main(argv):

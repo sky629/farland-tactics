@@ -102,5 +102,63 @@ class RosterJson(unittest.TestCase):
                                                   weapon=130, armor=0, drop_item=0, drop_gold=0)])
 
 
+from ft2_event_disasm import decode_program, disassemble
+from ft2_export import event_json
+
+
+def num(v: int) -> bytes:
+    return bytes([v & 0xFF]) if -127 <= v <= 127 else b"\x80" + v.to_bytes(4, "little", signed=True)
+
+
+def sample_script() -> bytes:
+    body = b"".join([
+        b"\xff\x29", num(2), num(0),                   # FLAG_SET 2, 0
+        b"\xff\x00", num(4), num(1), num(1),           # EXT TOWN_FLAG_SET 1, 1
+        b"\xff\x04", num(15), b"a\x00",                # MSG_TOP spk15 face 'a'
+        b"\xff\x06", "안녕_세계\x00".encode("cp949"),   # TEXT
+        b"\xff\x1f", num(0),                           # SET_DIR u0 -> rest skipped
+        b"\xff\x31", num(1), num(5), num(0),           # SHOP [1, 5]
+        b"\xff\x20", b"Next\x00",                      # JUMP @Next
+        b"\xff\xff",                                   # END
+    ])
+    table_len = len(b"begin\x00") + 4 + len(b"next\x00") + 4
+    table = b"begin\x00" + table_len.to_bytes(4, "little") + b"next\x00" + (table_len + len(body) - 2).to_bytes(4, "little")
+    return table + body
+
+
+class DecodeProgram(unittest.TestCase):
+    def test_decodes_typed_arguments_and_truncates_after_unit_zero(self):
+        p = decode_program(sample_script())
+        ops = [(i["op"], i.get("sub"), i["args"]) for i in p["code"]]
+        self.assertEqual(ops[0], ("FLAG_SET", None, [2, 0]))
+        self.assertEqual(ops[1], ("EXT", "TOWN_FLAG_SET", [1, 1]))
+        self.assertEqual(ops[2], ("MSG_TOP", None, [[15, "a"]]))
+        self.assertEqual(ops[3], ("TEXT", None, ["안녕_세계"]))
+        self.assertEqual(ops[4], ("SET_DIR", None, [0]))
+        self.assertEqual(ops[5], ("SHOP", None, [[1, 5]]))
+        self.assertEqual(ops[6], ("JUMP", None, ["Next"]))
+        self.assertEqual(ops[7], ("END", None, []))
+        self.assertEqual(p["stats"]["instr"], 8)
+        self.assertEqual(p["symbols"][0][1], p["code"][0]["at"])
+        self.assertEqual(p["symbols"][1][1], p["code"][7]["at"])
+
+    def test_disassembly_text_comes_from_the_same_decode(self):
+        syms, body, lines, stats, bad = disassemble(sample_script())
+        text = "\n".join(lines)
+        self.assertIn(": EXT TOWN_FLAG_SET, 1, 1", text)
+        self.assertIn(": MSG_TOP spk15, face'a'", text)
+        self.assertIn(": SET_DIR u0, ; u0: rest skipped", text)
+        self.assertIn(": SHOP [1, 5]", text)
+        self.assertIn(": JUMP @Next", text)
+        self.assertEqual(stats["instr"], 8)
+        self.assertEqual(bad, [])
+
+    def test_event_json_flattens_ext_ops_and_keeps_symbols(self):
+        j = event_json(decode_program(sample_script()))
+        self.assertEqual(j["symbols"]["begin"], j["code"][0]["at"])
+        self.assertEqual(j["code"][1], {"at": j["code"][1]["at"], "op": "TOWN_FLAG_SET", "args": [1, 1]})
+        self.assertNotIn("sub", j["code"][1])
+
+
 if __name__ == '__main__':
     unittest.main()
