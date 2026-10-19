@@ -26,3 +26,32 @@
 .w95-item .arrow { position: absolute; right: 6px; top: 3px; }
 .w95-item > .w95-popup { left: 100%; top: -3px; }
 .w95-sep { height: 0; margin: 3px 1px; border-top: 1px solid var(--w95-shadow); border-bottom: 1px solid var(--w95-light); }
+
+/* dialog boxes (RT_DIALOG templates, dialog.ts): caption, body with controls at template positions, modal backdrop */
+.w95-backdrop { position: absolute; inset: 0; z-index: 30; }
+.w95-dialog { position: absolute; z-index: 31; padding: 3px; }
+.w95-title { height: 18px; margin: 0 0 0 0; padding: 0 4px; background: var(--w95-sel); color: var(--w95-sel-fg); font-weight: 700; line-height: 18px; white-space: nowrap; overflow: hidden; }
+.w95-body { position: relative; }
+.w95-body > * { position: absolute; margin: 0; }
+.w95-btn { font: var(--w95-font); color: var(--w95-text); background: var(--w95-face); border: 0; padding: 0; cursor: default;
+  box-shadow: inset -1px -1px var(--w95-dark), inset 1px 1px var(--w95-light), inset -2px -2px var(--w95-shadow), inset 2px 2px var(--w95-face); }
+.w95-btn.default { outline: 1px solid var(--w95-dark); outline-offset: 0; }
+.w95-btn:active:not(:disabled) { box-shadow: inset 1px 1px var(--w95-dark), inset -1px -1px var(--w95-light), inset 2px 2px var(--w95-shadow); }
+.w95-btn:disabled { color: var(--w95-gray); text-shadow: 1px 1px var(--w95-light); }
+.w95-btn:focus-visible { outline: 1px dotted var(--w95-dark); outline-offset: -4px; }
+.w95-static { display: block; white-space: pre; overflow: hidden; line-height: 1.1; }
+.w95-static.center { text-align: center; } .w95-static.right { text-align: right; }
+.w95-static.disabled { color: var(--w95-gray); }
+.w95-edit { font: var(--w95-font); padding: 1px 3px; border: 0; outline: none; color: var(--w95-text); }
+.w95-list { overflow-y: auto; padding: 2px; cursor: default; }
+.w95-row { white-space: pre; padding: 0 2px; line-height: 1.25; }
+.w95-row.selected { background: var(--w95-sel); color: var(--w95-sel-fg); }
+.w95-row.disabled { color: var(--w95-gray); }
+.w95-check { display: flex; align-items: center; gap: 4px; white-space: nowrap; }
+.w95-check input { margin: 0; width: 13px; height: 13px; }
+.w95-group { border: 0; padding: 0; box-shadow: inset -1px -1px var(--w95-light), inset 1px 1px var(--w95-shadow), inset -2px -2px var(--w95-shadow), inset 2px 2px var(--w95-light); }
+.w95-group legend { padding: 0 2px; margin-left: 6px; background: var(--w95-face); }
+.w95-owner { background: var(--w95-face); }
+.w95-tabs { display: flex; flex-direction: column; }
+.w95-strip { left: 0; right: 0; height: 22px; display: flex; gap: 4px; align-items: center; justify-content: flex-end; padding: 0 2px; }
+.w95-strip .w95-btn { height: 18px; padding: 0 8px; }

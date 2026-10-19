@@ -22,6 +22,10 @@ import { menuEnabled } from '../ui/menuEnabled';
 import '../ui/win/theme.css';
 import { accelOf, MenuBar, menuModel, type MenuTemplate } from '../ui/win/menubar';
 import { PopupMenu, unitPopupItems, type PopupItem } from '../ui/win/popup';
+import type { DialogHost } from '../ui/win/dialog';
+import { confirm } from '../ui/win/screens/confirm';
+import { pickSave } from '../ui/win/screens/saves';
+import { titleDialog } from '../ui/win/screens/title';
 import { frameScale, MENU_BAR_H } from '../viewer/scale';
 
 const $ = <T extends HTMLElement>(id: string): T => { const el = document.getElementById(id); if (!el) throw new Error(`missing element #${id}`); return el as T; };
@@ -57,9 +61,10 @@ function resize(): void {
 function menuCommand(id: number): void {
   if (!core || !stage) return;
   switch (id) {
-    case 40009: if (core.battle) core.dispatch({ type: 'endTurn' }); break;                          // 턴 종료 F10
-    case 40028: void refreshSaves().then(() => dialogueRef?.openLoad(saveList, loadHandlersRef!)); break;   // 불러오기 F1
-    case 40029: dialogueRef?.openSaveSlots(saveList, (slot) => core!.save(slot)); break;               // 저장하기 F5
+    case 40009: if (core.battle && dialogHost) void confirm(dialogHost, '턴을 종료해도 좋습니까?').then((yes) => { if (yes && core?.battle) core.dispatch({ type: 'endTurn' }); }); break;   // 턴 종료 F10 — the original asks (string 0x44ba98)
+    case 40028: void openLoadDialog(); break;                                                             // 불러오기 F1
+    case 40029: if (dialogHost) void refreshSaves().then(() => pickSave(dialogHost!, saveList, 'save')).then((p) => { if (p && 'slot' in p) core?.save(p.slot); }); break;   // 저장하기 F5
+    case 40004: if (dialogHost) void confirm(dialogHost, '게임을 종료합니까?').then((yes) => { if (yes) location.reload(); }); break;   // 게임종료 (the web's exit is the title page)
     case 40010: dialogueRef?.openParty({ tables: tablesRef!, inventory: core.campaign.inventory, party: core.campaign.units.slice(0, PARTY_SLOTS) }); break;   // 유니트 일람 F2
     case 40003: if (document.fullscreenElement) void document.exitFullscreen(); else void $('stage').requestFullscreen?.(); break;   // 전체 화면 F4
     case 40032: if (core.battle) dialogueRef?.openModal('message', `${core.battle.state.entry.episode} — ${core.battle.state.entry.objective}`, { tables: tablesRef!, inventory: core.campaign.inventory, party: core.campaign.units.slice(0, PARTY_SLOTS) }); break;   // 클리어 조건
@@ -69,9 +74,46 @@ function menuCommand(id: number): void {
 /** Which menu items are live right now: 턴 종료 only in our battle phase; 클리어 조건 only in a battle; the rest of the system menu waits for its dialogs. */
 function menuFlags(): Record<number, boolean> {
   const b = core?.battle ?? null;
-  return { 40009: b !== null && menuEnabled(b.state, tablesRef?.item ?? []).endTurn, 40032: b !== null, 40030: false, 40012: false, 40004: false };
+  return { 40009: b !== null && menuEnabled(b.state, tablesRef?.item ?? []).endTurn, 40032: b !== null, 40030: false, 40012: false };
 }
-let dialogueRef: Dialogue | null = null; let tablesRef: Tables | null = null; let loadHandlersRef: Parameters<Dialogue['openLoad']>[1] | null = null; let menuRef: MenuTemplate | null = null;
+let dialogueRef: Dialogue | null = null; let tablesRef: Tables | null = null; let menuRef: MenuTemplate | null = null; let dialogHost: DialogHost | null = null;
+
+/** Dialog 143 in load mode with the web's save-file tools; a pick loads, 처음부터 starts a new game. Returns whether the title should stay. */
+async function openLoadDialog(): Promise<boolean> {
+  if (!dialogHost || !saves || !core || !stage) return true;
+  await refreshSaves();
+  const p = await pickSave(dialogHost, saveList, 'load', {
+    onExport: (slot) => { void saves!.read(slot).then((bytes) => { if (!bytes) return; const url = URL.createObjectURL(new Blob([bytes.slice().buffer])); const a = Object.assign(document.createElement('a'), { href: url, download: SaveStore.fileName(slot) }); a.click(); URL.revokeObjectURL(url); }); },
+    onImport: (file) => { void importSave(file); },
+    onDelete: (slot) => { void saves!.remove(slot).then(refreshSaves).then(() => openLoadDialog()).then((stay) => { if (stay && core?.mode === 'ended') void showTitle(); }); },
+  });
+  if (!p) return true;
+  if ('fresh' in p) { startNew(); return false; }
+  stage.unlockAudio();
+  const bytes = await saves.read(p.slot);
+  if (bytes && core.loadGame(bytes)) { $('title').hidden = true; $('error').textContent = ''; return false; }
+  return true;
+}
+async function importSave(file: File): Promise<void> {
+  if (!saves || !dialogHost) return;
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  const free = saveList.findIndex((s) => s === null);
+  const into = free >= 0 ? { slot: free } : await pickSave(dialogHost, saveList, 'save');   // every slot used: pick one to overwrite
+  if (!into || !('slot' in into)) return;
+  try { const sum = await saves.importBytes(into.slot, bytes); await refreshSaves(); log('info', `${SaveStore.fileName(into.slot)} ← ${file.name} (${sum.title})`); } catch (e) { showError(e); }
+  if (core?.mode === 'ended') void showTitle();
+}
+function startNew(): void { stage!.unlockAudio(); $('title').hidden = true; $('error').textContent = ''; core!.newGame(); }
+/** The title picture with dialog 124 over it: 게임 개시 or 불러오기 (back to the dialog when loading is cancelled). */
+async function showTitle(): Promise<void> {
+  if (!dialogHost) return;
+  $('title').hidden = false;
+  for (;;) {
+    const c = await titleDialog(dialogHost);
+    if (c === 'new') { startNew(); return; }
+    if (!(await openLoadDialog())) return;
+  }
+}
 
 let lastFrameError = '';
 /** Volume controls: 0..100 sliders and a mute box, remembered per browser. */
@@ -94,7 +136,7 @@ function frame(now: number): void {
     if (core && stage) {
       core.frame(now);
       if (menuBar && menuRef) { const flags = menuFlags(), sig = JSON.stringify(flags); if (sig !== menuSig) { menuSig = sig; menuBar.setModel(menuModel(menuRef, flags, dev)); } }
-      if (core.mode === 'ended' && !endedShown) { endedShown = true; stage.hideTown(); $('title').hidden = false; }   // the ending (or a game over with nowhere to go) returns to the title
+      if (core.mode === 'ended' && !endedShown) { endedShown = true; stage.hideTown(); void showTitle(); }   // the ending (or a game over with nowhere to go) returns to the title
       if (core.mode !== 'ended') endedShown = false;
       if (!audioNoted && stage.audioTried) { audioNoted = true; const note = $('audioNote'); const text = synthNotice(stage.musicFailure); note.hidden = text === null; note.textContent = text ?? ''; }
       stage.cellMode = core.mode === 'battle';
@@ -149,7 +191,7 @@ async function boot(): Promise<void> {
     stage = new BrowserStage(canvas, renderer, assets, bitmaps, dialogue, sprites, tables, {
       onCell: (cell) => { if (!core?.battle) return; for (const cmd of cellCommands(core.battle.state, cell)) { core.dispatch(cmd); if (core.lastEvents.some((e) => e.type === 'rejected')) break; } },   // one click may be several commands: stop at the first the rules refuse
       onTownClick: (i) => core?.townSelect(i),
-      onTownMenu: () => dialogue.openParty({ tables, inventory: core!.campaign.inventory, party: core!.campaign.units.slice(0, PARTY_SLOTS) }, { onSave: () => dialogue.openSaveSlots(saveList, (slot) => core!.save(slot)) }),
+      onTownMenu: () => dialogue.openParty({ tables, inventory: core!.campaign.inventory, party: core!.campaign.units.slice(0, PARTY_SLOTS) }),
       onCancel: () => core?.dispatch({ type: 'cancel' }),
       onBattleMenu: (cell, at) => {                                           // the original's right-click popup: the unit's entries over the 맵 menu's own
         if (!core?.battle || !popup || !menuRef) return;
@@ -175,42 +217,16 @@ async function boot(): Promise<void> {
     if (ui) {
       const model = menuModel(ui.menu, menuFlags(), dev); menuRef = ui.menu; menuSig = JSON.stringify(menuFlags());
       menuBar = new MenuBar($('menubar'), model, menuCommand); popup = new PopupMenu($('win'));
+      dialogHost = { layer: $('win'), templates: ui.dialogs }; dialogue.attach(dialogHost);
       document.addEventListener('keydown', (e) => {                            // the original's accelerators: F1 불러오기, F2 유니트 일람, F4 전체 화면, F5 저장, F10 턴 종료 …
         if (e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement || e.target instanceof HTMLTextAreaElement) return;
         const id = accelOf(menuModel(ui.menu, menuFlags(), dev), e.key, e.ctrlKey || e.metaKey);
         if (id !== null) { e.preventDefault(); menuCommand(id); }
       });
     }
-    $('newGame').addEventListener('click', () => { stage!.unlockAudio(); $('title').hidden = true; $('error').textContent = ''; core!.newGame(); });
     document.addEventListener('visibilitychange', () => { if (!document.hidden) stage?.resumeAudio(); });
     await refreshSaves();
-    const loadHandlers = {
-      onPick: async (slot: number) => { stage!.unlockAudio(); const bytes = await saves!.read(slot); if (bytes && core!.loadGame(bytes)) { $('title').hidden = true; $('error').textContent = ''; } },
-      onExport: async (slot: number) => {
-        const bytes = await saves!.read(slot);
-        if (!bytes) return;
-        const url = URL.createObjectURL(new Blob([bytes.slice().buffer]));
-        const a = Object.assign(document.createElement('a'), { href: url, download: SaveStore.fileName(slot) });
-        a.click(); URL.revokeObjectURL(url);
-      },
-      onImport: async (file: File) => {
-        const bytes = new Uint8Array(await file.arrayBuffer());
-        const into = async (slot: number) => {
-          try {
-            const sum = await saves!.importBytes(slot, bytes);
-            await refreshSaves();
-            log('info', `${SaveStore.fileName(slot)} ← ${file.name} (${sum.title})`);
-            dialogue.openLoad(saveList, loadHandlers);
-          } catch (e) { showError(e); }
-        };
-        const free = saveList.findIndex((s) => s === null);
-        if (free >= 0) await into(free);
-        else dialogue.openSaveSlots(saveList, (slot) => void into(slot));     // every slot used: pick one to overwrite
-      },
-      onDelete: async (slot: number) => { await saves!.remove(slot); await refreshSaves(); dialogue.openLoad(saveList, loadHandlers); },
-    };
-    loadHandlersRef = loadHandlers;
-    $('loadGame').addEventListener('click', () => { void refreshSaves().then(() => dialogue.openLoad(saveList, loadHandlers)); });
+    void showTitle();
     void bitmaps.load('title');
   } catch (e) { showError(e); }
 }

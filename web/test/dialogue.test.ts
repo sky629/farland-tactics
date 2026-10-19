@@ -52,26 +52,13 @@ describe('Dialogue', () => {
     expect(dlg.takeClick()).toBe(true);
     expect(dlg.takeClick()).toBe(false);
   });
-  it('ask modal: 예 → 1, 아니오 → 0; the result is read once', () => {
-    const { root, dlg, ctx } = setup();
-    dlg.openModal('ask', '사겠는가?', ctx);
-    expect(dlg.takeModalResult()).toBeNull();
-    root.find('예')!.click();
-    expect(dlg.takeModalResult()).toBe(1);
-    expect(dlg.takeModalResult()).toBeNull();
-    expect(el(dlg.modal).hidden).toBe(true);
-    dlg.openModal('ask', '또?', ctx);
-    root.find('아니오')!.click();
-    expect(dlg.takeModalResult()).toBe(0);
-  });
-  it('message closes with 0, a cancelled save answers −1, result lists gold and level-ups', () => {
+  it('message closes with 0; ask and save need the original dialogs attached (dialog 126 / 143 — browser-verified)', () => {
     const { root, dlg, ctx } = setup();
     dlg.openModal('message', '잘 있거라', ctx);
     root.find('닫기')!.click();
     expect(dlg.takeModalResult()).toBe(0);
-    dlg.openModal('save', -1, ctx);                                            // no slot list given: all 32 empty
-    root.find('취소')!.click();
-    expect(dlg.takeModalResult()).toBe(-1);
+    expect(() => dlg.openModal('ask', '사겠는가?', ctx)).toThrow(/dialogs not attached/);
+    expect(() => dlg.openModal('save', -1, ctx)).toThrow(/dialogs not attached/);
   });
   it('result modal: gold, then the EXP pool shared out — opens on the equalizing split, 균등 splits evenly, ± moves ten points within the pool, 확인 adds the shares to the units → 0', () => {
     const { root, dlg, ctx } = setup();
@@ -149,52 +136,6 @@ describe('Dialogue', () => {
     list[5] = BROKEN_SUMMARY;
     return list;
   };
-  it('save slot modal: an empty slot answers its number; a used slot asks to overwrite first; 취소 → −1', () => {
-    const { root, dlg, ctx } = setup();
-    ctx.saves = slotList();
-    dlg.openModal('save', -1, ctx);
-    expect(root.find('02 첫업무')).not.toBeNull();
-    expect(root.find('350 Gold')).not.toBeNull();
-    root.find('00 비어 있음')!.click();
-    expect(dlg.takeModalResult()).toBe(0);
-    dlg.openModal('save', -1, ctx);
-    root.find('02 첫업무')!.click();
-    expect(dlg.takeModalResult()).toBeNull();                                  // not yet: confirm overwrite
-    root.find('덮어쓰기')!.click();
-    expect(dlg.takeModalResult()).toBe(2);
-    dlg.openModal('save', -1, ctx);
-    root.find('취소')!.click();
-    expect(dlg.takeModalResult()).toBe(-1);
-  });
-  it('load modal: only used slots can be picked, each has 내보내기, and a file can be imported', () => {
-    const { root, dlg } = setup();
-    const picked: number[] = [], exported: number[] = [];
-    dlg.openLoad(slotList(), { onPick: (s) => picked.push(s), onExport: (s) => exported.push(s), onImport: () => {} });
-    expect(el(root.find('00 비어 있음')!).disabled).toBe(true);
-    expect(el(root.find('05 손상됨')!).disabled).toBe(true);                   // a broken slot cannot be loaded
-    expect(root.find('스테이지 0')).toBeNull();                                  // and shows no summary
-    root.find('02 첫업무')!.click();
-    expect(picked).toEqual([2]);
-    root.find('내보내기')!.click();
-    expect(exported).toEqual([2]);
-    expect(root.find('가져오기')).not.toBeNull();
-    root.find('닫기')!.click();
-    expect(el(dlg.modal).hidden).toBe(true);
-  });
-  it('the party menu offers 저장, which opens the slot picker through the page callback; the load modal can delete a slot', () => {
-    const { root, dlg, ctx } = setup();
-    let saved = 0;
-    dlg.openParty(ctx, { onSave: () => { saved++; } });
-    root.find('저장')!.click();
-    expect(saved).toBe(1);
-    const picked: number[] = [], deleted: number[] = [];
-    dlg.openSaveSlots(slotList(), (s) => picked.push(s));
-    root.find('00 비어 있음')!.click();
-    expect(picked).toEqual([0]);
-    dlg.openLoad(slotList(), { onPick: () => {}, onExport: () => {}, onImport: () => {}, onDelete: (s) => deleted.push(s) });
-    root.find('삭제')!.click();
-    expect(deleted).toEqual([2]);
-  });
   it('closeAll hides windows, modal and episode title', () => {
     const { dlg, ctx } = setup();
     dlg.openWindow('top', 1, null); dlg.openModal('message', 'x', ctx); dlg.showEpisode('제1화');

@@ -8,6 +8,9 @@ import type { Tables } from '../data/types';
 import type { SaveSummary } from '../save/format';
 import type { ModalKind, Where } from '../script/host';
 import { itemName, unitName } from './panel';
+import type { DialogHost } from './win/dialog';
+import { confirm } from './win/screens/confirm';
+import { pickSave } from './win/screens/saves';
 
 /** One piece of a TEXT line with the size/color the `[Snn]`/`[Cnn]` tags before it set (null = default). */
 export interface TextRun { text: string; size: number | null; color: number | null }
@@ -28,11 +31,7 @@ export function parseTextTags(line: string): TextRun[] {
 
 /** What the modals need from the game: item/race names, the shared inventory, the party for equipment purchases. */
 export interface ModalContext { tables: Tables; inventory: Inventory; party: (Unit | null)[]; saves?: (SaveSummary | null)[] }
-export interface LoadHandlers { onPick(slot: number): void; onExport(slot: number): void; onImport(file: File): void; onDelete?(slot: number): void }
 
-const two = (n: number) => String(n).padStart(2, '0');
-const slotLabel = (i: number, s: SaveSummary | null): string => `${two(i)} ${s ? (s.broken ? '손상됨' : s.title || '(제목 없음)') : '비어 있음'}`;
-const dateText = (d: Date | null): string => (d ? `${d.getFullYear()}-${two(d.getMonth() + 1)}-${two(d.getDate())} ${two(d.getHours())}:${two(d.getMinutes())}` : '');
 interface ResultPayload { gold: number; pool: number }
 
 const BUY_TEXT: Record<ReturnType<typeof buy>, string> = { ok: '샀다.', 'no gold': '골드가 부족하다.', full: '더 가질 수 없다.', 'unknown item': '그런 물건은 없다.' };
@@ -48,6 +47,7 @@ export class Dialogue {
   private readonly parts: Record<Where, { face: HTMLImageElement; name: HTMLElement; lines: HTMLElement }>;
   private clicks = 0;
   private result: number | null = null;
+  private dialogs: DialogHost | null = null;   // the original's dialog boxes (ask 126, save 143) once the templates are loaded
   private episodeTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(private readonly doc: Document, root: HTMLElement, private readonly faceUrl: (speaker: number, letter: string) => string | null) {
@@ -79,6 +79,8 @@ export class Dialogue {
     return b;
   }
 
+  /** The dialog templates and the frame layer for the Win95 boxes; ASK and SAVE_GAME wait until they are attached. */
+  attach(host: DialogHost): void { this.dialogs = host; }
   face(where: Where): HTMLImageElement { return this.parts[where].face; }
   lines(where: Where): HTMLElement { return this.parts[where].lines; }
 
@@ -113,8 +115,8 @@ export class Dialogue {
     const close = (value: number) => (): void => { this.result = value; box.hidden = true; };
     switch (kind) {
       case 'message': box.append(this.el('div', 'text', String(payload)), this.button('닫기', close(0))); break;
-      case 'ask': { const row = this.el('div', 'row'); row.append(this.button('예', close(1)), this.button('아니오', close(0))); box.append(this.el('div', 'text', String(payload)), row); break; }
-      case 'save': this.slotPicker(ctx.saves ?? [], (slot) => { this.result = slot; box.hidden = true; }, close(-1)); break;
+      case 'ask': { if (!this.dialogs) throw new Error('dialogs not attached'); void confirm(this.dialogs, String(payload)).then((yes) => { this.result = yes ? 1 : 0; }); return; }   // dialog 126 확인
+      case 'save': { if (!this.dialogs) throw new Error('dialogs not attached'); void pickSave(this.dialogs, ctx.saves ?? [], 'save').then((p) => { this.result = p && 'slot' in p ? p.slot : -1; }); return; }   // dialog 143 데이터 선택
       case 'result': this.battleResult(payload as ResultPayload, ctx, close(0)); break;
       case 'shop': this.shop(payload as number[], ctx, close(1)); break;
     }
@@ -177,7 +179,7 @@ export class Dialogue {
   }
 
   /** Town right click (spec §9): every party member with level, HP/MP, equipment and bag; 장착/해제 go through equipment.ts, 팔기 through shop.ts. */
-  openParty(ctx: ModalContext, extra: { onSave?: () => void; onClose?: () => void } = {}): void {
+  openParty(ctx: ModalContext, extra: { onClose?: () => void } = {}): void {
     this.result = null;
     const box = this.modal, items = ctx.tables.item;
     const name = (id: number) => (id === 0 ? '—' : itemName(items[id]!));
@@ -205,61 +207,10 @@ export class Dialogue {
         box.appendChild(row);
       }
       const row = this.el('div', 'row');
-      if (extra.onSave) row.appendChild(this.button('저장', () => { box.hidden = true; extra.onSave!(); }));
       row.appendChild(this.button('닫기', () => { if (extra.onClose) extra.onClose(); else box.hidden = true; }));
       box.appendChild(row);
     };
     render();
-    box.hidden = false;
-  }
-
-  /** The slot picker opened by the page (party menu 저장, import into a used slot): the choice goes to a callback, not to a script. */
-  openSaveSlots(saves: (SaveSummary | null)[], onPick: (slot: number) => void): void {
-    this.result = null;
-    this.modal.replaceChildren();
-    this.slotPicker(saves, (slot) => { this.modal.hidden = true; onPick(slot); }, () => { this.modal.hidden = true; });
-    this.modal.hidden = false;
-  }
-
-  /** SAVE_GAME with no slot (dialog 0x8F): 32 rows; a used slot asks before it is overwritten. */
-  private slotPicker(saves: (SaveSummary | null)[], pick: (slot: number) => void, cancel: () => void): void {
-    const box = this.modal;
-    const confirm = this.el('div', 'row');
-    const list = this.el('div', 'slots');
-    for (let i = 0; i < 32; i++) {
-      const s = saves[i] ?? null;
-      list.append(this.button(slotLabel(i, s), () => {
-        if (!s) { pick(i); return; }
-        confirm.replaceChildren(this.el('span', 'text', `${two(i)} 슬롯을 덮어쓸까?`), this.button('덮어쓰기', () => pick(i)), this.button('아니오', () => confirm.replaceChildren()));
-      }), this.slotInfo(s));
-    }
-    box.append(this.el('div', 'title', '저장할 슬롯'), list, confirm, this.button('취소', cancel));
-  }
-  private slotInfo(s: SaveSummary | null): HTMLElement {
-    const info = this.el('div', 'info');
-    if (s && !s.broken) info.append(this.el('span', 'date', dateText(s.date)), this.el('span', 'gold', `${s.gold} Gold`), this.el('span', 'stage', `스테이지 ${s.stage}`));
-    return info;
-  }
-
-  /** Title screen: pick a used slot to load, export any used slot as save%02d.dat, import a .dat into the first free slot. */
-  openLoad(saves: (SaveSummary | null)[], h: LoadHandlers): void {
-    this.result = null;
-    const box = this.modal;
-    box.replaceChildren(this.el('div', 'title', '불러오기'));
-    const list = this.el('div', 'slots');
-    for (let i = 0; i < 32; i++) {
-      const s = saves[i] ?? null;
-      const b = this.button(slotLabel(i, s), () => { box.hidden = true; h.onPick(i); });
-      if (!s || s.broken) (b as HTMLButtonElement).disabled = true;                 // a broken slot cannot be loaded; it can still be exported or deleted
-      const info = this.slotInfo(s);
-      if (s) { info.appendChild(this.button('내보내기', () => h.onExport(i))); if (h.onDelete) info.appendChild(this.button('삭제', () => h.onDelete!(i))); }
-      list.append(b, info);
-    }
-    const file = this.doc.createElement('input') as HTMLInputElement;
-    file.type = 'file'; file.accept = '.dat'; file.className = 'file';
-    const row = this.el('div', 'row');
-    row.append(file, this.button('가져오기', () => { const f = file.files?.[0]; if (f) h.onImport(f); }));
-    box.append(list, row, this.button('닫기', () => { box.hidden = true; }));
     box.hidden = false;
   }
 
