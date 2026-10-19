@@ -14,6 +14,7 @@ import type { Unit } from '../../battle/unit';
 import type { Tables } from '../../data/types';
 import { unitName } from '../panel';
 import { buildMenuList, mnemonicItem, type MenuItem } from './menubar';
+import { FACILITY_BASE } from './commands';
 
 export interface PopupItem extends MenuItem { cmd?: Command; items?: PopupItem[] }
 
@@ -31,6 +32,19 @@ export function unitPopupItems(u: Unit, inv: Inventory, tables: Tables): PopupIt
     { label: `${name}의 행동`, ul: -1, key: null, accel: `(HP:${u.hp}/${u.hpMax})`, id: 102, enabled: !u.moved && !helpless, separator: false, cmd: { type: 'beginMove' } },
     { label: `${name}의 마법/특기`, ul: -1, key: null, accel: `(MP:${u.mp}/${u.mpMax})`, id: null, enabled: !u.acted && !helpless && u.status !== 6 && spells.length > 0, separator: false, items: spells },
     { ...tool, id: null, enabled: !u.acted && !helpless && items.length > 0, separator: false, items },
+    { label: '-', ul: -1, key: null, accel: null, id: null, enabled: false, separator: true },
+  ];
+}
+
+/**
+ * The town's right-click popup (FUN_0042b620): '이동하다(&M)' ▸ the facilities the town flags open (hotspot table order, command
+ * 7000 + index), then a separator; the caller appends the 시스템 popup's items (갈 수 있는 장소 표시, 유니트 일람, 전 화면 표시, 시스템 ▸).
+ */
+export function townPopupItems(hotspots: { name: string }[], flags: number[]): PopupItem[] {
+  const open = hotspots.map((h, i) => ({ h, i })).filter(({ i }) => (flags[i] ?? 0) !== 0);
+  const places: PopupItem[] = open.map(({ h, i }) => ({ label: h.name, ul: -1, key: null, accel: null, id: FACILITY_BASE + i, enabled: true, separator: false, cmd: { type: 'cancel' } }));
+  return [
+    { ...mnemonicItem('이동하다(&M)'), id: null, enabled: places.length > 0, separator: false, items: places },
     { label: '-', ul: -1, key: null, accel: null, id: null, enabled: false, separator: true },
   ];
 }

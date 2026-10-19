@@ -21,7 +21,9 @@ import { Panel } from '../ui/panel';
 import { menuEnabled } from '../ui/menuEnabled';
 import '../ui/win/theme.css';
 import { accelOf, MenuBar, menuModel, type MenuTemplate } from '../ui/win/menubar';
-import { PopupMenu, unitPopupItems, type PopupItem } from '../ui/win/popup';
+import { PopupMenu, townPopupItems, unitPopupItems, type PopupItem } from '../ui/win/popup';
+import { menuAction } from '../ui/win/commands';
+import { HOTSPOTS } from '../town/town';
 import type { DialogHost } from '../ui/win/dialog';
 import { confirm } from '../ui/win/screens/confirm';
 import { pickSave } from '../ui/win/screens/saves';
@@ -60,20 +62,24 @@ function resize(): void {
   $('frame').style.transform = `scale(${k})`;
 }
 
-/** Menu 103 → actions. Items without an action yet are disabled in `menuFlags`. */
+/** Menu 103 and the popups' command ids → actions (commands.ts). */
 function menuCommand(id: number): void {
   if (!core || !stage) return;
-  switch (id) {
-    case 40009: if (core.battle && dialogHost) void confirm(dialogHost, '턴을 종료해도 좋습니까?').then((yes) => { if (yes && core?.battle) core.dispatch({ type: 'endTurn' }); }); break;   // 턴 종료 F10 — the original asks (string 0x44ba98)
-    case 40028: void openLoadDialog(); break;                                                             // 불러오기 F1
-    case 40029: if (dialogHost) void refreshSaves().then(() => pickSave(dialogHost!, saveList, 'save')).then((p) => { if (p && 'slot' in p) core?.save(p.slot); }); break;   // 저장하기 F5
-    case 40004: if (dialogHost) void confirm(dialogHost, '게임을 종료합니까?').then((yes) => { if (yes) location.reload(); }); break;   // 게임종료 (the web's exit is the title page)
-    case 40010: if (dialogHost) void unitList(dialogHost, { tables: tablesRef!, inventory: core.campaign.inventory, party: core.campaign.units.slice(0, PARTY_SLOTS) }); break;   // 유니트 일람 F2 (dialog 107)
-    case 40003: settings = { ...settings, fullscreen: !document.fullscreenElement }; applySettings(); break;   // 전체 화면 F4
-    case 40012: if (dialogHost) void settingsDialog(dialogHost, settings, synthNotice(stage.musicFailure) ?? 'MIDI: 사운드폰트 합성 (FluidR3Mono_GM)').then((s) => { if (s) { settings = s; applySettings(); } }); break;   // 환경설정 F11 (dialog 156)
-    case 107: if (dialogHost && midiTracks.length > 0) { const names = midiTracks.map((n) => `BGM ${String(n).padStart(2, '0')}`); void bgmDialog(dialogHost, names).then((name) => { const i = name ? names.indexOf(name) : -1; if (i >= 0) stage?.playMusic(midiTracks[i]!); }); } break;   // BGM 선택 (dialog 160, offered once the game is complete)
-    case 40032: if (core.battle) dialogueRef?.openModal('message', `${core.battle.state.entry.episode} — ${core.battle.state.entry.objective}`, { tables: tablesRef!, inventory: core.campaign.inventory, party: core.campaign.units.slice(0, PARTY_SLOTS) }); break;   // 클리어 조건
-    default: break;
+  const act = menuAction(id);
+  if (act === null) return;
+  if (typeof act === 'object') { core.townSelect(act.facility); return; }                               // 이동하다 ▸ a facility
+  switch (act) {
+    case 'endTurn': if (core.battle && dialogHost) void confirm(dialogHost, '턴을 종료해도 좋습니까?').then((yes) => { if (yes && core?.battle) core.dispatch({ type: 'endTurn' }); }); break;   // F10 — the original asks (string 0x44ba98)
+    case 'load': void openLoadDialog(); break;                                                                 // F1
+    case 'save': if (dialogHost) void refreshSaves().then(() => pickSave(dialogHost!, saveList, 'save')).then((p) => { if (p && 'slot' in p) core?.save(p.slot); }); break;   // F5
+    case 'unitList': if (dialogHost) void unitList(dialogHost, { tables: tablesRef!, inventory: core.campaign.inventory, party: core.campaign.units.slice(0, PARTY_SLOTS) }); break;   // F2 (dialog 107)
+    case 'fullscreen': settings = { ...settings, fullscreen: !document.fullscreenElement }; applySettings(); break;   // F4
+    case 'settings': if (dialogHost) void settingsDialog(dialogHost, settings, synthNotice(stage.musicFailure) ?? 'MIDI: 사운드폰트 합성 (FluidR3Mono_GM)').then((s) => { if (s) { settings = s; applySettings(); } }); break;   // F11 (dialog 156)
+    case 'bgm': if (dialogHost && midiTracks.length > 0) { const names = midiTracks.map((n) => `BGM ${String(n).padStart(2, '0')}`); void bgmDialog(dialogHost, names).then((name) => { const i = name ? names.indexOf(name) : -1; if (i >= 0) stage?.playMusic(midiTracks[i]!); }); } break;   // dialog 160
+    case 'objective': if (core.battle) dialogueRef?.openModal('message', `${core.battle.state.entry.episode} — ${core.battle.state.entry.objective}`, { tables: tablesRef!, inventory: core.campaign.inventory, party: core.campaign.units.slice(0, PARTY_SLOTS) }); break;   // 클리어 조건
+    case 'quit': if (dialogHost) void confirm(dialogHost, '게임을 종료합니까?').then((yes) => { if (yes) location.reload(); }); break;   // 게임종료: the web's exit is the title page
+    case 'showPlaces': stage.toggleTownHighlights(); break;                                               // 갈 수 있는 장소 표시
+    case 'fullMap': break;                                                                                 // 전체 맵 F3: the original's screen is not recovered — disabled in menuFlags
   }
 }
 /** Which menu items are live right now: 턴 종료 only in our battle phase; 클리어 조건 only in a battle; the rest of the system menu waits for its dialogs. */
@@ -198,7 +204,11 @@ async function boot(): Promise<void> {
     stage = new BrowserStage(canvas, renderer, assets, bitmaps, dialogue, sprites, tables, {
       onCell: (cell) => { if (!core?.battle) return; for (const cmd of cellCommands(core.battle.state, cell)) { core.dispatch(cmd); if (core.lastEvents.some((e) => e.type === 'rejected')) break; } },   // one click may be several commands: stop at the first the rules refuse
       onTownClick: (i) => core?.townSelect(i),
-      onTownMenu: () => { if (dialogHost) void unitList(dialogHost, { tables, inventory: core!.campaign.inventory, party: core!.campaign.units.slice(0, PARTY_SLOTS) }); },   // the town's right click opens the original's 시스템 popup in Task 8; the unit list stands in until then
+      onTownMenu: (at) => {                                                   // FUN_0042b620: 이동하다 ▸ the open facilities over the 시스템 popup
+        if (!popup || !menuRef || !stage) return;
+        const items: PopupItem[] = [...townPopupItems(HOTSPOTS, stage.townFlags ?? []), ...(currentMenu().popups['시스템']?.items ?? [])];
+        void popup.open(at.x, at.y, items).then((pick) => { if (pick && pick.id !== null) menuCommand(pick.id); });
+      },
       onCancel: () => core?.dispatch({ type: 'cancel' }),
       onBattleMenu: (cell, at) => {                                           // the original's right-click popup: the unit's entries over the 맵 menu's own
         if (!core?.battle || !popup || !menuRef) return;

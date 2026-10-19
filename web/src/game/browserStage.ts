@@ -34,7 +34,7 @@ const nn = (n: number): string => String(n).padStart(2, '0');
 export interface StageHooks {
   onCell(cell: [number, number]): void;        // battle mode: a map cell was clicked
   onTownClick(i: number): void;                // town mode: facility i was clicked
-  onTownMenu(): void;                          // town mode: right click → party menu (spec §9)
+  onTownMenu(at: { x: number; y: number }): void;   // town mode: right click → the original's popup (FUN_0042b620) at that surface point
   onBattleMenu(cell: [number, number] | null, at: { x: number; y: number }): void;   // battle mode: right click with no selection in progress → the original's popup (FUN_00430c80) at that surface point
   onCancel(): void;                            // right click while a range shows / Escape
   modalContext(): ModalContext;
@@ -154,7 +154,7 @@ export class BrowserStage implements Stage {
     const c = this.canvas;
     c.addEventListener('contextmenu', (e) => {
       e.preventDefault();
-      if (this.town) { this.hooks.onTownMenu(); return; }
+      if (this.town) { this.hooks.onTownMenu(this.canvasPoint(e)); return; }
       const choosing = this.phase?.kind === 'player' && this.phase.sel.mode !== 'idle' && this.phase.sel.mode !== 'menu';
       if (this.cellMode && !choosing && !this.player.playing) { const p = this.canvasPoint(e); this.hooks.onBattleMenu(this.cellAt(p), p); } else this.hooks.onCancel();
     });
@@ -321,6 +321,9 @@ export class BrowserStage implements Stage {
     townLayers(set, extra).forEach((name, i) => this.sheet(name, i));          // start loading
   }
   hideTown(): void { this.town = null; this.canvas.style.cursor = 'default'; }
+  get townFlags(): number[] | null { return this.town?.flags ?? null; }
+  /** Menu 40035 "갈 수 있는 장소 표시": every open facility highlighted (the same toggle as a click on an empty spot, 0x9c63). */
+  toggleTownHighlights(): void { if (this.town) this.town.showAll = !this.town.showAll; }
   writeSave(slot: number, bytes: Uint8Array): void { this.hooks.writeSave(slot, bytes); }
   log(kind: 'warn' | 'info', text: string): void { this.hooks.log(kind, text); }
 }
