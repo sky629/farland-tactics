@@ -3,7 +3,8 @@ import { emptyInventory, giveItem } from '../src/battle/inventory';
 import { BattleGrid } from '../src/battle/grid';
 import { RangeTable } from '../src/battle/moveRange';
 import type { BattleState } from '../src/battle/types';
-import { describeHit, menuEnabled, Panel, unitName } from '../src/ui/panel';
+import { describeHit, Panel, unitName } from '../src/ui/panel';
+import { menuEnabled } from '../src/ui/menuEnabled';
 import { fixedRng, flatMap, tables, unit, units } from './helpers/battleFixtures';
 import { fakeDocument, type FakeElement } from './helpers/fakeDom';
 

@@ -35,7 +35,8 @@ export interface StageHooks {
   onCell(cell: [number, number]): void;        // battle mode: a map cell was clicked
   onTownClick(i: number): void;                // town mode: facility i was clicked
   onTownMenu(): void;                          // town mode: right click → party menu (spec §9)
-  onCancel(): void;                            // right click / Escape
+  onBattleMenu(cell: [number, number] | null, at: { x: number; y: number }): void;   // battle mode: right click with no selection in progress → the original's popup (FUN_00430c80) at that surface point
+  onCancel(): void;                            // right click while a range shows / Escape
   modalContext(): ModalContext;
   writeSave(slot: number, bytes: Uint8Array): void;
   log(kind: 'warn' | 'info', text: string): void;
@@ -57,6 +58,7 @@ export class BrowserStage implements Stage {
   private lastNow = 0;
   /** true while the battle owns clicks (cells); false while a script may be waiting for a click. */
   cellMode = false;
+  private phase: Phase | null = null;           // the last phase drawn: the right click reads whether a range is being chosen
   seeThrough = false;
   private mapModel: MapModel | null = null;
   private loading: string | null = null;
@@ -82,6 +84,7 @@ export class BrowserStage implements Stage {
   // ---- drawing ----
   /** One frame: town layers, or the field with the presenter's sprites; the script effects on top. */
   draw(now: number, units: (Unit | null)[], phase: Phase): void {
+    this.phase = phase;
     this.lastNow = now;
     this.gate.update(now);
     const fx = this.effects.snapshot(now);
@@ -149,7 +152,12 @@ export class BrowserStage implements Stage {
 
   private bind(): void {
     const c = this.canvas;
-    c.addEventListener('contextmenu', (e) => { e.preventDefault(); if (this.town) this.hooks.onTownMenu(); else this.hooks.onCancel(); });
+    c.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      if (this.town) { this.hooks.onTownMenu(); return; }
+      const choosing = this.phase?.kind === 'player' && this.phase.sel.mode !== 'idle' && this.phase.sel.mode !== 'menu';
+      if (this.cellMode && !choosing && !this.player.playing) { const p = this.canvasPoint(e); this.hooks.onBattleMenu(this.cellAt(p), p); } else this.hooks.onCancel();
+    });
     c.addEventListener('mousedown', (e) => { if (e.button === 0 && !this.town) this.drag = { x: e.clientX, y: e.clientY, cx: this.camera.x, cy: this.camera.y }; });
     window.addEventListener('mouseup', (e) => {
       if (e.button !== 0) return;

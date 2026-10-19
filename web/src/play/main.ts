@@ -6,7 +6,7 @@ import type { BattleEvent } from '../battle/types';
 import { PARTY_SLOTS } from '../battle/unit';
 import { DataError, DataLoader } from '../data/loader';
 import type { RosterUnit, Tables } from '../data/types';
-import { cellCommand } from '../game/battleInput';
+import { cellCommands } from '../game/battleInput';
 import { BrowserStage } from '../game/browserStage';
 import { GameCore } from '../game/gameCore';
 import { SpriteCache } from '../game/spriteCache';
@@ -17,9 +17,11 @@ import { IdbBackend, MemoryBackend, SaveStore } from '../save/store';
 import type { Resources } from '../script/host';
 import type { Program } from '../script/program';
 import { Dialogue } from '../ui/dialogue';
-import { menuEnabled, Panel } from '../ui/panel';
+import { Panel } from '../ui/panel';
+import { menuEnabled } from '../ui/menuEnabled';
 import '../ui/win/theme.css';
 import { accelOf, MenuBar, menuModel, type MenuTemplate } from '../ui/win/menubar';
+import { PopupMenu, unitPopupItems, type PopupItem } from '../ui/win/popup';
 import { frameScale, MENU_BAR_H } from '../viewer/scale';
 
 const $ = <T extends HTMLElement>(id: string): T => { const el = document.getElementById(id); if (!el) throw new Error(`missing element #${id}`); return el as T; };
@@ -33,7 +35,7 @@ const data = new DataLoader();
 let core: GameCore | null = null;
 let stage: BrowserStage | null = null;
 let panel: Panel | null = null;                                               // the developer's side panel (?dev=1): logs, raw unit data, errors
-let menuBar: MenuBar | null = null; let menuSig = '';
+let menuBar: MenuBar | null = null; let menuSig = ''; let popup: PopupMenu | null = null;
 const dev = new URLSearchParams(location.search).get('dev') === '1';
 let shownEvents: BattleEvent[] | null = null;
 let saves: SaveStore | null = null;
@@ -145,10 +147,23 @@ async function boot(): Promise<void> {
     const dialogue = new Dialogue(document, $('dialogue'), (spk, letter) => { const name = `face${nn(spk)}${letter}`; return bmpSet.has(name) ? `assets/bmp/${name}.png` : null; });
     const sprites = new SpriteCache(assets, renderer, new Set(index.sprites), showError);
     stage = new BrowserStage(canvas, renderer, assets, bitmaps, dialogue, sprites, tables, {
-      onCell: (cell) => { if (core?.battle) { const cmd = cellCommand(core.battle.state, cell); if (cmd) core.dispatch(cmd); } },
+      onCell: (cell) => { if (!core?.battle) return; for (const cmd of cellCommands(core.battle.state, cell)) { core.dispatch(cmd); if (core.lastEvents.some((e) => e.type === 'rejected')) break; } },   // one click may be several commands: stop at the first the rules refuse
       onTownClick: (i) => core?.townSelect(i),
       onTownMenu: () => dialogue.openParty({ tables, inventory: core!.campaign.inventory, party: core!.campaign.units.slice(0, PARTY_SLOTS) }, { onSave: () => dialogue.openSaveSlots(saveList, (slot) => core!.save(slot)) }),
       onCancel: () => core?.dispatch({ type: 'cancel' }),
+      onBattleMenu: (cell, at) => {                                           // the original's right-click popup: the unit's entries over the 맵 menu's own
+        if (!core?.battle || !popup || !menuRef) return;
+        const s = core.battle.state, u = cell ? s.units.find((v) => v && v.side === 0 && v.c === cell[0] && v.r === cell[1]) ?? null : null;
+        const items: PopupItem[] = [...(u ? unitPopupItems(u, s.inventory, tables) : []), ...menuModel(menuRef, menuFlags(), dev).bar[0]!.items];
+        void popup.open(at.x, at.y, items).then((pick) => {
+          if (!pick || !core?.battle) return;
+          if (pick.cmd && u) {
+            const sel = core.battle.state.phase.kind === 'player' ? core.battle.state.phase.sel : null;
+            if (!sel || sel.mode === 'idle' || sel.slot !== u.slot) { if (sel && sel.mode !== 'idle') core.dispatch({ type: 'cancel' }); core.dispatch({ type: 'select', slot: u.slot }); }
+            core.dispatch(pick.cmd);
+          } else if (pick.id !== null) menuCommand(pick.id);
+        });
+      },
       modalContext: () => ({ tables, inventory: core!.campaign.inventory, party: core!.campaign.units.slice(0, PARTY_SLOTS), saves: saveList }),
       writeSave: (slot, bytes) => { void saves?.write(slot, bytes).then(refreshSaves).catch(showError); },
       log,
@@ -159,7 +174,7 @@ async function boot(): Promise<void> {
     const ui = await data.ui().catch((e: unknown) => { showError(e); return null; });
     if (ui) {
       const model = menuModel(ui.menu, menuFlags(), dev); menuRef = ui.menu; menuSig = JSON.stringify(menuFlags());
-      menuBar = new MenuBar($('menubar'), model, menuCommand);
+      menuBar = new MenuBar($('menubar'), model, menuCommand); popup = new PopupMenu($('win'));
       document.addEventListener('keydown', (e) => {                            // the original's accelerators: F1 불러오기, F2 유니트 일람, F4 전체 화면, F5 저장, F10 턴 종료 …
         if (e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement || e.target instanceof HTMLTextAreaElement) return;
         const id = accelOf(menuModel(ui.menu, menuFlags(), dev), e.key, e.ctrlKey || e.metaKey);

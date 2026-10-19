@@ -7,7 +7,7 @@ import type { BattleEntry, Tables } from '../data/types';
 import { Presenter } from '../field/presenter';
 import { addGold, emptyInventory, giveItem, usableItems } from '../battle/inventory';
 import { animApd } from '../field/unitSprites';
-import { cellCommand } from './battleInput';
+import { cellCommands } from './battleInput';
 import { SpriteCache } from './spriteCache';
 import { VIEW_H, VIEW_W } from '../iso/grid';
 import { MapModel } from '../map/mapModel';
@@ -93,8 +93,10 @@ function canvasCell(ev: MouseEvent): [number, number] | null {
 
 function onClick(cell: [number, number]): void {
   if (!battle) return;
-  const cmd = cellCommand(battle.state, cell);
-  if (cmd) dispatch(cmd);
+  for (const cmd of cellCommands(battle.state, cell)) {                       // one click may be several commands (select + range, cancel + attack …): stop at the first the rules refuse
+    const events = battle.reduce(cmd); handle(events);
+    if (events.some((e) => e.type === 'rejected')) break;
+  }
 }
 
 let lastFrameError = '';

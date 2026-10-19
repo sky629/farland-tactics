@@ -1,23 +1,11 @@
+import { menuEnabled, type MenuEnabled } from './menuEnabled';
 import { isTreasure } from '../battle/unit';
 import { usableItems } from '../battle/inventory';
-import { hasMoveTarget } from '../battle/moveRange';
 import type { Hit } from '../battle/resolve';
 import type { BattleEvent, BattleState, Command } from '../battle/types';
 import type { Unit } from '../battle/unit';
 import type { BattleEntry, ItemData, Tables } from '../data/types';
 
-export interface MenuEnabled { move: boolean; attack: boolean; magic: boolean; item: boolean; wait: boolean; endTurn: boolean }
-
-/** Which buttons the rules would accept right now (spec §10.2). */
-export function menuEnabled(state: BattleState, items: ItemData[] = []): MenuEnabled {
-  const none = { move: false, attack: false, magic: false, item: false, wait: false, endTurn: false };
-  if (state.phase.kind !== 'player') return none;
-  const sel = state.phase.sel;
-  if (sel.mode !== 'menu') return { ...none, endTurn: true };
-  const u = state.units[sel.slot];
-  if (!u) return { ...none, endTurn: true };
-  return { move: !u.moved && hasMoveTarget(sel.range, state.units, u), attack: !u.acted, magic: !u.acted && u.spells.length > 0 && u.status !== 6, item: !u.acted && usableItems(state.inventory, items).length > 0, wait: true, endTurn: true };
-}
 
 /** event_script_format.md §6 speaker names for the named characters (id 1..29). */
 export const SPEAKER_NAMES: Record<number, string> = {

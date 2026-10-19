@@ -13,6 +13,9 @@ export interface MenuPopup { label: string; ul: number; key: string | null; item
 export interface MenuBarModel { bar: MenuPopup[]; popups: Record<string, MenuPopup> }
 
 const MF_GRAYED = 0x1, MF_DISABLED = 0x2;
+
+/** A leaf item from a resource string such as '도구를 사용하다(&U)' (enabled, no id: the caller sets both). */
+export function mnemonicItem(text: string): MenuItem { const mn = mnemonic(text); return { label: mn.label, ul: mn.ul, key: mn.key, accel: mn.accel, id: null, enabled: true, separator: false }; }
 const DEV_POPUPS = new Set(['디버그']);
 
 function item(t: MenuItemTemplate, enabled: Record<number, boolean>): MenuItem {
