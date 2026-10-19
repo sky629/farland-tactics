@@ -26,3 +26,14 @@ describe('clampCamera', () => {
     expect(clampCamera(703.6, 415.5, 1344, 896)).toEqual({ x: 704, y: 416 });
   });
 });
+
+describe('frameScale', () => {
+  it('is the largest integer scale at which the 640×480 surface plus the menu bar fits', async () => {
+    const { frameScale, MENU_BAR_H } = await import('../src/viewer/scale');
+    expect(MENU_BAR_H).toBe(19);
+    expect(frameScale(1280, 998)).toBe(2);                                  // 2 × 499 = 998 fits exactly
+    expect(frameScale(1280, 997)).toBe(1);                                  // one row short of two rows of menu bar
+    expect(frameScale(640, 499)).toBe(1);
+    expect(frameScale(100, 100)).toBe(1);                                   // never below 1: the page scrolls instead
+  });
+});

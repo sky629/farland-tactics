@@ -1,5 +1,5 @@
 import { loadProgram, type Program } from '../script/program';
-import { assertRecords, BATTLE_FIELDS, ITEM_FIELDS, MAGIC_FIELDS, RACE_FIELDS, ROSTER_FIELDS, VISUAL_FIELDS, type BattleEntry, type RosterUnit, type StaffLine, type Tables, type VisualRecord } from './types';
+import { BATTLE_FIELDS, type BattleEntry, type DialogTemplate, ITEM_FIELDS, MAGIC_FIELDS, type MenuTemplate, RACE_FIELDS, ROSTER_FIELDS, type RosterUnit, type StaffLine, type Tables, type UiResources, VISUAL_FIELDS, type VisualRecord, assertRecords } from './types';
 
 export class DataError extends Error {
   override name = 'DataError';
@@ -72,6 +72,18 @@ export class DataLoader {
       return list as BattleEntry[];
     })().catch((e: unknown) => { this.battlesP = null; throw e; });
     return this.battlesP;
+  }
+
+  /** The original's dialog templates and menu 103 (assets/data/dialogs.json, menu.json): the Win32 chrome rebuilt from data. */
+  async ui(): Promise<UiResources> {
+    const [dialogs, menu] = await Promise.all([this.json('dialogs.json'), this.json('menu.json')]);
+    if (typeof dialogs !== 'object' || dialogs === null || Array.isArray(dialogs)) throw new DataError(`${this.base}/dialogs.json`, 'not an object of templates');
+    for (const [id, d] of Object.entries(dialogs as Record<string, Partial<DialogTemplate>>)) {
+      if (typeof d.cx !== 'number' || typeof d.cy !== 'number' || !Array.isArray(d.items) || typeof d.title !== 'string') throw new DataError(`${this.base}/dialogs.json`, `dialog ${id}: no size, title or items`);
+    }
+    const items = (menu as Partial<MenuTemplate> | null)?.items;
+    if (!Array.isArray(items) || items.length === 0) throw new DataError(`${this.base}/menu.json`, 'no menu items');
+    return { dialogs: dialogs as Record<string, DialogTemplate>, menu: menu as MenuTemplate };
   }
 
   private async json(rel: string, absolute = false): Promise<unknown> {

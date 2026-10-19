@@ -52,3 +52,16 @@ describe('DataLoader', () => {
     await expect(new DataLoader().battles()).rejects.toThrow(/battles.json: entry 0 missing "label"/);
   });
 });
+
+describe('DataLoader.ui', () => {
+  it('loads the dialog templates and menu 103 exported from the executable', async () => {
+    mockFetch({ 'assets/data/dialogs.json': { '126': { ex: false, style: 0, title: '확인', font: [9, '굴림'], cx: 151, cy: 55, items: [] } }, 'assets/data/menu.json': { items: [{ text: '맵', id: null, flags: 0x90, items: [] }] } });
+    const ui = await new DataLoader().ui();
+    expect(ui.dialogs['126']!.title).toBe('확인');
+    expect(ui.menu.items[0]!.text).toBe('맵');
+  });
+  it('rejects a menu without items or a dialog without a size', async () => {
+    mockFetch({ 'assets/data/dialogs.json': { '126': { title: '확인' } }, 'assets/data/menu.json': { items: [] } });
+    await expect(new DataLoader().ui()).rejects.toThrow(DataError);
+  });
+});

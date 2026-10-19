@@ -48,3 +48,10 @@ export function assertRecords(x: unknown, fields: readonly string[], what: strin
 export const elems = (r: { elem0: number; elem1: number; elem2: number }): [number, number, number] => [r.elem0, r.elem1, r.elem2];
 export const costLand = (r: RaceData): number[] => [r.cost_land0, r.cost_land1, r.cost_land2, r.cost_land3, r.cost_land4, r.cost_land5, r.cost_land6, r.cost_land7];
 export const raceSpells = (r: RaceData): number[] => [r.spell0, r.spell1, r.spell2, r.spell3];
+
+/** The executable's UI resources (tools/ft2_dialogs.py → assets/data/dialogs.json, menu.json): dialog templates in dialog units, menu 103. */
+export interface ControlTemplate { id: number | null; cls: string; text: string | null; x: number; y: number; cx: number; cy: number; style: number }
+export interface DialogTemplate { ex: boolean; style: number; title: string; font: [number, string] | null; cx: number; cy: number; items: ControlTemplate[] }
+export interface MenuItemTemplate { text: string; id: number | null; flags: number; items?: MenuItemTemplate[] }
+export interface MenuTemplate { items: MenuItemTemplate[] }
+export interface UiResources { dialogs: Record<string, DialogTemplate>; menu: MenuTemplate }
