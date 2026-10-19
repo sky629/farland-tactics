@@ -1,6 +1,6 @@
 import { costLand, type ItemData, type RaceData, type Tables } from '../data/types';
 import { dist, hostile, incap, opposite, stepCell, unitAt, unitsWithin, type BattleGrid, type Dir } from './grid';
-import type { Unit } from './unit';
+import { isTreasure, type Unit } from './unit';
 
 export const RANGE_SIZE = 21;
 const HALF = 10;
@@ -136,7 +136,7 @@ export function markTargets(t: RangeTable, grid: BattleGrid, units: (Unit | null
 export function canStop(t: RangeTable, units: (Unit | null)[], unit: Unit, c: number, r: number): boolean {
   if (t.moveAt(c, r) === 0) return false;
   const v = unitAt(units, c, r);
-  return !v || v === unit || (v.side === 7 && v.id === 8);
+  return !v || v === unit || isTreasure(v);
 }
 
 /** True when the range holds at least one other cell the unit may stop on. */

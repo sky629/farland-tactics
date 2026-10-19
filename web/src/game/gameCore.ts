@@ -1,3 +1,4 @@
+import { isTreasure } from '../battle/unit';
 import type { MapData } from '../assets/types';
 import { Battle, placeUnplacedParty } from '../battle/battle';
 import { BattleGrid, hostile, type Dir } from '../battle/grid';
@@ -20,6 +21,7 @@ import { newCampaign, type Campaign } from './campaign';
 export interface Stage {
   readonly presenter: Presenter; readonly effects: Effects;
   camera: { x: number; y: number };
+  /** LOAD_MAP n: load `stage%02d`; n < 0 unloads the map at once (FUN_0042d5d0 frees the map and returns 1 for a negative number). */
   loadMap(n: number): void; mapReady(): boolean; mapData(): MapData | null; cellOf(c: number, r: number): { x: number; y: number } | null; pixelSize(): [number, number] | null;
   openWindow(where: Where, speaker: number, face: string | null): void; closeWindow(where: Where): void; text(where: Where, line: string, name: string | null): void;
   openModal(kind: ModalKind, payload: unknown): void; takeModalResult(): number | null; closeAll(): void; showEpisode(title: string): void;
@@ -119,7 +121,6 @@ export class GameCore implements Host {
     if (this.hooks.length > 0) { this.processHooks(); if (this.mode !== 'battle' || p.busy || this.hooks.length > 0) return; }
     p.sync(b.state);
     if (b.state.phase.kind === 'enemy') this.handle(b.reduce({ type: 'enemyStep' }));
-    else if (b.state.phase.kind === 'end') this.result = b.state.phase.result;
   }
 
   /** Runs queued hooks until one starts a script or the presenter has something to play. */
@@ -142,7 +143,7 @@ export class GameCore implements Host {
     const c = this.campaign, t = c.units[slot], a = c.units[actorSlot] ?? null;
     if (!t) return;
     c.battleTarget = t.slot; c.actor = a?.slot ?? null;
-    if (t.id !== 8) {
+    if (t.id !== 8 && !isTreasure(t)) {                                          // a drop keeps its foe's id (removeFallen) but has no story hooks of its own
       const own = t === a || !a || a.side !== 0 || t.side !== 0;
       const label = own ? `${t.status === 1 ? 'BEAT' : 'AFTER'}${nn(t.id)}` : `ASSIST${nn(a.id)}`;
       if (this.runLabel(c.stage, label)) return;
@@ -176,7 +177,7 @@ export class GameCore implements Host {
         for (const h of e.hits) if (!seen.has(h.target)) { seen.add(h.target); this.hooks.push({ kind: 'target', slot: h.target, actor: e.slot }); }
         this.hooks.push({ kind: 'settle' });
       } else if (e.type === 'levelUp') this.hooks.push({ kind: 'levelup', actor: e.slot });
-      else if (e.type === 'end') this.hooks.push({ kind: 'end', result: e.result });
+      else if (e.type === 'end') { this.result = e.result; this.hooks.push({ kind: 'end', result: e.result }); }   // before the hook runs the COMPLETE/GAMEOVER script
     }
   }
 
@@ -302,13 +303,15 @@ export class GameCore implements Host {
     this.stage.closeAll();
     if (this.completed) { this.quitComplete(); return; }
     if (restore === 'town') { this.toTown(); return; }
-    if (restore === 'battle' || this.pendingBattle) {
-      if (this.pendingBattle) this.createBattle(true);
-      else if (!this.battle) this.createBattle(false);                        // FIELD_MODE after a load: resume, do not restart
-      if (this.battle) this.toBattle();
-      return;
+    if (this.pendingBattle) { this.createBattle(true); if (this.battle) this.toBattle(); return; }   // BATTLE_START: a new battle, whatever came before
+    const over = this.battle?.state.phase.kind === 'end';                      // a finished battle is revisited only for the hooks still queued (levelup → COMPLETE)
+    if (over && this.hooks.length === 0 && this.result === 'defeat') {         // the GAMEOVER script (event00: title picture, END) has ended
+      this.battle = null; this.mode = 'ended'; this.stage.log('info', 'game over'); return;
     }
-    if (this.prevMode === 'battle' && this.battle) { this.toBattle(); return; }
+    if (restore === 'battle' || (this.prevMode === 'battle' && this.battle)) {
+      if (!this.battle) this.createBattle(false);                              // FIELD_MODE after a load: resume, do not restart
+      if (this.battle && (!over || this.hooks.length > 0)) { this.toBattle(); return; }
+    }
     if (this.prevMode === 'town') { this.toTown(); return; }
     this.mode = 'ended';
     this.stage.log('warn', 'script ended with nowhere to return');

@@ -10,7 +10,7 @@ import { resolveAction } from './resolve';
 import { Rng, type RandomSource } from './rng';
 import { targetsOf } from './targets';
 import type { BattleEvent, BattleState, Command, Selection } from './types';
-import { createUnit, growUnit, MAX_SLOTS, PARTY_SLOTS, type Unit } from './unit';
+import { createUnit, growUnit, isTreasure, MAX_SLOTS, PARTY_SLOTS, type Unit } from './unit';
 
 const freeSlot = (units: (Unit | null)[], from: number, to: number): number => { for (let s = from; s < to; s++) if (!units[s]) return s; return -1; };
 
@@ -48,19 +48,27 @@ export function syncPartyLevels(units: (Unit | null)[], roster: RosterUnit[], ta
   }
 }
 
-/** BATTLE_START(_HEAL): flags cleared, buffs and the special flag reset; with heal HP = max and MP = max/2. */
+/**
+ * BATTLE_START (opcode 0x35) / BATTLE_START_HEAL (0x1d, FT2.exe 0x4085f0): with heal (FUN_0040a5c0 case 0x28), every unit first gets
+ * HP = max, MP = max/2 and every status but hidden (9) cleared — the fallen included, so they return at full HP; then (0x35) every unit
+ * still fallen stands up with 1 HP, statuses but 9 are cleared, and flags, buffs and the special flag reset. Death is never permanent
+ * in the original: the fallen return at the next battle — whole after a HEAL start, with 1 HP in a dungeon chain without one.
+ */
 export function startBattle(units: (Unit | null)[], heal: boolean): void {
   for (const u of units) {
     if (!u) continue;
-    u.moved = false; u.acted = false; u.special = false;
+    if (u.side === 7) continue;                                                // objects keep their HP 0 and their hidden state (FUN_00431170 reveals them), a HEAL start included
+    if (heal) { u.hp = u.hpMax; u.mp = Math.trunc(u.mpMax / 2); if (u.status !== 9) u.status = 0; }
+    if (u.hp === 0 || u.status === 1) { u.hp = 1; u.status = 0; }              // the fallen stand up with 1 HP (no HEAL: a dungeon chain carries the last battle's HP)
+    if (u.status !== 9) u.status = 0;
+    u.moved = false; u.acted = false; u.special = false; u.statusCounter = 0;
     u.buff = { str: 0, def: 0, wis: 0, mgr: 0, agi: 0 };
-    if (heal && u.status !== 1) { u.hp = u.hpMax; u.mp = Math.trunc(u.mpMax / 2); }
   }
 }
 
 /** Remake rule (spec §11.5): 17 rosters leave party members at (0, 0) because the story script positions them; put each on the
- *  nearest free floor cell around the placed party (or around the map centre when nobody is placed). Non-party units are never moved;
- *  non-party (0, 0) placeholders are dropped by Battle.start. */
+ *  nearest free floor cell around the placed party (or around the map centre when nobody is placed). Non-party units are never moved:
+ *  the ones a roster keeps hidden at (0, 0) (status 9: the angels of maps 37, 69 and 137) wait there for 천사소환 to stand them up. */
 export function placeUnplacedParty(units: (Unit | null)[], grid: BattleGrid): void {
   const party = liveUnits(units).filter((u) => u.slot < PARTY_SLOTS);
   const placed = party.filter((u) => grid.cell(u.c, u.r));
@@ -127,9 +135,9 @@ export class Battle {
     for (let s = 0; s < PARTY_SLOTS; s++) if (units[s] && !inRoster.has(units[s]!.id)) units[s] = null;
     syncPartyLevels(units, roster, tables, rng);
     const grid = new BattleGrid(map);
-    for (let s = PARTY_SLOTS; s < MAX_SLOTS; s++) { const u = units[s]; if (u && u.c === 0 && u.r === 0 && !grid.cell(0, 0)) units[s] = null; }   // (0, 0) = placed later by the story script
     placeUnplacedParty(units, grid);
     for (const u of liveUnits(units)) {
+      if (u.status === 9 && u.c === 0 && u.r === 0) continue;                 // hidden at (0, 0): the summon pool (resolve.ts summon)
       if (!grid.cell(u.c, u.r)) throw new DataError(`roster/stage${String(entry.roster).padStart(3, '0')}.json`, `unit ${u.slot} (id ${u.id}) stands on a missing cell (${u.c}, ${u.r})`);
     }
     startBattle(units, entry.heal);
@@ -242,14 +250,14 @@ export class Battle {
     return events;
   }
 
-  /** FUN_00431170 after a party move: stand on a treasure (id 8) to take it; stand next to a hidden object to reveal it.
-   *  Only treasure objects are taken: a hidden story object (id ≠ 8) can be stood on but must survive for its script. */
+  /** FUN_00431170 after a party move: stand on a treasure (a chest, or a fallen foe's drop) to take it; stand next to a hidden object to reveal it.
+   *  Only treasures are taken: a hidden story object (id ≠ 8, no drop race) can be stood on but must survive for its script. */
   private pickUp(u: Unit): BattleEvent[] {
     const events: BattleEvent[] = [];
     for (const o of liveUnits(this.state.units)) {
       if (o.side !== 7) continue;
       const d = dist(u.c, u.r, o.c, o.r);
-      if (d === 0 && o.id === 8) {
+      if (d === 0 && isTreasure(o)) {
         if (o.dropItem === 0) { addGold(this.state.inventory, o.dropGold); events.push({ type: 'pickup', slot: u.slot, item: 0, gold: o.dropGold }); }
         else if (giveItem(this.state.inventory, u, o.dropItem, 1, this.tables.item)) events.push({ type: 'pickup', slot: u.slot, item: o.dropItem, gold: 0 });
         else { events.push({ type: 'bagFull', slot: u.slot, item: o.dropItem }); continue; }

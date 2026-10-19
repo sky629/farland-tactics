@@ -62,6 +62,13 @@ describe('applyOutcome', () => {
     expect(s.units[10]).toMatchObject({ side: 7, race: 8 });
     expect(events.some((e) => e.type === 'end')).toBe(false);
   });
+  it('a fallen named unit with a drop keeps its id (FUN_0043a2e0 case 9 sets only status, side and race), so the story finds it', () => {
+    const actor = unit({ slot: 0, level: 5 });
+    const dead = unit({ slot: 10, id: 27, race: 1, side: 4, hp: 0, status: 1, dropGold: 50, hpMax: 12 });
+    const s = state(units(actor, dead));
+    applyOutcome(s, actor, [dmg(10, 12, true)], t); new Battle(s, t).settle();
+    expect(s.units[10]).toMatchObject({ side: 7, race: 9, status: 0, id: 27 });
+  });
   it('party deaths stay as corpses and enemy actors earn nothing', () => {
     const enemy = unit({ slot: 10, id: 8, race: 1, side: 4 });
     const hero = unit({ slot: 0, hp: 0, status: 1 }), hero2 = unit({ slot: 1 });

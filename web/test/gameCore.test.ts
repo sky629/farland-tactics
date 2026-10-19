@@ -74,6 +74,16 @@ describe('GameCore', () => {
     expect(stage.calls).toContainEqual(['stopMusic']);
     expect(core.campaign.bgm).toBe(-1);
   });
+  it('LOAD_MAP -1 unloads the map at once and the script goes on (FUN_0042d5d0 frees the map and returns 1 for a negative number)', () => {
+    const stage = new FakeStage();
+    const core = new GameCore(res([prog(0, ['begin', ['LOAD_MAP', 49], ['LOAD_MAP', -1], ['SOUND', 'hit'], ['WAIT_CLICK', 0], ['END']])]), stage);
+    core.newGame(); core.frame(0);
+    expect(stage.calls).toContainEqual(['loadMap', -1]);
+    core.frame(16);
+    expect(stage.mapData()).toBeNull();
+    expect(stage.calls).toContainEqual(['playSound', 'hit']);
+    expect(stage.calls.some((c) => c[0] === 'log' && c[1] === 'warn')).toBe(false);
+  });
   it('LOAD_MAP waits for the stage; BATTLE_START + END creates a Battle over the campaign units and inventory', () => {
     const stage = new FakeStage(); stage.ready = false;
     const core = new GameCore(res([prog(0, ['begin', ['LOAD_UNITS', 5], ['LOAD_MAP', 49], ['BATTLE_START_HEAL'], ['END']])], { 5: [...party, slime] }), stage);
@@ -90,6 +100,41 @@ describe('GameCore', () => {
     expect(core.battle!.state.phase).toEqual({ kind: 'player', sel: { mode: 'idle' } });
     core.dispatch({ type: 'select', slot: 0 });
     expect(core.battle!.state.phase.kind === 'player' && core.battle!.state.phase.sel.mode).toBe('menu');
+  });
+});
+
+describe('game over', () => {
+  it('a lost battle runs the GAMEOVER label and its END ends the game with "game over" (event00 gameover: … SHOW_IMAGE title, END) instead of returning to the dead battle', () => {
+    const stage = new FakeStage();
+    const core = new GameCore(res([prog(0, ['begin', ['LOAD_UNITS', 5], ['LOAD_MAP', 49], ['BATTLE_START_HEAL'], ['END'], 'GAMEOVER', ['HIDE_IMAGE'], ['END']])], { 5: [...party, slime] }), stage);
+    core.newGame(); core.frame(0); core.frame(16);
+    expect(core.mode).toBe('battle');
+    for (const u of core.battle!.state.units.slice(0, 2)) { u!.hp = 0; u!.status = 1; }                 // the whole party has fallen
+    core.dispatch({ type: 'endTurn' });                                                                 // the enemy phase's end check finds no party → 'end' defeat
+    expect(core.battle!.state.phase).toEqual({ kind: 'end', result: 'defeat' });
+    for (let t = 32; t < 3000 && core.mode !== 'ended'; t += 16) core.frame(t);
+    expect(core.mode).toBe('ended');
+    expect(core.result).toBe('defeat');
+    expect(core.battle).toBeNull();
+    expect(stage.calls).toContainEqual(['log', 'info', 'game over']);
+    expect(stage.calls.some((c) => c[0] === 'log' && c[1] === 'warn')).toBe(false);
+  });
+});
+
+describe('victory', () => {
+  it('a won battle runs COMPLETE; when that script starts the next battle (event03 complete → … → battle_start: FIELD_MODE, BATTLE_START_HEAL, END) the game goes on in the new battle', () => {
+    const stage = new FakeStage();
+    const core = new GameCore(res([prog(0, ['begin', ['LOAD_UNITS', 5], ['LOAD_MAP', 49], ['BATTLE_START_HEAL'], ['END'], 'COMPLETE', ['LOAD_UNITS', 5], ['FIELD_MODE'], ['BATTLE_START_HEAL'], ['END']])], { 5: [...party, slime] }), stage);
+    core.newGame(); core.frame(0); core.frame(16);
+    const first = core.battle!;
+    const foe = first.state.units[10]!; foe.hp = 0; foe.status = 1;                                   // the last enemy has fallen
+    core.dispatch({ type: 'endTurn' });
+    expect(first.state.phase).toEqual({ kind: 'end', result: 'victory' });
+    for (let t = 32; t < 3000 && !(core.mode === 'battle' && core.battle !== first); t += 16) core.frame(t);   // end hook → COMPLETE script → new battle
+    expect(core.mode).toBe('battle');
+    expect(core.battle).not.toBe(first);
+    expect(core.battle!.state.phase).toEqual({ kind: 'player', sel: { mode: 'idle' } });
+    expect(stage.calls.some((c) => c[0] === 'log' && String(c[2]).startsWith('game'))).toBe(false);
   });
 });
 

@@ -5,7 +5,7 @@ import { growUnit, PARTY_SLOTS, type Unit } from './unit';
 import type { BattleEvent, BattleState } from './types';
 
 const trunc = Math.trunc;
-const EXP_CAP = 9899;
+export const EXP_CAP = 9899;
 
 /** FUN_0043a2e0 case 7: experience for one hit. `k` carries the halving series across the hits of one action. */
 export function expGain(actor: Unit, target: Unit, hit: Hit, tables: Tables, k: { v: number }): number {
@@ -34,13 +34,13 @@ export function checkEnd(state: BattleState): 'victory' | 'defeat' | null {
 }
 
 /**
- * FUN_0043a2e0 case 9: a fallen non-party unit with a drop turns into a drop object (item → race 8, gold → race 9);
+ * FUN_0043a2e0 case 9: a fallen non-party unit with a drop turns into a drop object (item → race 8, gold → race 9, side 7, status 0, its id kept);
  * without one, only plain corpses (id 8 or id > 30) leave their slot — a named corpse stays until a script converts (UNIT_TO_ID8) or removes it.
  */
 export function removeFallen(state: BattleState, t: Unit, events: BattleEvent[]): void {
   if (t.slot < PARTY_SLOTS) return;
   if (t.dropItem !== 0 || t.dropGold !== 0) {
-    t.side = 7; t.race = t.dropItem !== 0 ? 8 : 9; t.status = 0; t.id = 8;
+    t.side = 7; t.race = t.dropItem !== 0 ? 8 : 9; t.status = 0;             // as FUN_0043a2e0 case 9: side, race and status change, the id (word 0) stays — the story turns named spoils to id 8 itself (UNIT_TO_ID8)
   } else if (t.id === 8 || t.id > 30) {
     state.units[t.slot] = null;
     events.push({ type: 'removed', slot: t.slot });

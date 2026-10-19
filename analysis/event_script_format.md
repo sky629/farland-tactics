@@ -60,7 +60,7 @@ list   := number* 0                   ; SHOP 전용, 0 으로 종료
 | 12 | CAMERA_SCROLL | n dx, n dy, n tx, n ty, n ms | 자동 스크롤: 매 ms 마다 (dx,dy)px 이동, 타일(tx,ty) 도달/통과 시 정지. (0,0) 타겟 없음 | [관찰] 0x409274 + 0x408660 |
 | 13 | LOAD_SPRITE | s, n id, n x, n y | `sprite\%s.apd` 를 빈 슬롯(20개)에 로드, id 로 오브젝트 유닛(side 7 템플릿) 생성, 좌표 설정. id<4000 → 레이어 3, 아니면 5 | [관찰] 0x40931a |
 | 14 | SPRITE_REUSE | n id, n x, n y | 마지막 로드 스프라이트로 오브젝트 유닛 생성 | [관찰] 0x40934c |
-| 15 | REMOVE_UNIT | u | 유닛 슬롯 삭제 | [관찰] 0x4093b8 |
+| 15 | REMOVE_UNIT | u | 유닛 슬롯 삭제. 없는 유닛이면 아무 일도 하지 않는다(구현: 15일째 beat29는 REMOVE_DEAD 뒤에 적 27·28을 다시 지운다 — 전리품을 주워 슬롯이 빈 경우) | [관찰] 0x4093b8 |
 | 16 | GIVE_ITEM | n item, n cnt | 파티 소지품 추가(장비는 1번 유닛 슬롯) `FUN_0041ecc0` | [관찰] 0x4093dd |
 | 17 | TAKE_ITEM | n item, n cnt | 소지품 감소 `FUN_0041eda0` | [관찰] 0x409417 |
 | 18 | WAIT_CLICK | n ms | 클릭 대기(커서 변경, 타이머). n>0 이면 시간 초과도 해제 | [관찰] 0x40a278 |
@@ -68,7 +68,7 @@ list   := number* 0                   ; SHOP 전용, 0 으로 종료
 | 1A | NOP_UNIT | u | 유닛만 읽고 아무 동작 없음 | [관찰] 0x409586 |
 | 1B | WAIT_MUSIC_FADE | – | 볼륨 페이드 종료까지 재시도. 종료 시 dir=0 이었으면 음악 정지 | [관찰] 0x40959a |
 | 1C | SET_POS | u, n x, n y | 유닛 타일 좌표 설정 | [관찰] 0x4095cd |
-| 1D | BATTLE_START_HEAL | – | 전 유닛 HP=max, MP=max/2 후 0x35 와 동일 | [관찰] 0x40960e |
+| 1D | BATTLE_START_HEAL | – | 전 유닛 HP=max, MP=max/2, status(≠9)=0 — 쓰러진 유닛도 완전히 회복해 선다 (0x40a5c0 case 0x28) — 후 0x35 와 동일 | [관찰] 0x40960e |
 | 1E | NEXT_STAGE | – | 플래그 100개 초기화, 비파티 유닛 삭제, END 시 `stage+1`의 `begin` 로드(`ForcedStage` INI 키가 있으면 현재 stage 재시작). 데이터에서 미사용 | [관찰] 0x40971d, 0x40a0bf |
 | 1F | SET_DIR | u, n | 방향 0=S 1=E 2=W 3=N, 4=유지 | [관찰] 0x40975f, FUN_0041f4d0 |
 | 20 | JUMP | L | 라벨로 점프 (`Jump:'%s'` 디버그) | [관찰] 0x40a001 |
@@ -92,7 +92,7 @@ list   := number* 0                   ; SHOP 전용, 0 으로 종료
 | 32 | SHOW_IMAGE | s, n step | `bmp\%s.bmp` 전체화면 표시 후 팔레트 페이드 인. `DAT_0044f158=1` | [관찰] 0x409ab9 |
 | 33 | HIDE_IMAGE | – | 팔레트 복원, 화면 지움, `DAT_0044f158=0` | [관찰] 0x409bd5 |
 | 34 | PLAY_VISUAL | n | 모드 8 비주얼 씬 n (0..47, 테이블 0x449598, `VSLLST.DAT`). 종료 후 모드 4 복귀 | [관찰] 0x40a324, FUN_004082d0, FUN_00401f70 |
-| 35 | BATTLE_START | – | 상태 초기화, 첫 생존 유닛으로 카메라, `FUN_00423820(30)` 자동 저장(슬롯 30), 전투 플래그 | [관찰] 0x409639 |
+| 35 | BATTLE_START | – | 상태 초기화(쓰러진 파티 유닛(HP 0 / status 1)은 HP 1·status 0 으로 다시 서고, status 9 외는 0, 이동·행동 플래그·버프·상태 카운터 초기화; 오브젝트(side 7) 제외 — HEAL 없이 이어지는 던전 연전은 직전 전투가 끝난 HP 로 시작), 첫 생존 유닛으로 카메라, `FUN_00423820(30)` 자동 저장(슬롯 30), 전투 플래그 | [관찰] 0x409639 |
 | 36 | TOWN | – | 스크립트 해제, 모드 9(마을), 맵 해제, 마을 배경 `Town%02d.bmp` 로드, 턴=-1 | [관찰] 0x40a37d, FUN_0042ad00 |
 | 37 | FLAG_BIT_SET | n i, n bit | `Flag[i] |= 1<<bit` | [관찰] 0x409c1a |
 | 38 | FLAG_BIT_CLR | n i, n bit | `&= ~` | [관찰] |
@@ -119,7 +119,7 @@ list   := number* 0                   ; SHOP 전용, 0 으로 종료
 | 06 | STAGE_FROM_FLAG | n i | `stage(DAT_0044b73c) = Flag[i]` | [관찰] |
 | 07 | DIM_SCENE | n step | 팔레트 0x20..0xD0 을 60% 밝기로 | [관찰] FUN_00434330 |
 | 08 | ASK | s | 예/아니오 다이얼로그(`+` 접두 → 리소스 0xA3, 아니면 0x7E). `result = (답 != IDNO)` | [관찰] FUN_004343b0 |
-| 09 | BATTLE_RESULT | n gold, n p | gold>0 이면 골드 추가+효과음+메시지, 결과 다이얼로그 0xA2(파라미터 p), 전 유닛 레벨업 처리 | [관찰] |
+| 09 | BATTLE_RESULT | n gold, n p | gold>0 이면 골드 추가+효과음+메시지, 결과 다이얼로그 0xA2(파라미터 p = 파티에 나눠 줄 경험치 풀: 유닛별 ±10, 균등 배분, 확인), 닫힌 뒤 전 유닛 레벨업 처리(`FUN_0041f7c0(unit,1,1)`, 레벨 100·EXP 상한 9899) | [관찰] 0x40a5c0 case 9, 다이얼로그 프로시저 0x40bb40 |
 | 0A | TOWN_SET | n | 마을 배경 세트 1/2/3 (`Town00/10/20+`) | [관찰] FUN_0042ac90/FUN_0042ad70 |
 | 0B | SWEAT | u | `sweat` 효과 스프라이트(레이어 5) | [관찰] |
 | 0C | REMOVE_DEAD | – | 슬롯 10.. 의 id 8/24/>30 이고 HP 0 또는 status≠1 인 유닛 삭제 | [관찰] |
@@ -156,7 +156,7 @@ list   := number* 0                   ; SHOP 전용, 0 으로 종료
 | 2B | KILL | u | HP=MP=0, status 1, 스프라이트 삭제 | [관찰] |
 | 2C | ADD_GOLD | n | 골드 += n (0..999999), 메시지 | [관찰] |
 | 2D | TINT_NIGHT | n | R×0.6, G×0.8, B+R/2 | [관찰] |
-| 2E | TEST_IS_ACTOR | u | result = (행동 유닛 == u). 아니면 대상 HP=1 | [관찰] |
+| 2E | TEST_IS_ACTOR | u | result = (행동 유닛 == u). 아니면 전투 대상(id 24) HP=1, status=0 — 쓰러진 보스가 1 HP로 다시 선다(듀마·앨비스: 알의 마지막 일격) | [관찰] 0x40a5c0 case 0x2e |
 | 2F | TEST_ACTIVE | u | result = !(status 1 \|\| side 7) | [관찰] |
 | 30 | REVIVE | u | HP=max, status 0 | [관찰] |
 | 31 | TINT_DUSK | n | R×0.9, G/B×0.6 | [관찰] |

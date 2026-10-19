@@ -17,9 +17,10 @@ export class FakeStage implements Stage {
   clicks = 0;
   modal: number | null = null;
   map: MapData | null = null;
+  loaded = false;
   private rec(name: string, ...args: unknown[]): void { this.calls.push([name, ...args]); }
-  loadMap(n: number): void { this.rec('loadMap', n); this.map = flatMap(9); }
-  mapReady(): boolean { return this.ready && this.map !== null; }
+  loadMap(n: number): void { this.rec('loadMap', n); this.map = n < 0 ? null : flatMap(9); this.loaded = true; }
+  mapReady(): boolean { return this.ready && this.loaded; }
   mapData(): MapData | null { return this.map; }
   cellOf(c: number, r: number): { x: number; y: number } | null { return { x: (c - r) * 32 + 320, y: (c + r) * 16 }; }
   pixelSize(): [number, number] { return [1280, 960]; }

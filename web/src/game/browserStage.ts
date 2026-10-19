@@ -195,6 +195,7 @@ export class BrowserStage implements Stage {
 
   // ---- Stage: map ----
   loadMap(n: number): void {
+    if (n < 0) { this.mapModel = null; this.loading = null; return; }
     const name = `stage${nn(n)}`;
     this.mapModel = null; this.loading = name;
     void (async () => {

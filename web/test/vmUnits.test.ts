@@ -25,6 +25,12 @@ describe('ScriptVm: units and sprites', () => {
     vm.step(0);
     expect(host.calls.filter((x) => x[0] === 'log' && x[1] === 'warn').map((x) => x[2])).toEqual(['SET_POS: unit 77 not found', 'ANIM: unit 78 not found']);
   });
+  it('REMOVE_UNIT of a unit that is already gone (killed and looted) is a silent no-op', () => {
+    const { vm, host, c } = start(['begin', ['REMOVE_UNIT', 27], ['REMOVE_UNIT', 1], ['END']]);
+    vm.step(0);
+    expect(c.units[0]).toBeNull();                                          // the one that is there goes
+    expect(host.calls.some((x) => x[0] === 'log' && x[1] === 'warn')).toBe(false);
+  });
   it('MOVE_TO hands the unit and the animation name to the host (its M offsets are the knock-back path)', () => {
     const { vm, host } = start(['begin', ['MOVE_TO', 1, 'f.event04'], ['END']]);
     expect(vm.step(0)).toBe('ended');
@@ -117,16 +123,44 @@ describe('ScriptVm: map, items and battle', () => {
     vm.step(0);
     expect(c.flags[0]).toBe(1);
   });
-  it('BATTLE_RESULT adds gold, opens the result modal and levels up party members with enough EXP', () => {
-    const { c, vm, host } = start(['begin', ['BATTLE_RESULT', 100, 1], ['END']]);
+  it('TEST_IS_ACTOR for someone else stands the beaten target back up: HP 1, status 0 (FUN_0040a5c0 case 0x2e — a boss only its destined foe may fell)', () => {
+    const { c, vm, host } = start(['begin', ['TEST_IS_ACTOR', 2], ['JUMP_IF_RESULT', 1, 'actor'], ['END'], 'actor', ['FLAG_SET', 0, 2], ['END']]);
+    c.units[10] = unit({ slot: 10, id: 25, side: 3, c: 4, r: 2, hp: 0, status: 1 });
+    c.actor = 0; c.battleTarget = 10;                                        // unit 1 struck the boss down; the hook asks whether it was unit 2
+    vm.step(0);
+    expect(c.flags[0]).toBe(0);
+    expect(c.units[10]).toMatchObject({ hp: 1, status: 0 });
+    expect(host.calls).toContainEqual(['unitsChanged']);
+    expect(host.calls).toContainEqual(['log', 'info', 'TEST_IS_ACTOR: slot 10 stands back up at 1 HP']);   // the stage hears it: a player (or the walker) learns whose blow the script waits for
+  });
+  it('run() forgets a BATTLE_RESULT in progress: a script restarted during the EXP dialog (a load) does not reuse the old pool', () => {
+    const { vm, host } = start(['begin', ['BATTLE_RESULT', 100, 200], ['END'], 'again', ['BATTLE_RESULT', 50, 70], ['END']]);
+    host.modal = null;
+    expect(vm.step(0)).toBe('waiting');
+    vm.run(0, 'again');
+    expect(vm.step(0)).toBe('waiting');
+    expect(host.calls.filter((x) => x[0] === 'openModal' && x[1] === 'result').map((x) => x[2]).at(-1)).toEqual({ gold: 50, pool: 70 });
+  });
+  it('BATTLE_RESULT adds gold and hands the EXP pool to the result dialog; when it closes the party levels up on the EXP it got and a message lists the level-ups (FUN_0040a5c0 case 9)', () => {
+    const { c, vm, host } = start(['begin', ['BATTLE_RESULT', 100, 200], ['END']]);
     c.units[0]!.exp = 250; c.units[0]!.level = 1;
     host.modal = null;
     expect(vm.step(0)).toBe('waiting');
     expect(c.inventory.gold).toBe(300);
-    expect(host.calls).toContainEqual(['openModal', 'result', { gold: 100, param: 1, levelUps: [{ slot: 0, from: 1, to: 3 }] }]);
-    expect(c.units[0]!.level).toBe(3);
-    host.modal = 1;
+    expect(host.calls).toContainEqual(['openModal', 'result', { gold: 100, pool: 200 }]);
+    expect(c.units[0]!.level).toBe(1);                                         // nothing grows while the dialog is open
+    c.units[0]!.exp += 200;                                                    // the dialog's OK: the player gave the whole pool to unit 0
+    host.modal = 0;                                                            // the fake host answers every modal at once
     expect(vm.step(1)).toBe('ended');
+    expect(c.units[0]!.level).toBe(5);                                         // 450 EXP → level 5, announced in a message after the dialog
+    expect(host.calls.filter((x) => x[0] === 'openModal').at(-1)).toEqual(['openModal', 'message', '카린: 레벨 1 → 5']);
+  });
+  it('BATTLE_RESULT with nothing to level up closes without a message', () => {
+    const { c, vm, host } = start(['begin', ['BATTLE_RESULT', 0, 50], ['END']]);
+    host.modal = 0;
+    expect(vm.step(0)).toBe('ended');
+    expect(c.inventory.gold).toBe(200);
+    expect(host.calls.filter((x) => x[0] === 'openModal')).toEqual([['openModal', 'result', { gold: 0, pool: 50 }]]);
   });
   it('the debug-only EXT99 ops are logged and skipped', () => {
     const { vm, host } = start(['begin', ['EXT99_4', 1, 'x'], ['END']]);

@@ -1,5 +1,5 @@
 import { elems, type ItemData, type MagicData, type RaceData, type Tables } from '../data/types';
-import { dirTo, incap, type BattleGrid } from './grid';
+import { dirTo, incap, unitAt, type BattleGrid } from './grid';
 import type { RandomSource } from './rng';
 import { itemsOf, type Unit } from './unit';
 
@@ -156,6 +156,7 @@ export function resolveMagic(a: Unit, t: Unit, index: number, ctx: ResolveContex
   const m = tbl.magic[index]!;
   const wisTot = totals(a, itemsOf(a, tbl.item)).wis;
   if (FIRE.has(index) && t.status === 5) t.status = 0;
+  if (index === 82) return hit(t, 'none', 0, '');                             // 천사소환: case 0x52 marks the summon (popup 90000) and skips the damage path
   if (HEAL.has(index)) {
     if (t.status === 1 || t.side === 7) return hit(t, 'miss', 0, 'miss!');
     const v = Math.min(wisTot, t.hpMax - t.hp); t.hp += v;
@@ -236,10 +237,28 @@ export function resolveItem(t: Unit, id: number, ctx: ResolveContext): Hit {
   return value > 0 ? hit(t, 'heal', value, popup) : hit(t, 'cure', 0, 'well');
 }
 
-/** One FUN_0043b4a0 call per target; lifesteal/drain heal the caster (last target) by the first damage dealt. */
+/**
+ * 천사소환 (FUN_0043e3b0 case 0x52, once per cast): every hidden non-party unit (status 9, side ∉ {0, 7} — the angels a roster
+ * keeps at (0, 0)) stands up on a random free cell within 8 of the caster (an existing, unblocked, flag-free cell nobody stands
+ * on; the original draws until it finds one, we give up after a hundred draws), facing the caster's way.
+ */
+function summon(a: Unit, ctx: ResolveContext): void {
+  for (const u of ctx.units) {
+    if (!u || u.status !== 9 || u.side === 0 || u.side === 7) continue;
+    for (let tries = 0; tries < 100; tries++) {
+      const c = a.c + ctx.rng.rand(17) - 8, r = a.r + ctx.rng.rand(17) - 8, cell = ctx.grid.cell(c, r);
+      if (!cell || cell.blocked !== 0 || cell.flag2 !== 0 || unitAt(ctx.units, c, r)) continue;
+      u.c = c; u.r = r; u.dir = a.dir; u.status = 0;
+      break;
+    }
+  }
+}
+
+/** One FUN_0043b4a0 call per target; lifesteal/drain heal the caster (last target) by the first damage dealt; a summon stands the hidden up. */
 export function resolveAction(actor: Unit, action: number, targets: Unit[], ctx: ResolveContext): Hit[] {
   if (action === 0) return targets.map((t) => resolvePhysical(actor, t, ctx));
   if (action >= 1000) return targets.map((t) => resolveItem(t, action - 1000, ctx));
+  if (action === 82) summon(actor, ctx);
   const hits: Hit[] = [];
   for (const t of targets) {
     if ((action === 55 || action === 81) && t === actor) {

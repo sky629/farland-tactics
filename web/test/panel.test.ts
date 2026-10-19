@@ -107,6 +107,7 @@ describe('unitName / describeHit', () => {
     expect(unitName(unit({ slot: 0, id: 1 }), t)).toBe('카린');
     expect(unitName(unit({ slot: 0, id: 2 }), t)).toBe('알');
     expect(unitName(unit({ slot: 10, id: 8, race: 1 }), t)).toBe('slime');
+    expect(unitName(unit({ slot: 12, id: 27, side: 7, race: 9 }), t)).toBe('종족 9');   // the spoils of a named foe keep its id (removeFallen) but are an object now (side 7, race 9 = gold), not 히드라
   });
   it('writes one log line per hit', () => {
     const a = unit({ slot: 0, id: 1 }), e = unit({ slot: 10, id: 8, race: 1 });

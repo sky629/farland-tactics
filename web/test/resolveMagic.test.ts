@@ -21,6 +21,7 @@ function magicTable(): MagicData[] {
   m[41] = MAGIC({ name: 'resurrection', elem2: 10, target: 1 });
   m[55] = MAGIC({ name: 'lifesteal', elem2: -5 });
   m[64] = MAGIC({ name: 'sacrifice', elem2: 10, target: 1 });
+  m[82] = MAGIC({ name: 'summon', elem2: -10, target: 2, shape: 3, range_min: 1, range_max: 15, mp_cost: 100 });
   return m;
 }
 const grid = new BattleGrid(flatMap(9));
@@ -29,6 +30,19 @@ const caster = (over = {}) => unit({ slot: 0, c: 4, r: 4, dir: 1, wis: 10, agi: 
 const foe = (over = {}) => unit({ slot: 10, c: 6, r: 4, dir: 2, mgr: 10, agi: 10, hp: 30, side: 4, id: 8, ...over });
 
 describe('resolveMagic (FUN_0043b4a0 magic cases)', () => {
+  it('천사소환 (82) hurts nobody: FUN_0043b4a0 case 0x52 only marks the summon (popup 90000) and skips the damage path', () => {
+    const t = foe({ mgr: 0 });
+    expect(resolveMagic(caster({ wis: 100 }), t, 82, ctx([]))).toMatchObject({ kind: 'none', value: 0 });
+    expect(t.hp).toBe(30);
+  });
+  it('a summon (FUN_0043e3b0 case 0x52) stands every hidden non-party unit up on a free cell within 8 of the caster', () => {
+    const a = caster(), t = foe(), hidden = unit({ slot: 11, c: 0, r: 0, status: 9, side: 6, id: 8 }), object = unit({ slot: 12, c: 0, r: 0, status: 9, side: 7, id: 8 });
+    const c = { ...ctx([3, 12, 9, 9]), units: units(a, t, hidden, object) };
+    resolveAction(a, 82, [t], c);
+    expect(hidden.status).toBe(0);
+    expect(Math.abs(hidden.c - a.c) <= 8 && Math.abs(hidden.r - a.r) <= 8 && !(hidden.c === a.c && hidden.r === a.r) && !(hidden.c === t.c && hidden.r === t.r)).toBe(true);
+    expect([object.status, object.c, object.r]).toEqual([9, 0, 0]);                 // objects (side 7) are not summoned
+  });
   it('damage = power + wis − mgr, no rolls, no facing or height bonus', () => {
     const t = foe({ dir: 1 });
     const rng = fixedRng([0]);

@@ -29,7 +29,7 @@ export class ScriptVm {
   protected modalOpen = false;
   private timer = 0;
   private window: { where: Where; speaker: number; firstLine: boolean } | null = null;
-  private resultPayload: unknown = null;
+  private result: { pool: number; text: string | null } | null = null;   // BATTLE_RESULT in progress: the EXP pool dialog, then the level-up message
   private resumeAfterEnd = false;
 
   constructor(protected readonly res: Resources, protected readonly c: Campaign, protected readonly host: Host) {}
@@ -40,7 +40,7 @@ export class ScriptVm {
     if (!program) { this.host.log('warn', `${stageName(stage)}: no such program`); return false; }
     const pc = findLabel(program, label);
     if (pc === null) { this.host.log('warn', `${stageName(stage)}: no label ${label}`); return false; }
-    this.state.program = program; this.state.pc = pc; this.wait = null; this.modalOpen = false; this.window = null;
+    this.state.program = program; this.state.pc = pc; this.wait = null; this.modalOpen = false; this.window = null; this.result = null;   // a BATTLE_RESULT in progress (a load during the EXP dialog) is forgotten with the rest
     return true;
   }
 
@@ -223,7 +223,8 @@ export class ScriptVm {
     const unitArg = (k: number): Unit | null | 'skip' => { const id = i(k); if (id === null || id === 0) return 'skip'; return findUnit(this.c, id); };
     const first = unitArg(0);
     if (first === 'skip' && UNIT_FIRST.has(ins.op)) return 'next';
-    if (first === null && UNIT_FIRST.has(ins.op) && ins.op !== 'ATTACH_SPRITE') { this.host.log('warn', `${ins.op}: unit ${idx(0)} not found`); return 'next'; }   // the original would misparse here; we skip loudly
+    if (first === null && UNIT_FIRST.has(ins.op) && ins.op !== 'ATTACH_SPRITE' && ins.op !== 'REMOVE_UNIT') { this.host.log('warn', `${ins.op}: unit ${idx(0)} not found`); return 'next'; }   // the original would misparse here; we skip loudly — except a removal of one already gone: the slot a looted drop left empty before the story's REMOVE_UNIT (beat29 of day 15 removes foes 27 and 28 after REMOVE_DEAD) has nothing to do and nothing to say
+    if (first === null && ins.op === 'REMOVE_UNIT') return 'next';
     const un = first === 'skip' ? null : first;
     const sprite = (u: Unit, patch: Partial<NonNullable<Unit['sprite']>>) => { u.sprite = { ...u.sprite, ...patch }; };
     switch (ins.op) {
@@ -275,7 +276,9 @@ export class ScriptVm {
       }
       case 'TARGET_CLASS40': { const t = findUnit(this.c, 24); if (t) t.race = 0x40; return 'next'; }
       case 'TEST_ACTIVE': this.state.result = un && un.status !== 1 && un.side !== 7 ? 1 : 0; return 'next';
-      case 'TEST_IS_ACTOR': { const actor = this.c.actor === null ? null : this.c.units[this.c.actor]; this.state.result = un && actor === un ? 1 : 0; if (this.state.result === 0) { const t = findUnit(this.c, 24); if (t) t.hp = 1; } return 'next'; }
+      // FUN_0040a5c0 case 0x2e: when the actor is someone else, the battle target stands back up with 1 HP (HP = 1, status = 0) — the
+      // boss "only its destined foe may fell" (듀마, 앨비스: 알의 최후의 한 방) keeps fighting instead of lying unbeatable at 1 HP
+      case 'TEST_IS_ACTOR': { const actor = this.c.actor === null ? null : this.c.units[this.c.actor]; this.state.result = un && actor === un ? 1 : 0; if (this.state.result === 0) { const t = findUnit(this.c, 24); if (t) { t.hp = 1; t.status = 0; this.host.log('info', `TEST_IS_ACTOR: slot ${t.slot} stands back up at 1 HP`); this.host.unitsChanged(); } } return 'next'; }
       case 'TEST_UNITS_1_2': { const ok = (id: number) => { const v = findUnit(this.c, id); return v !== null && ![1, 3, 4, 5, 8, 9].includes(v.status) ? 1 : 0; }; this.state.result = ok(1) | ok(2); return 'next'; }
       // items and gold
       case 'GIVE_ITEM': giveItem(this.c.inventory, findUnit(this.c, 1), idx(0), i(1) ?? 1, items); return 'next';
@@ -288,19 +291,22 @@ export class ScriptVm {
       case 'BATTLE_START': case 'BATTLE_START_HEAL':
         startBattle(this.c.units, ins.op === 'BATTLE_START_HEAL');
         this.c.turn = 0; this.state.restore = 'battle'; this.host.enterBattle(); return 'next';
-      case 'BATTLE_RESULT': {
-        if (!this.modalOpen) {
-          const gold = idx(0);
-          if (gold > 0) addGold(this.c.inventory, gold);
-          const levelUps: { slot: number; from: number; to: number }[] = [];
+      case 'BATTLE_RESULT': {                                                  // FUN_0040a5c0 case 9: gold, then dialog 0xA2 hands the party an EXP pool to share, then level-ups
+        if (!this.result) { const gold = idx(0); if (gold > 0) addGold(this.c.inventory, gold); this.result = { pool: idx(1), text: null }; }
+        if (this.result.text === null) {
+          if (!this.modal('result', { gold: idx(0), pool: this.result.pool }).done) return 'wait';   // the host adds the shares to the units
+          const ups: string[] = [];
           for (const v of this.c.units.slice(0, 10)) if (v) {
             const from = v.level;
             while (v.level * 100 <= v.exp && v.level < 99) { v.level++; growUnit(v, this.res.tables.race[v.race]!, true, this.res.rng, this.res.tables.magic); }
-            if (v.level !== from) levelUps.push({ slot: v.slot, from, to: v.level });
+            if (v.level !== from) ups.push(`${this.speakerName(v.id) ?? `유닛 ${v.slot}`}: 레벨 ${from} → ${v.level}`);
           }
-          this.resultPayload = { gold, param: idx(1), levelUps };
+          if (ups.length === 0) { this.result = null; return 'next'; }
+          this.result.text = ups.join('\n');
         }
-        return this.modal('result', this.resultPayload).done ? 'next' : 'wait';
+        if (!this.modal('message', this.result.text).done) return 'wait';
+        this.result = null;
+        return 'next';
       }
       default:
         this.host.log('warn', `${ins.op} is not implemented; skipped`);

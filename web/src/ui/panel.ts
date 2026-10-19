@@ -1,3 +1,4 @@
+import { isTreasure } from '../battle/unit';
 import { usableItems } from '../battle/inventory';
 import { hasMoveTarget } from '../battle/moveRange';
 import type { Hit } from '../battle/resolve';
@@ -29,7 +30,7 @@ export const STATUS_NAMES: Record<number, string> = { 0: '정상', 1: '사망', 
 export const itemName = (item: ItemData): string => item.name.replace(/_/g, ' ');
 
 export function unitName(u: Unit, tables: Tables): string {
-  return (u.id !== 8 && u.id < 30 && SPEAKER_NAMES[u.id]) || tables.race[u.race]?.name.replace(/_/g, ' ') || `종족 ${u.race}`;
+  return (!isTreasure(u) && u.id !== 8 && u.id < 30 && SPEAKER_NAMES[u.id]) || tables.race[u.race]?.name.replace(/_/g, ' ') || `종족 ${u.race}`;
 }
 
 export function describeHit(actor: Unit, hit: Hit, units: (Unit | null)[], tables: Tables): string {

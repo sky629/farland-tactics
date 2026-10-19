@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { applyRoster, Battle, createParty, isDash } from '../src/battle/battle';
+import { applyRoster, Battle, createParty, isDash, startBattle } from '../src/battle/battle';
 import { BattleGrid } from '../src/battle/grid';
 import { countOf, emptyInventory, giveItem } from '../src/battle/inventory';
 import type { BattleEvent, Command } from '../src/battle/types';
@@ -74,6 +74,11 @@ describe('treasure pickup (battle_rules §4.4)', () => {
     expect(b.state.inventory.gold).toBe(50);
     expect(b.state.units[12]).toBeNull();
   });
+  it('a named unit\'s drop (its own id, race 9) is taken like a chest', () => {
+    const b = start(1, flatMap(9), [...roster, chest({ unit_id: 27, drop_gold: 50 })]);
+    expect(types(moveHero(b, 3, 4))).toEqual(['moved', 'pickup', 'removed']);
+    expect(b.state.inventory.gold).toBe(50);
+  });
   it('an item chest goes to the party inventory, equipment into the bag of the unit that stepped on it', () => {
     const b = start(1, flatMap(9), [...roster, chest({ drop_item: 7 }), chest({ drop_item: 1, c: 2, r: 3 })]);
     moveHero(b, 3, 4);
@@ -91,7 +96,7 @@ describe('treasure pickup (battle_rules §4.4)', () => {
     expect(b.state.units[0]).toMatchObject({ c: 3, r: 4 });
   });
   it('a hidden story object (not a chest) is neither taken nor destroyed when stepped on', () => {
-    const b = start(1, flatMap(9), [...roster, chest({ unit_id: 14, status: 9 })]);        // a hidden NPC object (e.g. 잃어버린 어린이) at (3,4)
+    const b = start(1, flatMap(9), [...roster, chest({ unit_id: 14, race: 2, status: 9 })]);   // a hidden NPC object (e.g. 잃어버린 어린이, race 36) at (3,4): not a drop race
     const ev = moveHero(b, 3, 4);
     expect(types(ev)).toEqual(['moved']);
     expect(b.state.units[12]).toMatchObject({ id: 14, side: 7, status: 9 });
@@ -173,16 +178,21 @@ describe('party rules (spec §11)', () => {
     expect(solo.state.units[1]).toBeNull();
     expect(solo.state.phase).toEqual({ kind: 'player', sel: { mode: 'idle' } });
   });
-  it('(0, 0) placeholders: party units are placed next to the placed party, non-party units are dropped', () => {
+  it('a HEAL start leaves the spoils of a fallen foe (side 7) at HP 0: objects are not healed', () => {
+    const o = unit({ slot: 12, id: 27, side: 7, race: 8, hp: 0, hpMax: 150, status: 0 });
+    startBattle([o], true);
+    expect(o.hp).toBe(0);
+  });
+  it('(0, 0) placeholders: party units are placed next to the placed party, hidden non-party units wait there for a summon', () => {
     const map = flatMap(9); map.cellAt[0] = -1;                                         // (0, 0) does not exist, as on the real maps
     const ros = roster.map((r) => (r.unit_id === 2 ? { ...r, c: 0, r: 0 } : r));
-    ros.push({ ...roster[2]!, c: 0, r: 0 });                                             // a reinforcement the script would place later
+    ros.push({ ...roster[2]!, c: 0, r: 0, status: 9 });                                  // an angel 천사소환 will stand up (maps 37, 69, 137)
     const b = Battle.start(entry, map, roster1, ros, t, 1);
     const hero2 = b.state.units[1]!;
     expect(b.state.grid.cell(hero2.c, hero2.r)).not.toBeNull();
     expect(Math.abs(hero2.c - 2) + Math.abs(hero2.r - 4)).toBeLessThanOrEqual(1);   // around hero 1 at (2,4)
     expect([hero2.c, hero2.r]).not.toEqual([2, 4]);
-    expect(b.state.units[12]).toBeNull();
+    expect(b.state.units[12]).toMatchObject({ c: 0, r: 0, status: 9 });
     expect(b.state.units[10]).not.toBeNull();
   });
   it('rejects a roster unit placed on a missing cell', () => {

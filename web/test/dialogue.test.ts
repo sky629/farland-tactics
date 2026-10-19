@@ -72,9 +72,26 @@ describe('Dialogue', () => {
     dlg.openModal('save', -1, ctx);                                            // no slot list given: all 32 empty
     root.find('취소')!.click();
     expect(dlg.takeModalResult()).toBe(-1);
-    dlg.openModal('result', { gold: 120, param: 0, levelUps: [{ slot: 0, from: 2, to: 3 }] }, ctx);
+  });
+  it('result modal: gold, then the EXP pool shared out — opens on the equalizing split, 균등 splits evenly, ± moves ten points within the pool, 확인 adds the shares to the units → 0', () => {
+    const { root, dlg, ctx } = setup();
+    ctx.party = [unit({ slot: 0, id: 1, exp: 44 }), unit({ slot: 1, id: 2, exp: 59 })];
+    dlg.openModal('result', { gold: 120, pool: 200 }, ctx);
     expect(root.find('120 Gold')).not.toBeNull();
-    root.find('닫기')!.click();
+    expect(root.find('경험치 200')).not.toBeNull();
+    expect(root.find('+108')).not.toBeNull();                                  // 44 → 59, then 185 split 93/92 (dialog 0xA2's opening split)
+    expect(root.find('+92')).not.toBeNull();
+    root.find('균등')!.click();
+    expect(root.find('+100')).not.toBeNull();
+    root.find('+10')!.click();                                                 // the pool is spent: a share cannot grow past it
+    expect(root.find('+110')).toBeNull();
+    root.find('−10')!.click();                                                 // first unit gives ten back …
+    expect(root.find('+90')).not.toBeNull();
+    root.find('+10')!.click();                                                 // … and takes them again
+    expect(root.find('+90')).toBeNull();
+    root.find('확인')!.click();
+    expect(ctx.party[0]!.exp).toBe(144);
+    expect(ctx.party[1]!.exp).toBe(159);
     expect(dlg.takeModalResult()).toBe(0);
   });
   it('shop modal lists items with price and owned count; 구매 buys through shop.buy; 유니트 일람 opens the party and comes back; 돌아오기 → 1', () => {
@@ -115,6 +132,15 @@ describe('Dialogue', () => {
     expect(u.bag).toContain(3);
     root.find('닫기')!.click();
     expect(el(dlg.modal).hidden).toBe(true);
+  });
+  it('party menu 팔기 sells a bag item for half its price (menu 103 "도구 → 팔기")', () => {
+    const { root, dlg, ctx } = setup();
+    const u = ctx.party[0]!; u.bag = [3, 0, 0, 0]; ctx.tables.item[3]!.price = 80; ctx.inventory.gold = 5;
+    dlg.openParty(ctx);
+    root.find('팔기 pike')!.click();
+    expect(u.bag[0]).toBe(0);
+    expect(ctx.inventory.gold).toBe(45);
+    expect(root.find('팔기 pike')).toBeNull();
   });
   const slotList = (): (SaveSummary | null)[] => {
     const list = new Array<SaveSummary | null>(32).fill(null);

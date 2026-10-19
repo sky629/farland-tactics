@@ -77,3 +77,7 @@ export function createUnit(rec: RosterUnit, slot: number, tables: Tables, rng: R
   }
   return u;
 }
+
+/** A thing to pick up: an object (side 7) of the drop races — 8 보물상자 (an item), 9 금 (gold) — whether a roster's chest or a fallen
+ *  unit's drop (FUN_0043a2e0 case 9 turns the unit into one and keeps its id). Story objects (잃어버린 어린이, 붙잡힌 루루 …) have their own races. */
+export const isTreasure = (u: Unit): boolean => u.side === 7 && (u.race === 8 || u.race === 9);

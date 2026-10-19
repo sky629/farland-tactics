@@ -166,12 +166,13 @@ describe('pathTo (FUN_00438960) and canStop', () => {
   it('canStop needs move points and an empty cell, own cell or a treasure object', () => {
     const grid = new BattleGrid(flatMap(7));
     const u = unit({ slot: 0, c: 3, r: 3 });
-    const ally = unit({ slot: 1, c: 4, r: 3 }), chest = unit({ slot: 20, c: 3, r: 4, id: 8, side: 7, race: 8 });
-    const all = units(u, ally, chest);
+    const ally = unit({ slot: 1, c: 4, r: 3 }), chest = unit({ slot: 20, c: 3, r: 4, id: 8, side: 7, race: 8 }), spoils = unit({ slot: 21, c: 5, r: 4, id: 27, side: 7, race: 9 });
+    const all = units(u, ally, chest, spoils);
     const t = computeMoveRange(grid, all, u, race);
     expect(canStop(t, all, u, 3, 3)).toBe(true);
     expect(canStop(t, all, u, 4, 3)).toBe(false);
     expect(canStop(t, all, u, 3, 4)).toBe(true);
+    expect(canStop(t, all, u, 5, 4)).toBe(true);                               // a named unit's drop (race 9, its own id kept) is a treasure too
     expect(canStop(t, all, u, 0, 0)).toBe(false);
   });
 });

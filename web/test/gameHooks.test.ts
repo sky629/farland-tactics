@@ -83,7 +83,19 @@ describe('battle script hooks (story_flow.md §5)', () => {
     expect(byId(core, 1).level).toBe(3);
     expect(core.campaign.flags[6]).toBe(1);                                    // levelup01 saw BEAT09's flag: target hooks came first
   });
-  it('victory runs COMPLETE from the stage file; defeat runs GAMEOVER from EVENT00 after BEAT%02d of the fallen hero', () => {
+  it('a level-up on the killing blow of the last enemy runs levelup%02d and then COMPLETE: the finished battle is revisited for its remaining hooks', () => {
+    const { core, stage } = boot(['COMPLETE', ['FLAG_SET', 7, 1], ['TOWN']], ['levelup01', ['FLAG_SET', 6, 1], ['END']], [R(1, 0, 2, 4), R(9, 4, 3, 4)]);
+    const last = byId(core, 9); last.hp = 1;
+    byId(core, 1).exp = 199;
+    attack(core, 0, last);
+    settle(core, stage);
+    expect(byId(core, 1).level).toBe(3);
+    expect(core.campaign.flags[6]).toBe(1);                                    // levelup01 ran …
+    expect(core.campaign.flags[7]).toBe(1);                                    // … and COMPLETE after it
+    expect(core.mode).toBe('town');
+    expect(stage.calls.some((c) => c[0] === 'log' && c[1] === 'warn')).toBe(false);
+  });
+  it('victory runs COMPLETE from the stage file; defeat runs GAMEOVER from EVENT00 after BEAT%02d of the fallen hero, and its END ends the game', () => {
     const a = boot(['COMPLETE', ['FLAG_SET', 7, 1], ['TOWN']], [], [R(1, 0, 2, 4), R(9, 4, 3, 4)]);
     byId(a.core, 9).hp = 1;
     attack(a.core, 0, byId(a.core, 9));
@@ -99,8 +111,10 @@ describe('battle script hooks (story_flow.md §5)', () => {
     expect(byId(b.core, 1).status).toBe(1);
     expect(b.core.campaign.flags[12]).toBe(1);
     expect(b.core.campaign.flags[8]).toBe(1);
-    expect(b.core.mode).toBe('battle');
+    expect(b.core.mode).toBe('ended');                                        // no battle to go back to
+    expect(b.core.battle).toBeNull();
     expect(b.core.result).toBe('defeat');
+    expect(b.stage.calls).toContainEqual(['log', 'info', 'game over']);
   });
   it('victory without a COMPLETE label shows the result and stays in the battle', () => {
     const { core, stage } = boot([], [], [R(1, 0, 2, 4), R(9, 4, 3, 4)]);
