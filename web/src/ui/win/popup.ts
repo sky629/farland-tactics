@@ -12,7 +12,7 @@ import { usableItems, type Inventory } from '../../battle/inventory';
 import type { Command } from '../../battle/types';
 import type { Unit } from '../../battle/unit';
 import type { Tables } from '../../data/types';
-import { unitName } from '../panel';
+import { unitName } from '../names';
 import { buildMenuList, mnemonicItem, type MenuItem } from './menubar';
 import { FACILITY_BASE } from './commands';
 
@@ -42,11 +42,19 @@ export function unitPopupItems(u: Unit, inv: Inventory, tables: Tables): PopupIt
  */
 export function townPopupItems(hotspots: { name: string }[], flags: number[]): PopupItem[] {
   const open = hotspots.map((h, i) => ({ h, i })).filter(({ i }) => (flags[i] ?? 0) !== 0);
-  const places: PopupItem[] = open.map(({ h, i }) => ({ label: h.name, ul: -1, key: null, accel: null, id: FACILITY_BASE + i, enabled: true, separator: false, cmd: { type: 'cancel' } }));
+  const places: PopupItem[] = open.map(({ h, i }) => ({ label: h.name, ul: -1, key: null, accel: null, id: FACILITY_BASE + i, enabled: true, separator: false }));
   return [
     { ...mnemonicItem('이동하다(&M)'), id: null, enabled: places.length > 0, separator: false, items: places },
     { label: '-', ul: -1, key: null, accel: null, id: null, enabled: false, separator: true },
   ];
+}
+
+/** Every enabled leaf with an id, by id — what a click in the popup can pick (a unit entry with a battle command, a menu item, a facility). */
+export function pickable(items: PopupItem[]): Map<number, PopupItem> {
+  const out = new Map<number, PopupItem>();
+  const walk = (list: PopupItem[]) => { for (const it of list) { if (it.items) walk(it.items); else if (it.id !== null && it.enabled && !it.separator) out.set(it.id, it); } };
+  walk(items);
+  return out;
 }
 
 /** A popup menu at a point of the game frame; resolves with the picked item, or null on Esc, a click elsewhere or a right click. */
@@ -58,9 +66,7 @@ export class PopupMenu {
   open(x: number, y: number, items: PopupItem[]): Promise<PopupItem | null> {
     this.close(null);
     const doc = this.layer.ownerDocument;
-    const picks = new Map<number, PopupItem>();
-    const index = (list: PopupItem[]) => { for (const it of list) { if (it.id !== null && it.cmd) picks.set(it.id, it); if (it.items) index(it.items); } };
-    index(items);
+    const picks = pickable(items);
     const box = buildMenuList(doc, items, (id) => this.close(picks.get(id) ?? null));
     box.style.left = `${x}px`; box.style.top = `${y}px`;
     this.layer.appendChild(box); this.box = box;

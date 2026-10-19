@@ -20,6 +20,7 @@ describe('menu bar model from menu 103', () => {
     expect(accelOf(m, 'z', true)).toBe(40026);
     expect(accelOf(m, 'F6', false)).toBeNull();
     expect(accelOf(menuModel(menu, {}, false), 'z', true)).toBeNull();     // a dev-only accelerator is off outside dev
+    expect(accelOf(menuModel(menu, { 40009: false }, true), 'F10', false)).toBeNull();   // a greyed item's accelerator does nothing, as in Win32
   });
   it('enabled flags land on the items; a separator is never enabled', () => {
     const m = menuModel(menu, { 40009: false }, false);

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { emptyInventory, giveItem } from '../src/battle/inventory';
-import { unitPopupItems } from '../src/ui/win/popup';
+import { pickable, unitPopupItems, type PopupItem } from '../src/ui/win/popup';
 import type { Unit } from '../src/battle/unit';
 import { tables, unit } from './helpers/battleFixtures';
 
@@ -33,5 +33,15 @@ describe('the battle right-click popup (FUN_00430c80: inserted above the 맵 men
   });
   it('a sleeping or stoned unit (status 3/4/5/8/9/1) can do nothing', () => {
     for (const status of [1, 3, 4, 5, 8, 9]) expect(unitPopupItems(karin({ spells: [1], status }), emptyInventory(), t).slice(0, 3).every((i) => !i.enabled)).toBe(true);
+  });
+  it('every enabled item with an id can be picked — the 맵 menu items appended to the popup carry no battle command', () => {
+    const items: PopupItem[] = [
+      { label: '알의 행동', ul: -1, key: null, accel: null, id: 102, enabled: true, separator: false, cmd: { type: 'beginMove' } },
+      { label: '표시(D)', ul: -1, key: 'd', accel: null, id: null, enabled: true, separator: false, items: [{ label: '유니트 일람(L)', ul: -1, key: 'l', accel: 'F2', id: 40010, enabled: true, separator: false }] },
+      { label: '턴 종료(T)', ul: -1, key: 't', accel: 'F10', id: 40009, enabled: false, separator: false },
+    ];
+    const p = pickable(items);
+    expect([...p.keys()]).toEqual([102, 40010]);                              // the greyed 턴 종료 is not pickable
+    expect(p.get(40010)!.label).toBe('유니트 일람(L)');
   });
 });

@@ -4,7 +4,7 @@ import { addGold, giveItem, takeItem } from '../battle/inventory';
 import { growUnit, type Unit } from '../battle/unit';
 import type { Campaign } from '../game/campaign';
 import { createScriptUnit, findUnit, removeDead, removeScriptUnits } from '../game/campaign';
-import { SPEAKER_NAMES } from '../ui/panel';
+import { SPEAKER_NAMES } from '../ui/names';
 import type { Host, ModalKind, Resources, Restore, Where } from './host';
 import { face, findLabel, list, num, str, type Instr, type Program } from './program';
 

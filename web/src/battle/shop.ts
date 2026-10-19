@@ -17,7 +17,7 @@ export function buy(inv: Inventory, unit: Unit | null, id: number, items: ItemDa
 export type SellResult = 'ok' | 'nothing';
 
 /**
- * Selling (FT2.exe menu 103 "도구 → 팔기", dialog 118 "더블클릭하면 매각할 수 있습니다": the unit list's sale tab lists the unit's bag): the piece
+ * Selling a piece of equipment (the unit list's 장비 tab: popup "%d에 판다", string 0x44ad28): the piece
  * at bag index `which` leaves the bag for half its price (the original's sale-price formula is not recovered: half is the assumption,
  * see analysis/story_flow.md §8).
  */

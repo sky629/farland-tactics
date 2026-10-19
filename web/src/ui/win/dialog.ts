@@ -1,8 +1,9 @@
 /**
  * A Win95 dialog box built from one of the original's templates (assets/data/dialogs.json): the title bar, then every control
  * at its template position (layout.ts). Screens (screens/*.ts) bind the controls by their original ids and resolve a result.
- * A box is modal over the game frame: a transparent backdrop takes the clicks the original's main window would not get.
- * A tab control (SysTabControl32) hosts other templates as its pages, each with its own control set.
+ * A box is modal over the game frame: a transparent backdrop takes the clicks the original's main window would not get, and
+ * the host (`Dialogs`) knows which boxes are open so the page can hold its menu and accelerators while one is — as the Win32
+ * modal loop held the owner window. A tab control (SysTabControl32) hosts other templates as its pages.
  */
 import type { DialogTemplate } from '../../data/types';
 import { layoutDialog, metricsFor, type DialogLayout, type LaidControl } from './layout';
@@ -11,8 +12,29 @@ import { labelNodes } from './menubar';
 export const TITLE_H = 18;                                                     // the Win95 caption height in CSS px at scale 1
 const TAB_H = 18;                                                              // the tab header row
 
-export interface DialogHost { layer: HTMLElement; templates: Record<string, DialogTemplate> }
 export interface ListRow { text: string; enabled?: boolean }
+
+/** The frame layer the boxes live in, the templates, and the stack of open boxes (top last). */
+export class Dialogs {
+  private readonly stack: DialogBox<unknown>[] = [];
+  constructor(readonly layer: HTMLElement, readonly templates: Record<string, DialogTemplate>) {
+    const doc = layer.ownerDocument;
+    doc.addEventListener('keydown', (e) => {                                   // Esc cancels the top box wherever the focus went; no key reaches the game while a box is open
+      const top = this.stack[this.stack.length - 1];
+      if (!top) return;
+      if (e.key === 'Escape') { top.cancel(); e.stopPropagation(); e.preventDefault(); return; }
+      if (e.key === 'Enter' && !(e.target instanceof HTMLButtonElement)) { top.pressDefault(); e.stopPropagation(); e.preventDefault(); return; }
+      if (!(e.target instanceof HTMLInputElement)) e.stopPropagation();
+    }, true);
+    layer.addEventListener('contextmenu', (e) => { if (this.stack.length > 0) e.preventDefault(); });
+  }
+  get busy(): boolean { return this.stack.length > 0; }
+  opened(box: DialogBox<unknown>): void { this.stack.push(box); }
+  closed(box: DialogBox<unknown>): void { const i = this.stack.indexOf(box); if (i >= 0) this.stack.splice(i, 1); }
+  /** Every open box is cancelled (a load, a script's end): their promises settle with their cancel value. */
+  closeAll(): void { for (const box of [...this.stack].reverse()) box.cancel(true); }
+}
+export type DialogHost = Dialogs;
 
 function template(host: DialogHost, id: number | string): DialogTemplate {
   const t = host.templates[String(id)];
@@ -29,7 +51,7 @@ export class ControlSet {
     const doc = host.layer.ownerDocument;
     this.layout = layoutDialog(t, metricsFor(t.font));
     this.body = doc.createElement('div'); this.body.className = 'w95-body';
-    this.body.style.font = `${metricsFor(t.font).charH}px 'Gulim','굴림','Apple SD Gothic Neo','Malgun Gothic','Noto Sans KR',sans-serif`;   // the template's font size
+    this.body.style.font = `${metricsFor(t.font).charH}px 'Gulim','굴림','Apple SD Gothic Neo','Malgun Gothic','Noto Sans KR',sans-serif`;   // the template's font size, inherited by its controls
     this.body.style.width = `${this.layout.width}px`; this.body.style.height = `${this.layout.height}px`;
     for (const c of this.layout.controls) {
       const el = this.make(doc, c);
@@ -54,10 +76,15 @@ export class ControlSet {
   has(id: number): boolean { return this.byId.has(id); }
   setText(id: number, text: string): void { this.control(id).textContent = text; }
   onClick(id: number, fn: () => void): void { this.control(id).addEventListener('click', fn); }
-  setEnabled(id: number, on: boolean): void { const el = this.control(id); if (el instanceof HTMLButtonElement || el instanceof HTMLInputElement) el.disabled = !on; else el.classList.toggle('disabled', !on); }
+  /** Buttons and edits are disabled; a check/radio label disables its input; anything else is greyed by class. */
+  setEnabled(id: number, on: boolean): void {
+    const el = this.control(id);
+    if (el instanceof HTMLButtonElement || el instanceof HTMLInputElement) el.disabled = !on;
+    else { const input = el.querySelector('input'); if (input) input.disabled = !on; el.classList.toggle('disabled', !on); }
+  }
   hide(id: number): void { this.control(id).hidden = true; }
   /** Fills a listbox: one row per entry; a click selects (onPick), a double click confirms (onDouble), a right click opens a popup (onContext). A tab in a row is the original's column stop. */
-  setList(id: number, rows: ListRow[], onPick: (i: number) => void, onDouble?: (i: number) => void, onContext?: (i: number, ev: MouseEvent) => void): void {
+  setList(id: number, rows: ListRow[], onPick: (i: number) => void, onDouble?: (i: number, ev: MouseEvent) => void, onContext?: (i: number, ev: MouseEvent) => void): void {
     const list = this.control(id), doc = list.ownerDocument;
     list.replaceChildren(...rows.map((r, i) => {
       const row = doc.createElement('div'); row.className = `w95-row${r.enabled === false ? ' disabled' : ''}`; row.setAttribute('role', 'option');
@@ -66,7 +93,7 @@ export class ControlSet {
       else { row.append(...cols.map((c, k) => { const sp = doc.createElement('span'); sp.className = k === 0 ? 'name' : 'col'; sp.textContent = c; return sp; })); row.classList.add('cols'); }
       if (r.enabled !== false) {
         row.addEventListener('click', () => { for (const x of list.children) x.classList.remove('selected'); row.classList.add('selected'); onPick(i); });
-        if (onDouble) row.addEventListener('dblclick', () => onDouble(i));
+        if (onDouble) row.addEventListener('dblclick', (ev) => onDouble(i, ev));
         if (onContext) row.addEventListener('contextmenu', (ev) => { ev.preventDefault(); ev.stopPropagation(); onContext(i, ev); });
       }
       return row;
@@ -100,25 +127,26 @@ export class DialogBox<T> extends ControlSet {
     const doc = host.layer.ownerDocument;
     this.cancelValue = opts.cancel ?? null;
     this.backdrop = doc.createElement('div'); this.backdrop.className = 'w95-backdrop';
-    const box = doc.createElement('div'); box.className = 'w95 w95-dialog w95-raised'; box.setAttribute('role', 'dialog');
+    const box = doc.createElement('div'); box.className = 'w95 w95-dialog w95-raised'; box.setAttribute('role', 'dialog'); box.tabIndex = -1;
     box.style.width = `${this.layout.width + 6}px`; box.style.height = `${this.layout.height + TITLE_H + 6 + extraH}px`;
     const title = doc.createElement('div'); title.className = 'w95-title'; title.textContent = this.layout.title; box.appendChild(title);
     box.appendChild(this.body);
-    box.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape' && this.cancelValue) { e.stopPropagation(); this.close(this.cancelValue()); }
-      if (e.key === 'Enter' && !(e.target instanceof HTMLButtonElement)) { const def = this.layout.controls.find((c) => c.kind === 'default'); if (def?.id !== null && def?.id !== undefined) { e.stopPropagation(); this.byId.get(def.id)?.click(); } }
-    });
     this.el = box;
   }
   /** A web-only row under the template's controls (the save file tools): the box was made `extraH` taller for it. */
   extra(el: HTMLElement): void { el.style.top = `${this.layout.height}px`; this.body.appendChild(el); }
+  /** Esc: the cancel value when the box has one (a box without one — the title, the EXP share — ignores Esc unless `force`d by closeAll). */
+  cancel(force = false): void { if (this.cancelValue) this.close(this.cancelValue()); else if (force) this.close(undefined as T); }
+  /** Enter: the template's default button, else nothing. */
+  pressDefault(): void { const def = this.layout.controls.find((c) => c.kind === 'default'); if (def?.id !== null && def?.id !== undefined) this.byId.get(def.id)?.click(); }
   show(): Promise<T> {
     const layer = this.host.layer;
     layer.append(this.backdrop, this.el);
+    this.host.opened(this as DialogBox<unknown>);
     const W = layer.clientWidth, H = layer.clientHeight;                       // centred in the frame, like the original's dialogs over its window
     this.el.style.left = `${Math.max(0, Math.round((W - this.el.offsetWidth) / 2))}px`; this.el.style.top = `${Math.max(0, Math.round((H - this.el.offsetHeight) / 2))}px`;
-    (this.el.querySelector('.w95-btn.default') as HTMLElement | null ?? this.el.querySelector('button') as HTMLElement | null)?.focus();
+    (this.el.querySelector('.w95-btn.default') as HTMLElement | null ?? this.el.querySelector('button') as HTMLElement | null ?? this.el).focus();
     return new Promise((resolve) => { this.settle = resolve; });
   }
-  close(value: T): void { this.el.remove(); this.backdrop.remove(); const s = this.settle; this.settle = null; s?.(value); }
+  close(value: T): void { this.el.remove(); this.backdrop.remove(); this.host.closed(this as DialogBox<unknown>); const s = this.settle; this.settle = null; s?.(value); }
 }

@@ -4,7 +4,7 @@ import type { Unit } from '../battle/unit';
 import type { Tables } from '../data/types';
 import type { SaveSummary } from '../save/format';
 import type { ModalKind, Where } from '../script/host';
-import { unitName } from './panel';
+import { unitName } from './names';
 import type { DialogHost } from './win/dialog';
 import { confirm } from './win/screens/confirm';
 import { pickSave } from './win/screens/saves';
@@ -35,8 +35,10 @@ export interface ModalContext { tables: Tables; inventory: Inventory; party: (Un
 
 
 /**
- * HTML overlay for the story scripts (spec §10): two dialogue windows, a modal box (message / ask / shop / result / save)
- * and the episode title. Only DOM glue lives here; clicks on the overlay are counted for WAIT_CLICK.
+ * The in-screen text layer of the play page: the original's two dialogue windows (window1/2.apd: top and bottom, face and lines),
+ * the episode title, the message box (MESSAGE), and the click counter for WAIT_CLICK. The other modals a script opens — ASK,
+ * SAVE_GAME, BATTLE_RESULT, SHOP — are the original's dialog boxes (ui/win/screens), attached once their templates are loaded;
+ * their answers reach the VM through the same takeModalResult() poll.
  */
 export class Dialogue {
   readonly windows: Record<Where, HTMLElement>;
@@ -138,6 +140,7 @@ export class Dialogue {
   closeAll(): void {
     this.windows.top.hidden = true; this.windows.bottom.hidden = true;
     this.modal.hidden = true; this.episode.hidden = true;
+    this.dialogs?.closeAll();                                                 // a load or a script's end: no stale box may answer the next script
     this.result = null;
   }
 

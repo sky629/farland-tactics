@@ -38,7 +38,7 @@ export function accelOf(m: MenuBarModel, key: string, ctrl: boolean): number | n
   const want = (ctrl ? `ctrl+${key}` : key).toLowerCase();
   const find = (items: MenuItem[]): number | null => {
     for (const i of items) {
-      if (i.accel !== null && i.id !== null && i.accel.toLowerCase() === want) return i.id;
+      if (i.accel !== null && i.id !== null && i.enabled && i.accel.toLowerCase() === want) return i.id;
       if (i.items) { const r = find(i.items); if (r !== null) return r; }
     }
     return null;
@@ -68,7 +68,7 @@ export function buildMenuList(doc: Document, items: MenuItem[], pick: (id: numbe
       row.addEventListener('mouseleave', () => { if (sub) { sub.remove(); sub = null; row.classList.remove('open'); } });
     } else if (it.enabled && it.id !== null) {
       const id = it.id;
-      row.addEventListener('mouseup', (e) => { e.stopPropagation(); pick(id); });
+      row.addEventListener('mouseup', (e) => { if (e.button !== 0) return; e.stopPropagation(); pick(id); });
     }
     box.appendChild(row);
   }
@@ -79,7 +79,7 @@ export function buildMenuList(doc: Document, items: MenuItem[], pick: (id: numbe
 export class MenuBar {
   private openIdx = -1;
   private dropdown: HTMLElement | null = null;
-  constructor(private readonly root: HTMLElement, private model: MenuBarModel, private readonly onCommand: (id: number) => void) {
+  constructor(private readonly root: HTMLElement, private model: MenuBarModel, private readonly onCommand: (id: number) => void, private readonly blocked: () => boolean = () => false) {
     root.classList.add('w95', 'w95-menubar');
     this.render();
     root.ownerDocument.addEventListener('mousedown', (e) => { if (!root.contains(e.target as Node)) this.close(); });
@@ -94,7 +94,7 @@ export class MenuBar {
     const doc = this.root.ownerDocument;
     this.root.replaceChildren(...this.model.bar.map((p, i) => {
       const el = doc.createElement('span'); el.className = 'w95-menu'; el.append(...labelNodes(doc, p.label, p.ul));
-      el.addEventListener('mousedown', (e) => { e.preventDefault(); if (this.openIdx === i) this.close(); else this.show(i); });
+      el.addEventListener('mousedown', (e) => { e.preventDefault(); if (this.blocked()) return; if (this.openIdx === i) this.close(); else this.show(i); });   // a modal dialog holds the menu, as the Win32 owner window was held
       el.addEventListener('mouseenter', () => { if (this.openIdx >= 0 && this.openIdx !== i) this.show(i); });
       return el;
     }));

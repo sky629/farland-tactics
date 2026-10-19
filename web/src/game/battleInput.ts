@@ -21,6 +21,7 @@ export function cellCommands(state: BattleState, cell: [number, number]): Comman
     }
     case 'move': {
       if (own && u.slot === sel.slot) return [{ type: 'cancel' }, { type: 'wait' }];
+      if (own) return [{ type: 'cancel' }, { type: 'select', slot: u.slot }, { type: 'beginMove' }];
       if (hostile) return [{ type: 'cancel' }, { type: 'beginTarget', action: 0 }, { type: 'act', c: cell[0], r: cell[1] }];
       return [{ type: 'move', c: cell[0], r: cell[1] }];
     }

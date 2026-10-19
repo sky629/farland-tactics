@@ -6,9 +6,8 @@
 import type { SaveSummary } from '../../../save/format';
 import { DialogBox, type DialogHost } from '../dialog';
 
-export const SAVE_ROW = '%2d: %2d일째  Turn%-3d %s';
 export type SaveMode = 'load' | 'save';
-export type SavePick = { slot: number } | { fresh: true } | null;
+export type SavePick = { slot: number } | { fresh: true } | { again: true } | null;   // again: a tool changed the slots — show the list afresh
 
 const pad2 = (n: number) => String(n).padStart(2, ' ');
 
@@ -17,13 +16,13 @@ export function savesRows(saves: (SaveSummary | null)[], mode: SaveMode): { slot
     const no = pad2(i + 1);
     if (s === null) return { slot: i, text: `${no}:           미등록`, enabled: mode === 'save' };
     if (s.broken) return { slot: i, text: `${no}:           손상됨`, enabled: mode === 'save' };
-    const where = s.turn > 0 ? `Turn${String(s.turn).padEnd(3, ' ')} ` : '어트랙터  ';
+    const where = s.turn >= 0 ? `Turn${String(s.turn).padEnd(3, ' ')} ` : '어트랙터  ';   // the header counts finished rounds: 0 at BATTLE_START, −1 in town
     return { slot: i, text: `${no}: ${pad2(s.stage)}일째  ${where}${s.title}`, enabled: true };
   });
 }
 
 /** Web-only tools under the original controls (loading only): export a slot as save%02d.dat, import a .dat, delete a slot. */
-export interface SaveFileTools { onExport(slot: number): void; onImport(file: File): void; onDelete(slot: number): void }
+export interface SaveFileTools { onExport(slot: number): void; onImport(file: File): Promise<void>; onDelete(slot: number): Promise<void> }
 
 export function pickSave(host: DialogHost, saves: (SaveSummary | null)[], mode: SaveMode, tools?: SaveFileTools): Promise<SavePick> {
   const box = new DialogBox<SavePick>(host, 143, { cancel: () => null }, tools ? 22 : 0);
@@ -38,8 +37,8 @@ export function pickSave(host: DialogHost, saves: (SaveSummary | null)[], mode: 
     const doc = host.layer.ownerDocument, strip = doc.createElement('div'); strip.className = 'w95-strip';
     const btn = (text: string, fn: () => void) => { const b = doc.createElement('button'); b.className = 'w95-btn'; b.textContent = text; b.addEventListener('click', fn); return b; };
     const file = doc.createElement('input'); file.type = 'file'; file.accept = '.dat'; file.hidden = true;
-    file.addEventListener('change', () => { const f = file.files?.[0]; if (f) { box.close(null); tools.onImport(f); } });
-    const exp = btn('내보내기', () => { if (chosen !== null && saves[chosen]) tools.onExport(chosen); }), del = btn('삭제', () => { if (chosen !== null && saves[chosen]) { box.close(null); tools.onDelete(chosen); } });
+    file.addEventListener('change', () => { const f = file.files?.[0]; if (f) void tools.onImport(f).then(() => box.close({ again: true })); });
+    const exp = btn('내보내기', () => { if (chosen !== null && saves[chosen]) tools.onExport(chosen); }), del = btn('삭제', () => { if (chosen !== null && saves[chosen]) void tools.onDelete(chosen).then(() => box.close({ again: true })); });
     strip.append(exp, btn('가져오기…', () => file.click()), del, file);
     box.extra(strip);
   }

@@ -23,6 +23,7 @@ describe('what a click means (the original: a selected unit attacks the enemy yo
     expect(cellCommands(state({ mode: 'move', slot: 0 }), [2, 3])).toEqual([{ type: 'cancel' }, { type: 'beginTarget', action: 0 }, { type: 'act', c: 2, r: 3 }]);
     expect(cellCommands(state({ mode: 'move', slot: 0 }), [2, 2])).toEqual([{ type: 'cancel' }, { type: 'wait' }]);
     expect(cellCommands(state({ mode: 'move', slot: 0 }), [5, 5])).toEqual([{ type: 'move', c: 5, r: 5 }]);
+    expect(cellCommands(state({ mode: 'move', slot: 0 }), [3, 2])).toEqual([{ type: 'cancel' }, { type: 'select', slot: 1 }, { type: 'beginMove' }]);   // another party member: switch to it
   });
   it('a target or a facing is one click', () => {
     expect(cellCommands(state({ mode: 'target', slot: 0 }), [2, 3])).toEqual([{ type: 'act', c: 2, r: 3 }]);

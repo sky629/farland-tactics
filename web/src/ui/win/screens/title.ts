@@ -7,8 +7,6 @@ import { DialogBox, type DialogHost } from '../dialog';
 
 export type TitleChoice = 'new' | 'load';
 
-export function titleChoice(id: number): TitleChoice | null { return id === 1 ? 'new' : id === 2 ? 'load' : null; }
-
 export function titleDialog(host: DialogHost): Promise<TitleChoice> {
   const box = new DialogBox<TitleChoice>(host, 124);
   box.setList(1051, [{ text: '파랜드 택틱스 2  시간의 이정표' }], () => {});

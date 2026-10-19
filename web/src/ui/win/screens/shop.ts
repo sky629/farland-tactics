@@ -9,7 +9,7 @@ import { countOf, isEquipment, type Inventory } from '../../../battle/inventory'
 import { buy, type BuyResult } from '../../../battle/shop';
 import type { Unit } from '../../../battle/unit';
 import type { ItemData, Tables } from '../../../data/types';
-import { unitName } from '../../panel';
+import { unitName } from '../../names';
 import { DialogBox, type DialogHost } from '../dialog';
 import { unitList } from './unitList';
 

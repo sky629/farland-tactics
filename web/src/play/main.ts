@@ -24,7 +24,7 @@ import { accelOf, MenuBar, menuModel, type MenuTemplate } from '../ui/win/menuba
 import { PopupMenu, townPopupItems, unitPopupItems, type PopupItem } from '../ui/win/popup';
 import { menuAction } from '../ui/win/commands';
 import { HOTSPOTS } from '../town/town';
-import type { DialogHost } from '../ui/win/dialog';
+import { Dialogs } from '../ui/win/dialog';
 import { confirm } from '../ui/win/screens/confirm';
 import { pickSave } from '../ui/win/screens/saves';
 import { titleDialog } from '../ui/win/screens/title';
@@ -52,6 +52,8 @@ let saveList: (SaveSummary | null)[] = [];
 const refreshSaves = async (): Promise<void> => { if (saves) saveList = await saves.summaries(); };
 
 const showError = (e: unknown) => { const msg = e instanceof AssetError || e instanceof DataError ? e.message : e instanceof Error ? `${e.name}: ${e.message}` : String(e); $('error').textContent = msg; console.error(e); };
+/** A failure that leaves no game to play (missing assets, no dialog templates): shown in the frame, dev panel or not. */
+const showFatal = (e: unknown) => { showError(e); const el = $('fatal'); el.textContent = `${$('error').textContent}\n(python3 -I tools/ft2_export.py extracted/FarlandTactics2 web/public/assets 로 자산을 다시 내보낸다)`; el.hidden = false; };
 const log = (kind: 'warn' | 'info', text: string) => { panel?.log(kind === 'warn' ? `⚠ ${text}` : text); if (kind === 'warn') console.warn(text); else console.info(text); };
 
 /** The game window (menu bar + 640×480 surface) scales as one by an integer factor; the dialogue and Win95 chrome inside scale with it. */
@@ -64,7 +66,7 @@ function resize(): void {
 
 /** Menu 103 and the popups' command ids → actions (commands.ts). */
 function menuCommand(id: number): void {
-  if (!core || !stage) return;
+  if (!core || !stage || dialogHost?.busy) return;                                           // a dialog box is modal: the menu waits, as the Win32 owner did
   const act = menuAction(id);
   if (act === null) return;
   if (typeof act === 'object') { core.townSelect(act.facility); return; }                               // 이동하다 ▸ a facility
@@ -75,9 +77,9 @@ function menuCommand(id: number): void {
     case 'unitList': if (dialogHost) void unitList(dialogHost, { tables: tablesRef!, inventory: core.campaign.inventory, party: core.campaign.units.slice(0, PARTY_SLOTS) }); break;   // F2 (dialog 107)
     case 'fullscreen': settings = { ...settings, fullscreen: !document.fullscreenElement }; applySettings(); break;   // F4
     case 'settings': if (dialogHost) void settingsDialog(dialogHost, settings, synthNotice(stage.musicFailure) ?? 'MIDI: 사운드폰트 합성 (FluidR3Mono_GM)').then((s) => { if (s) { settings = s; applySettings(); } }); break;   // F11 (dialog 156)
-    case 'bgm': if (dialogHost && midiTracks.length > 0) { const names = midiTracks.map((n) => `BGM ${String(n).padStart(2, '0')}`); void bgmDialog(dialogHost, names).then((name) => { const i = name ? names.indexOf(name) : -1; if (i >= 0) stage?.playMusic(midiTracks[i]!); }); } break;   // dialog 160
+    case 'bgm': if (dialogHost && midiTracks.length > 0) { const names = midiTracks.map((n) => `BGM ${String(n).padStart(2, '0')}`); void bgmDialog(dialogHost, names).then((name) => { const i = name ? names.indexOf(name) : -1; if (i >= 0) stage?.playMusic(midiTracks[i]!); }); } break;   // dialog 160 — its rows are not recovered: file names [추정]
     case 'objective': if (core.battle) dialogueRef?.openModal('message', `${core.battle.state.entry.episode} — ${core.battle.state.entry.objective}`, { tables: tablesRef!, inventory: core.campaign.inventory, party: core.campaign.units.slice(0, PARTY_SLOTS) }); break;   // 클리어 조건
-    case 'quit': if (dialogHost) void confirm(dialogHost, '게임을 종료합니까?').then((yes) => { if (yes) location.reload(); }); break;   // 게임종료: the web's exit is the title page
+    case 'quit': if (dialogHost) void confirm(dialogHost, '게임을 종료합니까?').then((yes) => { if (yes) location.reload(); }); break;   // 게임종료: the web's exit is the title page; the question is ours [추정]
     case 'showPlaces': stage.toggleTownHighlights(); break;                                               // 갈 수 있는 장소 표시
     case 'fullMap': break;                                                                                 // 전체 맵 F3: the original's screen is not recovered — disabled in menuFlags
   }
@@ -85,9 +87,10 @@ function menuCommand(id: number): void {
 /** Which menu items are live right now: 턴 종료 only in our battle phase; 클리어 조건 only in a battle; the rest of the system menu waits for its dialogs. */
 function menuFlags(): Record<number, boolean> {
   const b = core?.battle ?? null;
-  return { 40009: b !== null && menuEnabled(b.state, tablesRef?.item ?? []).endTurn, 40032: b !== null, 40030: false };
+  const inGame = core !== null && core.mode !== 'title' && core.mode !== 'ended';
+  return { 40009: b !== null && menuEnabled(b.state, tablesRef?.item ?? []).endTurn, 40032: b !== null, 40030: false, 40029: inGame, 40010: inGame, 40035: core?.mode === 'town' };
 }
-let dialogueRef: Dialogue | null = null; let tablesRef: Tables | null = null; let menuRef: MenuTemplate | null = null; let dialogHost: DialogHost | null = null; let midiTracks: number[] = [];
+let dialogueRef: Dialogue | null = null; let tablesRef: Tables | null = null; let menuRef: MenuTemplate | null = null; let dialogHost: Dialogs | null = null; let midiTracks: number[] = [];
 /** The menu as the original builds it at the time: menu 103 plus 'BGM 선택(&B)' (0x44b524, id 0x6b) once the game has been completed. */
 function currentMenu(): ReturnType<typeof menuModel> {
   const m = menuModel(menuRef!, menuFlags(), dev);
@@ -95,39 +98,55 @@ function currentMenu(): ReturnType<typeof menuModel> {
   return m;
 }
 
-/** Dialog 143 in load mode with the web's save-file tools; a pick loads, 처음부터 starts a new game. Returns whether the title should stay. */
+/**
+ * Dialog 143 in load mode with the web's save-file tools. A pick loads, 처음부터 starts a new game; after an import or a delete the
+ * list is shown afresh. Returns whether the caller's screen (the title) should stay. The tools only change the slots and report
+ * back — they never start flows of their own, so one dialog is open at a time.
+ */
 async function openLoadDialog(): Promise<boolean> {
-  if (!dialogHost || !saves || !core || !stage) return true;
-  await refreshSaves();
-  const p = await pickSave(dialogHost, saveList, 'load', {
-    onExport: (slot) => { void saves!.read(slot).then((bytes) => { if (!bytes) return; const url = URL.createObjectURL(new Blob([bytes.slice().buffer])); const a = Object.assign(document.createElement('a'), { href: url, download: SaveStore.fileName(slot) }); a.click(); URL.revokeObjectURL(url); }); },
-    onImport: (file) => { void importSave(file); },
-    onDelete: (slot) => { void saves!.remove(slot).then(refreshSaves).then(() => openLoadDialog()).then((stay) => { if (stay && core?.mode === 'ended') void showTitle(); }); },
-  });
-  if (!p) return true;
-  if ('fresh' in p) { startNew(); return false; }
-  stage.unlockAudio();
-  const bytes = await saves.read(p.slot);
-  if (bytes && core.loadGame(bytes)) { $('title').hidden = true; $('error').textContent = ''; return false; }
-  return true;
+  const host = dialogHost;
+  if (!host || !saves || !core || !stage) return true;
+  for (;;) {
+    await refreshSaves();
+    const p = await pickSave(host, saveList, 'load', {
+      onExport: (slot) => { void saves!.read(slot).then((bytes) => { if (!bytes) return; const url = URL.createObjectURL(new Blob([bytes.slice().buffer])); const a = Object.assign(document.createElement('a'), { href: url, download: SaveStore.fileName(slot) }); a.click(); URL.revokeObjectURL(url); }); },
+      onImport: (file) => importSave(file),
+      onDelete: (slot) => saves!.remove(slot).then(refreshSaves),
+    });
+    if (!p) return true;
+    if ('again' in p) continue;
+    if ('fresh' in p) { startNew(); return false; }
+    stage.unlockAudio();
+    const bytes = await saves.read(p.slot);
+    if (bytes && core.loadGame(bytes)) { $('title').hidden = true; $('error').textContent = ''; return false; }
+    return true;
+  }
 }
+/** A save file into the first empty slot, else into a slot picked in dialog 143 (save mode). */
 async function importSave(file: File): Promise<void> {
-  if (!saves || !dialogHost) return;
+  const host = dialogHost;
+  if (!saves || !host) return;
   const bytes = new Uint8Array(await file.arrayBuffer());
   const free = saveList.findIndex((s) => s === null);
-  const into = free >= 0 ? { slot: free } : await pickSave(dialogHost, saveList, 'save');   // every slot used: pick one to overwrite
+  const into = free >= 0 ? { slot: free } : await pickSave(host, saveList, 'save');   // every slot used: pick one to overwrite
   if (!into || !('slot' in into)) return;
   try { const sum = await saves.importBytes(into.slot, bytes); await refreshSaves(); log('info', `${SaveStore.fileName(into.slot)} ← ${file.name} (${sum.title})`); } catch (e) { showError(e); }
-  if (core?.mode === 'ended') void showTitle();
 }
 function startNew(): void { stage!.unlockAudio(); $('title').hidden = true; $('error').textContent = ''; core!.newGame(); }
-/** The title picture with dialog 124 over it: 게임 개시 or 불러오기 (back to the dialog when loading is cancelled). */
+/** The title picture with dialog 124 over it: 게임 개시 or 불러오기 (back to the dialog when loading is cancelled). One loop at a time. */
+let titleShowing = false;
 async function showTitle(): Promise<void> {
-  if (!dialogHost) return;
+  if (!dialogHost || titleShowing) return;
+  titleShowing = true;
+  try { await titleLoop(); } finally { titleShowing = false; }
+}
+async function titleLoop(): Promise<void> {
+  const host = dialogHost; if (!host) return;
   $('title').hidden = false;
   for (;;) {
-    const c = await titleDialog(dialogHost);
+    const c = await titleDialog(host);
     if (c === 'new') { startNew(); return; }
+    if (c !== 'load') return;                                                 // cancelled from outside (closeAll on a load): the title screen is over
     if (!(await openLoadDialog())) return;
   }
 }
@@ -136,6 +155,7 @@ let lastFrameError = '';
 /** Dialog 156's choices, remembered per browser: 효과음 ON/OFF and 전화면 표시 (the music is always the MIDI synth, as the original's MIDI setting). */
 let settings: Settings = { fullscreen: false, sound: true };
 function loadSettings(): void { try { const saved = JSON.parse(localStorage.getItem('ft2.settings') ?? 'null') as Partial<Settings> | null; if (saved) settings = { ...settings, ...saved }; } catch { /* storage unavailable */ } applySettings(); }
+document.addEventListener('fullscreenchange', () => { if (settings.fullscreen !== (document.fullscreenElement !== null)) { settings = { ...settings, fullscreen: document.fullscreenElement !== null }; try { localStorage.setItem('ft2.settings', JSON.stringify(settings)); } catch { /* storage unavailable */ } } });
 function applySettings(): void {
   stage?.setVolumes(0.8, settings.sound ? 0.8 : 0);
   try { localStorage.setItem('ft2.settings', JSON.stringify(settings)); } catch { /* storage unavailable */ }
@@ -230,13 +250,13 @@ async function boot(): Promise<void> {
     core = new GameCore(res, stage); dialogueRef = dialogue;
     if (dev) panel = new Panel(document, { onStart: () => {}, onCommand: (cmd) => core?.dispatch(cmd) }, tables);
     loadSettings();
-    const ui = await data.ui().catch((e: unknown) => { showError(e); return null; });
+    const ui = await data.ui().catch((e: unknown) => { showFatal(e); return null; });
     if (ui) {
       menuRef = ui.menu; midiTracks = [...(index.midi ?? [])]; const model = currentMenu(); menuSig = JSON.stringify(menuFlags());
-      menuBar = new MenuBar($('menubar'), model, menuCommand); popup = new PopupMenu($('win'));
-      dialogHost = { layer: $('win'), templates: ui.dialogs }; dialogue.attach(dialogHost);
+      menuBar = new MenuBar($('menubar'), model, menuCommand, () => dialogHost?.busy ?? false); popup = new PopupMenu($('win'));
+      dialogHost = new Dialogs($('win'), ui.dialogs); dialogue.attach(dialogHost);
       document.addEventListener('keydown', (e) => {                            // the original's accelerators: F1 불러오기, F2 유니트 일람, F4 전체 화면, F5 저장, F10 턴 종료 …
-        if (e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement || e.target instanceof HTMLTextAreaElement) return;
+        if (dialogHost?.busy || e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement || e.target instanceof HTMLTextAreaElement) return;
         const id = accelOf(currentMenu(), e.key, e.ctrlKey || e.metaKey);
         if (id !== null) { e.preventDefault(); menuCommand(id); }
       });
@@ -245,10 +265,10 @@ async function boot(): Promise<void> {
     await refreshSaves();
     void showTitle();
     void bitmaps.load('title');
-  } catch (e) { showError(e); }
+  } catch (e) { showFatal(e); }
 }
 
 /** Debug hook for scripted browser checks: window.__ft2().core.mode, .campaign.flags, .vm.state … */
-(window as unknown as { __ft2: () => unknown }).__ft2 = () => ({ core, campaign: core?.campaign, vm: core?.vm, battle: core?.battle, stage, mode: core?.mode, saves, saveList, music: stage ? { ready: stage.musicReady, current: stage.currentMusic } : null, visual: stage?.visualPlaying ?? false });
+(window as unknown as { __ft2: () => unknown }).__ft2 = () => ({ core, campaign: core?.campaign, vm: core?.vm, battle: core?.battle, stage, dialogs: dialogHost, mode: core?.mode, saves, saveList, music: stage ? { ready: stage.musicReady, current: stage.currentMusic } : null, visual: stage?.visualPlaying ?? false });
 
 void boot();

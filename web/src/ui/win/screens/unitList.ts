@@ -13,12 +13,11 @@ import { totals } from '../../../battle/resolve';
 import { sell, sellStack } from '../../../battle/shop';
 import { itemsOf, type Unit } from '../../../battle/unit';
 import type { Tables } from '../../../data/types';
-import { unitName } from '../../panel';
+import { unitName } from '../../names';
 import { DialogBox, type DialogHost } from '../dialog';
 import { mnemonicItem, type MenuItem } from '../menubar';
 import { PopupMenu, type PopupItem } from '../popup';
 
-export const TAB_NAMES = ['능력', '장비', '마법', '도구'] as const;
 const dash = (name: string | undefined) => (name ? name.replace(/_/g, ' ') : '-');
 
 export function abilityRows(u: Unit, tables: Tables): { id: number; text: string }[] {
@@ -88,13 +87,9 @@ export function unitList(host: DialogHost, ctx: UnitListContext): Promise<void> 
     const [ability, gear, magic, tool, saleTab] = tabs;
     for (const r of abilityRows(u, tables)) ability!.setText(r.id, r.text);
     const e = equipRows(u, tables);
-    const wornPopup = (where: EquipSlot) => (ev: MouseEvent) => { ev.preventDefault(); void openEquipPopup(u, { worn: where }, ev); };
-    gear!.setList(1035, [{ text: e[1035] }], () => {}); gear!.control(1035).oncontextmenu = wornPopup('weapon');
-    gear!.setList(1037, [{ text: e[1037] }], () => {}); gear!.control(1037).oncontextmenu = wornPopup('armor');
-    gear!.setList(1034, [{ text: e[1034] }], () => {}); gear!.control(1034).oncontextmenu = wornPopup(0);
-    gear!.setList(1032, [{ text: e[1032] }], () => {}); gear!.control(1032).oncontextmenu = wornPopup(1);
-    gear!.setList(1036, e[1036].map((text) => ({ text })), () => {}, undefined, (i, ev) => { void openEquipPopup(u, { bag: i }, ev); });
-    gear!.setText(1026, '더블클릭하면 메뉴가 나옵니다.');
+    const worn = (id: number, where: EquipSlot) => gear!.setList(id, [{ text: e[id as 1035 | 1037 | 1034 | 1032] }], () => {}, (_i, ev) => { void openEquipPopup(u, { worn: where }, ev); });   // '더블클릭하면 메뉴가 나옵니다.' (static 1026 of the template)
+    worn(1035, 'weapon'); worn(1037, 'armor'); worn(1034, 0); worn(1032, 1);
+    gear!.setList(1036, e[1036].map((text) => ({ text })), () => {}, (i, ev) => { void openEquipPopup(u, { bag: i }, ev); });
     magic!.setList(1043, [{ text: '명칭\t마력' }], () => {}); magic!.setList(1040, spellRows(u, tables).map((r) => ({ text: r.text })), () => {});
     magic!.setText(1039, '');
     const tools = toolRows(inv, tables);
@@ -110,9 +105,9 @@ export function unitList(host: DialogHost, ctx: UnitListContext): Promise<void> 
   const openEquipPopup = async (u: Unit, at: EquipTarget, ev: MouseEvent) => {
     const items = equipPopupItems(u, at, tables); if (items.length === 0) return;
     const p = host.layer.getBoundingClientRect(), k = p.width / host.layer.clientWidth || 1;
-    const pick = await popup.open((ev.clientX - p.left) / k, (ev.clientY - p.top) / k, items.map((i): PopupItem => ({ ...i, id: i.act === 'equip' ? 1 : i.act === 'unequip' ? 2 : 3, cmd: { type: 'cancel' } })));
+    const pick = await popup.open((ev.clientX - p.left) / k, (ev.clientY - p.top) / k, items.map((i): PopupItem => ({ ...i, id: i.act === 'equip' ? 1 : i.act === 'unequip' ? 2 : 3 })));
     if (!pick) return;
-    const act = items[pick.id! - 1]!.act;
+    const act = (pick as EquipPopupItem).act;
     if (act === 'equip' && 'bag' in at) equip(u, at.bag, tables.item);
     else if (act === 'unequip' && 'worn' in at) unequip(u, at.worn);
     else if (act === 'sell' && 'bag' in at) sell(inv, u, at.bag, tables.item);
@@ -120,7 +115,7 @@ export function unitList(host: DialogHost, ctx: UnitListContext): Promise<void> 
   };
   const openSellPopup = async (id: number, ev: MouseEvent) => {                 // menu 103's "도구" popup: 팔기(&S) → dialog 153
     const p = host.layer.getBoundingClientRect(), k = p.width / host.layer.clientWidth || 1;
-    const pick = await popup.open((ev.clientX - p.left) / k, (ev.clientY - p.top) / k, [{ ...mnemonicItem('팔기(&S)'), id: 1025, cmd: { type: 'cancel' } }]);
+    const pick = await popup.open((ev.clientX - p.left) / k, (ev.clientY - p.top) / k, [{ ...mnemonicItem('팔기(&S)'), id: 1025 }]);
     if (!pick) return;
     const n = await sellQuantity(host, inv, id, tables);
     if (n > 0) sellStack(inv, id, n, tables.item);
