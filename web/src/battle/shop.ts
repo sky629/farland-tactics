@@ -1,5 +1,5 @@
 import type { ItemData } from '../data/types';
-import { addGold, giveItem, type Inventory } from './inventory';
+import { addGold, giveItem, isEquipment, takeItem, type Inventory } from './inventory';
 import type { Unit } from './unit';
 
 export type BuyResult = 'ok' | 'no gold' | 'full' | 'unknown item';
@@ -27,5 +27,17 @@ export function sell(inv: Inventory, unit: Unit, which: number, items: ItemData[
   if (id === 0 || !item) return 'nothing';
   unit.bag[which] = 0;
   addGold(inv, Math.floor(item.price / 2));
+  return 'ok';
+}
+
+/**
+ * Dialog 153 "몇개 팔았습니까?" (reached from the unit list's 도구 tab, popup "팔기"): `count` of the shared stack `id` leave for half the
+ * price each; a piece of equipment is not a stack (it sells from the 장비 tab, "%d에 판다"), and the count cannot exceed the stack.
+ */
+export function sellStack(inv: Inventory, id: number, count: number, items: ItemData[]): SellResult {
+  const item = items[id], stack = inv.items.find((s) => s.id === id);
+  if (!item || isEquipment(item) || !stack || count < 1 || count > stack.count) return 'nothing';
+  takeItem(inv, id, count, items);
+  addGold(inv, Math.floor(item.price / 2) * count);
   return 'ok';
 }

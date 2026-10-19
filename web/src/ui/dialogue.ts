@@ -1,6 +1,5 @@
-import { canEquip, equip, unequip, type EquipSlot } from '../battle/equipment';
 import { countOf, type Inventory } from '../battle/inventory';
-import { buy, sell } from '../battle/shop';
+import { buy } from '../battle/shop';
 import { equalizeShare, evenShare } from '../game/expShare';
 import { EXP_CAP } from '../battle/outcome';
 import type { Unit } from '../battle/unit';
@@ -11,6 +10,7 @@ import { itemName, unitName } from './panel';
 import type { DialogHost } from './win/dialog';
 import { confirm } from './win/screens/confirm';
 import { pickSave } from './win/screens/saves';
+import { unitList } from './win/screens/unitList';
 
 /** One piece of a TEXT line with the size/color the `[Snn]`/`[Cnn]` tags before it set (null = default). */
 export interface TextRun { text: string; size: number | null; color: number | null }
@@ -148,7 +148,7 @@ export class Dialogue {
       }
     };
     refresh();
-    const party_ = this.button('유니트 일람', () => this.openParty(ctx, { onClose: () => { box.replaceChildren(); this.shop(ids, ctx, done); box.hidden = false; } }));   // dialog 150: 사기 · 유니트 일람 · 돌아오기 (the original has no selling)
+    const party_ = this.button('유니트 일람', () => { if (this.dialogs) void unitList(this.dialogs, { ...ctx, sale: true }).then(refresh); });   // dialog 150: 사기 · 유니트 일람 · 돌아오기 — the unit list with its 매각 tab
     box.append(this.el('div', 'title', '상점'), gold, who, list, note, this.el('div', 'row'), party_, this.button('돌아오기', done));
   }
 
@@ -176,42 +176,6 @@ export class Dialogue {
     const even = this.button('균등', () => { evenShare(party.length, r.pool).forEach((v, i) => { alloc[i] = v; }); refresh(); });
     const ok = this.button('확인', () => { party.forEach((u, i) => { u.exp = Math.min(u.exp + alloc[i]!, EXP_CAP); }); done(); });
     box.append(this.el('div', 'title', '전투 결과'), this.el('div', 'text', `${r.gold} Gold`), this.el('div', 'gold', `경험치 ${r.pool}`), list, this.el('div', 'row'), even, ok);
-  }
-
-  /** Town right click (spec §9): every party member with level, HP/MP, equipment and bag; 장착/해제 go through equipment.ts, 팔기 through shop.ts. */
-  openParty(ctx: ModalContext, extra: { onClose?: () => void } = {}): void {
-    this.result = null;
-    const box = this.modal, items = ctx.tables.item;
-    const name = (id: number) => (id === 0 ? '—' : itemName(items[id]!));
-    const render = () => {
-      box.replaceChildren(this.el('div', 'title', '파티'));
-      for (const u of ctx.party) {
-        if (!u) continue;
-        const row = this.el('div', 'member');
-        row.appendChild(this.el('div', 'uname', `${unitName(u, ctx.tables)}  Lv ${u.level}  HP ${u.hp}/${u.hpMax}  MP ${u.mp}/${u.mpMax}`));
-        const eq = this.el('div', 'equip');
-        const slots: [string, EquipSlot, number][] = [['무기', 'weapon', u.weapon], ['방어구', 'armor', u.armor], ['장신구1', 0, u.acc[0]], ['장신구2', 1, u.acc[1]]];
-        for (const [label, where, id] of slots) {
-          eq.appendChild(this.el('span', 'slot', `${label}: ${name(id)}`));
-          if (id !== 0) eq.appendChild(this.button(`해제 ${label}`, () => { unequip(u, where); render(); }));
-        }
-        const bag = this.el('div', 'bag');
-        bag.appendChild(this.el('span', 'slot', '가방:'));
-        u.bag.forEach((id, i) => {
-          if (id === 0) return;
-          bag.appendChild(this.el('span', 'slot', name(id)));
-          if (canEquip(u, id, items)) bag.appendChild(this.button(`장착 ${name(id)}`, () => { equip(u, i, items); render(); }));
-          bag.appendChild(this.button(`팔기 ${name(id)}`, () => { sell(ctx.inventory, u, i, items); render(); }));   // menu 103 "도구 → 팔기": half the price
-        });
-        row.append(eq, bag);
-        box.appendChild(row);
-      }
-      const row = this.el('div', 'row');
-      row.appendChild(this.button('닫기', () => { if (extra.onClose) extra.onClose(); else box.hidden = true; }));
-      box.appendChild(row);
-    };
-    render();
-    box.hidden = false;
   }
 
   takeModalResult(): number | null { const r = this.result; this.result = null; return r; }

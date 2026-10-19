@@ -20,6 +20,16 @@ export interface LaidControl extends Box {
 }
 export interface DialogLayout { width: number; height: number; title: string; controls: LaidControl[] }
 
+/**
+ * The dialog base unit of a template's font. The original's dialogs all name 굴림 (9–12 pt), a half-width Korean system font whose
+ * average character width is half its pixel size and whose line height is the pixel size — fixed numbers, so the layout does not
+ * depend on which substitute the browser draws with.
+ */
+export function metricsFor(font: [number, string] | null): Metrics {
+  const px = Math.round((font?.[0] ?? 9) * 96 / 72);
+  return { charW: Math.round(px / 2), charH: px };
+}
+
 export const duToPx = (m: Metrics, x: number, y: number, cx: number, cy: number): Box => ({
   left: Math.round(x * m.charW / 4), top: Math.round(y * m.charH / 8),
   width: Math.max(1, Math.round(cx * m.charW / 4)), height: Math.max(1, Math.round(cy * m.charH / 8)),

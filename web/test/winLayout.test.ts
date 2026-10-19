@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { duToPx, layoutDialog, mnemonic, type DialogTemplate } from '../src/ui/win/layout';
+import { duToPx, layoutDialog, metricsFor, mnemonic, type DialogTemplate } from '../src/ui/win/layout';
 
 // dialog 126 "확인" as the exporter writes it (tools/ft2_dialogs.py): a static for the question, 예/아니오, an owner-drawn icon button
 const confirm126: DialogTemplate = { ex: false, style: 0x80c800c0, title: '확인', font: [9, '굴림'], cx: 151, cy: 55, items: [
@@ -37,5 +37,10 @@ describe('Win95 dialog layout from the original templates', () => {
     ] }, { charW: 6, charH: 12 });
     expect(l.controls.map((c) => c.kind)).toEqual(['text', 'radio', 'group', 'tab', 'default']);
     expect(l.controls[0]!.align).toBe('right');
+  });
+  it('the dialog base unit follows 굴림, a half-width font: average character width = half the pixel size, height = the pixel size', () => {
+    expect(metricsFor([9, '굴림'])).toEqual({ charW: 6, charH: 12 });          // 9 pt = 12 px
+    expect(metricsFor([12, '굴림'])).toEqual({ charW: 8, charH: 16 });
+    expect(metricsFor(null)).toEqual({ charW: 6, charH: 12 });                 // no DS_SETFONT: the system font, 9 pt
   });
 });

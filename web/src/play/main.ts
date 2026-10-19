@@ -26,6 +26,7 @@ import type { DialogHost } from '../ui/win/dialog';
 import { confirm } from '../ui/win/screens/confirm';
 import { pickSave } from '../ui/win/screens/saves';
 import { titleDialog } from '../ui/win/screens/title';
+import { unitList } from '../ui/win/screens/unitList';
 import { frameScale, MENU_BAR_H } from '../viewer/scale';
 
 const $ = <T extends HTMLElement>(id: string): T => { const el = document.getElementById(id); if (!el) throw new Error(`missing element #${id}`); return el as T; };
@@ -65,7 +66,7 @@ function menuCommand(id: number): void {
     case 40028: void openLoadDialog(); break;                                                             // 불러오기 F1
     case 40029: if (dialogHost) void refreshSaves().then(() => pickSave(dialogHost!, saveList, 'save')).then((p) => { if (p && 'slot' in p) core?.save(p.slot); }); break;   // 저장하기 F5
     case 40004: if (dialogHost) void confirm(dialogHost, '게임을 종료합니까?').then((yes) => { if (yes) location.reload(); }); break;   // 게임종료 (the web's exit is the title page)
-    case 40010: dialogueRef?.openParty({ tables: tablesRef!, inventory: core.campaign.inventory, party: core.campaign.units.slice(0, PARTY_SLOTS) }); break;   // 유니트 일람 F2
+    case 40010: if (dialogHost) void unitList(dialogHost, { tables: tablesRef!, inventory: core.campaign.inventory, party: core.campaign.units.slice(0, PARTY_SLOTS) }); break;   // 유니트 일람 F2 (dialog 107)
     case 40003: if (document.fullscreenElement) void document.exitFullscreen(); else void $('stage').requestFullscreen?.(); break;   // 전체 화면 F4
     case 40032: if (core.battle) dialogueRef?.openModal('message', `${core.battle.state.entry.episode} — ${core.battle.state.entry.objective}`, { tables: tablesRef!, inventory: core.campaign.inventory, party: core.campaign.units.slice(0, PARTY_SLOTS) }); break;   // 클리어 조건
     default: break;
@@ -191,7 +192,7 @@ async function boot(): Promise<void> {
     stage = new BrowserStage(canvas, renderer, assets, bitmaps, dialogue, sprites, tables, {
       onCell: (cell) => { if (!core?.battle) return; for (const cmd of cellCommands(core.battle.state, cell)) { core.dispatch(cmd); if (core.lastEvents.some((e) => e.type === 'rejected')) break; } },   // one click may be several commands: stop at the first the rules refuse
       onTownClick: (i) => core?.townSelect(i),
-      onTownMenu: () => dialogue.openParty({ tables, inventory: core!.campaign.inventory, party: core!.campaign.units.slice(0, PARTY_SLOTS) }),
+      onTownMenu: () => { if (dialogHost) void unitList(dialogHost, { tables, inventory: core!.campaign.inventory, party: core!.campaign.units.slice(0, PARTY_SLOTS) }); },   // the town's right click opens the original's 시스템 popup in Task 8; the unit list stands in until then
       onCancel: () => core?.dispatch({ type: 'cancel' }),
       onBattleMenu: (cell, at) => {                                           // the original's right-click popup: the unit's entries over the 맵 menu's own
         if (!core?.battle || !popup || !menuRef) return;

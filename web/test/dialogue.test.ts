@@ -81,7 +81,7 @@ describe('Dialogue', () => {
     expect(ctx.party[1]!.exp).toBe(159);
     expect(dlg.takeModalResult()).toBe(0);
   });
-  it('shop modal lists items with price and owned count; 구매 buys through shop.buy; 유니트 일람 opens the party and comes back; 돌아오기 → 1', () => {
+  it('shop modal lists items with price and owned count; 구매 buys through shop.buy; 돌아오기 → 1', () => {
     const { root, dlg, ctx } = setup();
     ctx.tables.item[1]!.price = 30; ctx.tables.item[7]!.price = 10;
     dlg.openModal('shop', [1, 7], ctx);
@@ -97,45 +97,10 @@ describe('Dialogue', () => {
     for (let i = 0; i < 7; i++) root.find('구매 herb')!.click();                 // 60 Gold buys six more; the seventh fails
     expect(root.find('골드가 부족하다.')).not.toBeNull();
     expect(dlg.takeModalResult()).toBeNull();
-    root.find('유니트 일람')!.click();                                            // dialog 150's third button: the party list
-    expect(root.find('파티')).not.toBeNull();
-    root.find('닫기')!.click();                                                  // back to the shop, not out of it
-    expect(root.find('상점')).not.toBeNull();
-    expect(dlg.takeModalResult()).toBeNull();
+    expect(root.find('유니트 일람')).not.toBeNull();                              // dialog 150's third button opens the unit list (dialog 107, browser-verified)
     root.find('돌아오기')!.click();
     expect(dlg.takeModalResult()).toBe(1);
   });
-  it('party menu lists each member with equipment and bag; 장착 and 해제 move items between them', () => {
-    const { root, dlg, ctx } = setup();
-    const u = ctx.party[0]!; u.weapon = 1; u.armor = 0; u.acc = [0, 0]; u.bag = [3, 0, 0, 0];   // sword equipped, pike in the bag
-    dlg.openParty(ctx);
-    expect(el(dlg.modal).hidden).toBe(false);
-    expect(root.find('무기: sword')).not.toBeNull();
-    root.find('장착 pike')!.click();
-    expect(u.weapon).toBe(3);
-    expect(u.bag[0]).toBe(1);
-    root.find('해제 무기')!.click();
-    expect(u.weapon).toBe(0);
-    expect(u.bag).toContain(3);
-    root.find('닫기')!.click();
-    expect(el(dlg.modal).hidden).toBe(true);
-  });
-  it('party menu 팔기 sells a bag item for half its price (menu 103 "도구 → 팔기")', () => {
-    const { root, dlg, ctx } = setup();
-    const u = ctx.party[0]!; u.bag = [3, 0, 0, 0]; ctx.tables.item[3]!.price = 80; ctx.inventory.gold = 5;
-    dlg.openParty(ctx);
-    root.find('팔기 pike')!.click();
-    expect(u.bag[0]).toBe(0);
-    expect(ctx.inventory.gold).toBe(45);
-    expect(root.find('팔기 pike')).toBeNull();
-  });
-  const slotList = (): (SaveSummary | null)[] => {
-    const list = new Array<SaveSummary | null>(32).fill(null);
-    const c = newCampaign(); c.episode = '첫업무'; c.stage = 1; c.inventory.gold = 350;
-    list[2] = saveSummary(encodeSave(c, new Date(2026, 9, 16, 9, 30)));
-    list[5] = BROKEN_SUMMARY;
-    return list;
-  };
   it('closeAll hides windows, modal and episode title', () => {
     const { dlg, ctx } = setup();
     dlg.openWindow('top', 1, null); dlg.openModal('message', 'x', ctx); dlg.showEpisode('제1화');
