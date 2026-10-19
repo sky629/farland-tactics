@@ -4,7 +4,7 @@
 Usage: python3 -I tools/ft2_export.py GAME_DIR OUT_DIR
 Writes OUT_DIR/index.json, OUT_DIR/map/<name>.json|.png, OUT_DIR/sprite/<name>.json|.png,
 OUT_DIR/data/{race,item,magic}.json, data/roster/stageNNN.json, data/battles.json,
-data/eventNN.json (decoded scripts), bmp/<name>.png (all bitmaps).
+data/eventNN.json (decoded scripts), bmp/<name>.png (all bitmaps), data/dialogs.json + data/menu.json (the executable's UI resources).
 Names are lower-case stems. PNGs are 8-bit indexed with the palette and no transparency;
 the renderer applies color keys (docs/superpowers/specs/2026-10-14-rendering-foundation-design.md §5, §6).
 Exit code 1 when an error was reported. Missing referenced files are warnings.
@@ -17,6 +17,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # keep sibling imports working under -I
 from ft2_apd import parse as parse_apd  # noqa: E402
+from ft2_dialogs import read_resources  # noqa: E402
 from ft2_map import parse as parse_map  # noqa: E402
 from ft2_event_disasm import decode_program, disassemble  # noqa: E402
 from ft2_szdd import bmp8_to_png, szdd_decompress  # noqa: E402
@@ -349,6 +350,24 @@ def export_staff(src: Path, dst: Path, report: Report) -> int:
     return len(out)
 
 
+def export_ui(game: Path, dst: Path, report: Report) -> dict:
+    """FT2.exe resources → data/dialogs.json (the 21 dialog templates, keyed by id) and data/menu.json (menu 103): the web page
+    rebuilds the original's Win32 chrome from these instead of hand-written layouts (story_flow.md §7a)."""
+    exe = next((p for p in game.iterdir() if p.is_file() and p.name.lower() == 'ft2.exe'), None) if game.is_dir() else None
+    if exe is None:
+        report.error('no FT2.exe (dialog and menu resources)')
+        return dict(dialogs=0, menu=False)
+    res = read_resources(exe.read_bytes())
+    menu = res['menus'].get('103')
+    if menu is None:
+        report.error('FT2.exe has no menu 103')
+    (dst / 'data').mkdir(parents=True, exist_ok=True)
+    (dst / 'data' / 'dialogs.json').write_text(json.dumps(res['dialogs'], ensure_ascii=False), encoding='utf-8')
+    if menu is not None:
+        (dst / 'data' / 'menu.json').write_text(json.dumps(menu, ensure_ascii=False), encoding='utf-8')
+    return dict(dialogs=len(res['dialogs']), menu=menu is not None)
+
+
 def main(argv: list[str]) -> int:
     if len(argv) != 3:
         raise SystemExit(__doc__)
@@ -365,10 +384,11 @@ def main(argv: list[str]) -> int:
     audio = export_audio(game, out, report)
     visual = export_visual(game, out, report)
     staff = export_staff(game, out, report)
+    ui = export_ui(game, out, report)
     out.mkdir(parents=True, exist_ok=True)
-    (out / 'index.json').write_text(json.dumps(dict(format=FORMAT, maps=maps, sprites=sprites, data=True, events=events, bmp=bmps, wave=audio['wave'], midi=audio['midi'])), encoding='utf-8')
+    (out / 'index.json').write_text(json.dumps(dict(format=FORMAT, maps=maps, sprites=sprites, data=True, events=events, bmp=bmps, wave=audio['wave'], midi=audio['midi'], ui=ui['menu'])), encoding='utf-8')
     pngs = sum(1 for d in ('map', 'sprite', 'bmp') for _ in (out / d).glob('*.png'))
-    print(f'maps {len(maps)}, sprites {len(sprites)}, events {len(events)}, bmp {len(bmps)}, pngs {pngs}, wave {len(audio["wave"])}, midi {len(audio["midi"])}, visual {visual}, staff {staff}, warnings {len(report.warnings)}, errors {len(report.errors)}')
+    print(f'maps {len(maps)}, sprites {len(sprites)}, events {len(events)}, bmp {len(bmps)}, pngs {pngs}, wave {len(audio["wave"])}, midi {len(audio["midi"])}, visual {visual}, staff {staff}, dialogs {ui["dialogs"]}, warnings {len(report.warnings)}, errors {len(report.errors)}')
     print(f'tables race {counts["race"]}, item {counts["item"]}, magic {counts["magic"]}, rosters {counts["rosters"]}, battles {counts["battles"]}')
     for w in report.warnings:
         print('warning:', w)

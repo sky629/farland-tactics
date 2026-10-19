@@ -1,6 +1,12 @@
 import unittest
 
-from ft2_export import apd_json, map_json, normalize_name
+import json
+import tempfile
+from pathlib import Path
+from unittest import mock
+
+import ft2_export
+from ft2_export import Report, apd_json, export_ui, map_json, normalize_name
 
 
 class NormalizeName(unittest.TestCase):
@@ -163,3 +169,25 @@ class DecodeProgram(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class ExportUi(unittest.TestCase):
+    def test_writes_dialogs_and_menu_103_from_the_executable(self):
+        fake = {'dialogs': {'126': dict(ex=False, style=0, title='확인', font=[9, '굴림'], cx=151, cy=55, items=[])},
+                'menus': {'103': dict(items=[dict(text='맵', id=None, flags=0x90, items=[])]), '7': dict(items=[])}}
+        with tempfile.TemporaryDirectory() as tmp:
+            game, out = Path(tmp) / 'game', Path(tmp) / 'out'
+            game.mkdir(); (game / 'FT2.exe').write_bytes(b'MZ')
+            report = Report()
+            with mock.patch.object(ft2_export, 'read_resources', lambda exe: fake):
+                counts = export_ui(game, out, report)
+            self.assertEqual(counts, dict(dialogs=1, menu=True))
+            self.assertEqual(json.loads((out / 'data' / 'dialogs.json').read_text(encoding='utf-8'))['126']['title'], '확인')
+            self.assertEqual(json.loads((out / 'data' / 'menu.json').read_text(encoding='utf-8'))['items'][0]['text'], '맵')
+            self.assertEqual(report.errors, [])
+
+    def test_missing_executable_is_an_error(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            report = Report()
+            self.assertEqual(export_ui(Path(tmp), Path(tmp) / 'out', report), dict(dialogs=0, menu=False))
+            self.assertEqual(len(report.errors), 1)
