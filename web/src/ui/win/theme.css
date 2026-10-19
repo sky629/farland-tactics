@@ -9,6 +9,7 @@
 .w95 { font: var(--w95-font); color: var(--w95-text); user-select: none; -webkit-user-select: none; box-sizing: border-box; }
 .w95 *, .w95 *::before, .w95 *::after { box-sizing: border-box; }
 .w95 u { text-decoration: underline; }
+.w95 [hidden] { display: none !important; }
 .w95-raised { background: var(--w95-face); box-shadow: inset -1px -1px var(--w95-dark), inset 1px 1px var(--w95-light), inset -2px -2px var(--w95-shadow), inset 2px 2px var(--w95-face); }
 .w95-sunken { background: var(--w95-window); box-shadow: inset 1px 1px var(--w95-shadow), inset -1px -1px var(--w95-light), inset 2px 2px var(--w95-dark), inset -2px -2px var(--w95-face); }
 
@@ -62,5 +63,6 @@
 .w95-tab.selected { padding-bottom: 3px; margin-top: -2px; position: relative; z-index: 1; }
 .w95-tabpage { position: absolute; left: 0; right: 0; bottom: 0; padding: 3px; overflow: hidden; }
 .w95-tabpage .w95-body { position: relative; }
-.w95-row.cols { display: flex; justify-content: space-between; gap: 8px; }
-.w95-row .col { flex: none; }
+.w95-row.cols { display: flex; gap: 12px; }
+.w95-row .name { flex: 1; overflow: hidden; text-overflow: ellipsis; }
+.w95-row .col { flex: none; min-width: 2.5em; text-align: right; }

@@ -60,6 +60,8 @@ export class GameCore implements Host {
   private lastRoster = 0;
   private pendingBattle = false;
   private completed = false;                                                   // WRITE_COMPLETE_FLAG seen: the next script end is the ending
+  /** The original's INI CompleteFlag: the menus offer BGM 선택 once it is set. */
+  get complete(): boolean { return this.completed; }
   private hooks: Hook[] = [];
 
   constructor(private readonly res: Resources, readonly stage: Stage) {

@@ -1,16 +1,16 @@
-import { countOf, type Inventory } from '../battle/inventory';
-import { buy } from '../battle/shop';
-import { equalizeShare, evenShare } from '../game/expShare';
+import type { Inventory } from '../battle/inventory';
 import { EXP_CAP } from '../battle/outcome';
 import type { Unit } from '../battle/unit';
 import type { Tables } from '../data/types';
 import type { SaveSummary } from '../save/format';
 import type { ModalKind, Where } from '../script/host';
-import { itemName, unitName } from './panel';
+import { unitName } from './panel';
 import type { DialogHost } from './win/dialog';
 import { confirm } from './win/screens/confirm';
 import { pickSave } from './win/screens/saves';
 import { unitList } from './win/screens/unitList';
+import { expShareDialog } from './win/screens/expShare';
+import { shopDialog } from './win/screens/shop';
 
 /** One piece of a TEXT line with the size/color the `[Snn]`/`[Cnn]` tags before it set (null = default). */
 export interface TextRun { text: string; size: number | null; color: number | null }
@@ -32,9 +32,7 @@ export function parseTextTags(line: string): TextRun[] {
 /** What the modals need from the game: item/race names, the shared inventory, the party for equipment purchases. */
 export interface ModalContext { tables: Tables; inventory: Inventory; party: (Unit | null)[]; saves?: (SaveSummary | null)[] }
 
-interface ResultPayload { gold: number; pool: number }
 
-const BUY_TEXT: Record<ReturnType<typeof buy>, string> = { ok: '샀다.', 'no gold': '골드가 부족하다.', full: '더 가질 수 없다.', 'unknown item': '그런 물건은 없다.' };
 
 /**
  * HTML overlay for the story scripts (spec §10): two dialogue windows, a modal box (message / ask / shop / result / save)
@@ -117,65 +115,15 @@ export class Dialogue {
       case 'message': box.append(this.el('div', 'text', String(payload)), this.button('닫기', close(0))); break;
       case 'ask': { if (!this.dialogs) throw new Error('dialogs not attached'); void confirm(this.dialogs, String(payload)).then((yes) => { this.result = yes ? 1 : 0; }); return; }   // dialog 126 확인
       case 'save': { if (!this.dialogs) throw new Error('dialogs not attached'); void pickSave(this.dialogs, ctx.saves ?? [], 'save').then((p) => { this.result = p && 'slot' in p ? p.slot : -1; }); return; }   // dialog 143 데이터 선택
-      case 'result': this.battleResult(payload as ResultPayload, ctx, close(0)); break;
-      case 'shop': this.shop(payload as number[], ctx, close(1)); break;
+      case 'result': {                                                       // dialog 162 경험치 배분: the shares go onto the units, then the VM levels them up
+        if (!this.dialogs) throw new Error('dialogs not attached');
+        const party = ctx.party.filter((u): u is Unit => u !== null && u.status !== 9), pool = (payload as { pool: number }).pool;
+        void expShareDialog(this.dialogs, party.map((u) => ({ exp: u.exp, name: unitName(u, ctx.tables) })), pool).then((shares) => { party.forEach((u, i) => { u.exp = Math.min(u.exp + (shares[i] ?? 0), EXP_CAP); }); this.result = 0; });
+        return;
+      }
+      case 'shop': { if (!this.dialogs) throw new Error('dialogs not attached'); void shopDialog(this.dialogs, payload as number[], ctx).then(() => { this.result = 1; }); return; }   // dialogs 150/151/152
     }
     box.hidden = false;
-  }
-
-  private shop(ids: number[], ctx: ModalContext, done: () => void): void {
-    const box = this.modal;
-    const party = ctx.party.filter((u): u is Unit => u !== null);
-    const who = this.doc.createElement('select') as HTMLSelectElement;
-    who.className = 'who';
-    who.replaceChildren(...party.map((u) => Object.assign(this.doc.createElement('option'), { value: String(u.slot), textContent: unitName(u, ctx.tables) })));
-    const gold = this.el('div', 'gold'), note = this.el('div', 'note');
-    const list = this.el('div', 'list');
-    const refresh = () => {
-      gold.textContent = `소지금 ${ctx.inventory.gold} Gold`;
-      list.replaceChildren();
-      for (const id of ids) {
-        const item = ctx.tables.item[id];
-        if (!item) continue;
-        const row = this.el('div', 'item');
-        row.append(this.el('span', 'iname', itemName(item)), this.el('span', 'price', `${item.price} Gold`), this.el('span', 'owned', `보유 ${countOf(ctx.inventory, id)}`),
-          this.button(`구매 ${itemName(item)}`, () => {
-            const unit = party.find((u) => u.slot === Number(who.value)) ?? party[0] ?? null;
-            note.textContent = BUY_TEXT[buy(ctx.inventory, unit, id, ctx.tables.item)];
-            refresh();
-          }));
-        list.appendChild(row);
-      }
-    };
-    refresh();
-    const party_ = this.button('유니트 일람', () => { if (this.dialogs) void unitList(this.dialogs, { ...ctx, sale: true }).then(refresh); });   // dialog 150: 사기 · 유니트 일람 · 돌아오기 — the unit list with its 매각 tab
-    box.append(this.el('div', 'title', '상점'), gold, who, list, note, this.el('div', 'row'), party_, this.button('돌아오기', done));
-  }
-
-  /**
-   * Battle result (dialog 0xA2): the gold, then the EXP pool the script grants, shared out over the party. The original opens on
-   * the equalizing split and lets the player drag each unit's bar; here ± buttons move ten points within the pool, 균등 splits
-   * evenly, 확인 adds the shares (FUN_0040a5c0 case 9 then levels the party up — the VM does that after this modal closes).
-   */
-  private battleResult(r: ResultPayload, ctx: ModalContext, done: () => void): void {
-    const box = this.modal;
-    const party = ctx.party.filter((u): u is Unit => u !== null);
-    const alloc = equalizeShare(party.map((u) => u.exp), r.pool);
-    const list = this.el('div', 'list');
-    const left = () => r.pool - alloc.reduce((a, b) => a + b, 0);
-    const refresh = () => {
-      list.replaceChildren();
-      party.forEach((u, i) => {
-        const row = this.el('div', 'item');
-        const move = (d: number) => () => { const v = Math.max(0, Math.min(alloc[i]! + d, alloc[i]! + left())); alloc[i] = v; refresh(); };
-        row.append(this.el('span', 'iname', `${unitName(u, ctx.tables)} Lv${u.level} EXP ${u.exp}`), this.el('span', 'price', `+${alloc[i]}`), this.button('−10', move(-10)), this.button('+10', move(10)));
-        list.appendChild(row);
-      });
-    };
-    refresh();
-    const even = this.button('균등', () => { evenShare(party.length, r.pool).forEach((v, i) => { alloc[i] = v; }); refresh(); });
-    const ok = this.button('확인', () => { party.forEach((u, i) => { u.exp = Math.min(u.exp + alloc[i]!, EXP_CAP); }); done(); });
-    box.append(this.el('div', 'title', '전투 결과'), this.el('div', 'text', `${r.gold} Gold`), this.el('div', 'gold', `경험치 ${r.pool}`), list, this.el('div', 'row'), even, ok);
   }
 
   takeModalResult(): number | null { const r = this.result; this.result = null; return r; }

@@ -61,9 +61,9 @@ export class ControlSet {
     const list = this.control(id), doc = list.ownerDocument;
     list.replaceChildren(...rows.map((r, i) => {
       const row = doc.createElement('div'); row.className = `w95-row${r.enabled === false ? ' disabled' : ''}`; row.setAttribute('role', 'option');
-      const tab = r.text.indexOf('\t');
-      if (tab < 0) row.textContent = r.text;
-      else { const a = doc.createElement('span'); a.textContent = r.text.slice(0, tab); const b = doc.createElement('span'); b.className = 'col'; b.textContent = r.text.slice(tab + 1); row.append(a, b); row.classList.add('cols'); }
+      const cols = r.text.split('\t');
+      if (cols.length === 1) row.textContent = r.text;
+      else { row.append(...cols.map((c, k) => { const sp = doc.createElement('span'); sp.className = k === 0 ? 'name' : 'col'; sp.textContent = c; return sp; })); row.classList.add('cols'); }
       if (r.enabled !== false) {
         row.addEventListener('click', () => { for (const x of list.children) x.classList.remove('selected'); row.classList.add('selected'); onPick(i); });
         if (onDouble) row.addEventListener('dblclick', () => onDouble(i));

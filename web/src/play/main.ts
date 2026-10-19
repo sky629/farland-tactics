@@ -27,6 +27,8 @@ import { confirm } from '../ui/win/screens/confirm';
 import { pickSave } from '../ui/win/screens/saves';
 import { titleDialog } from '../ui/win/screens/title';
 import { unitList } from '../ui/win/screens/unitList';
+import { settingsDialog, type Settings } from '../ui/win/screens/settings';
+import { bgmDialog } from '../ui/win/screens/bgm';
 import { frameScale, MENU_BAR_H } from '../viewer/scale';
 
 const $ = <T extends HTMLElement>(id: string): T => { const el = document.getElementById(id); if (!el) throw new Error(`missing element #${id}`); return el as T; };
@@ -67,7 +69,9 @@ function menuCommand(id: number): void {
     case 40029: if (dialogHost) void refreshSaves().then(() => pickSave(dialogHost!, saveList, 'save')).then((p) => { if (p && 'slot' in p) core?.save(p.slot); }); break;   // 저장하기 F5
     case 40004: if (dialogHost) void confirm(dialogHost, '게임을 종료합니까?').then((yes) => { if (yes) location.reload(); }); break;   // 게임종료 (the web's exit is the title page)
     case 40010: if (dialogHost) void unitList(dialogHost, { tables: tablesRef!, inventory: core.campaign.inventory, party: core.campaign.units.slice(0, PARTY_SLOTS) }); break;   // 유니트 일람 F2 (dialog 107)
-    case 40003: if (document.fullscreenElement) void document.exitFullscreen(); else void $('stage').requestFullscreen?.(); break;   // 전체 화면 F4
+    case 40003: settings = { ...settings, fullscreen: !document.fullscreenElement }; applySettings(); break;   // 전체 화면 F4
+    case 40012: if (dialogHost) void settingsDialog(dialogHost, settings, synthNotice(stage.musicFailure) ?? 'MIDI: 사운드폰트 합성 (FluidR3Mono_GM)').then((s) => { if (s) { settings = s; applySettings(); } }); break;   // 환경설정 F11 (dialog 156)
+    case 107: if (dialogHost && midiTracks.length > 0) { const names = midiTracks.map((n) => `BGM ${String(n).padStart(2, '0')}`); void bgmDialog(dialogHost, names).then((name) => { const i = name ? names.indexOf(name) : -1; if (i >= 0) stage?.playMusic(midiTracks[i]!); }); } break;   // BGM 선택 (dialog 160, offered once the game is complete)
     case 40032: if (core.battle) dialogueRef?.openModal('message', `${core.battle.state.entry.episode} — ${core.battle.state.entry.objective}`, { tables: tablesRef!, inventory: core.campaign.inventory, party: core.campaign.units.slice(0, PARTY_SLOTS) }); break;   // 클리어 조건
     default: break;
   }
@@ -75,9 +79,15 @@ function menuCommand(id: number): void {
 /** Which menu items are live right now: 턴 종료 only in our battle phase; 클리어 조건 only in a battle; the rest of the system menu waits for its dialogs. */
 function menuFlags(): Record<number, boolean> {
   const b = core?.battle ?? null;
-  return { 40009: b !== null && menuEnabled(b.state, tablesRef?.item ?? []).endTurn, 40032: b !== null, 40030: false, 40012: false };
+  return { 40009: b !== null && menuEnabled(b.state, tablesRef?.item ?? []).endTurn, 40032: b !== null, 40030: false };
 }
-let dialogueRef: Dialogue | null = null; let tablesRef: Tables | null = null; let menuRef: MenuTemplate | null = null; let dialogHost: DialogHost | null = null;
+let dialogueRef: Dialogue | null = null; let tablesRef: Tables | null = null; let menuRef: MenuTemplate | null = null; let dialogHost: DialogHost | null = null; let midiTracks: number[] = [];
+/** The menu as the original builds it at the time: menu 103 plus 'BGM 선택(&B)' (0x44b524, id 0x6b) once the game has been completed. */
+function currentMenu(): ReturnType<typeof menuModel> {
+  const m = menuModel(menuRef!, menuFlags(), dev);
+  if (core?.complete) m.bar[0]?.items.push({ label: 'BGM 선택(B)', ul: 7, key: 'b', accel: null, id: 107, enabled: true, separator: false });
+  return m;
+}
 
 /** Dialog 143 in load mode with the web's save-file tools; a pick loads, 처음부터 starts a new game. Returns whether the title should stay. */
 async function openLoadDialog(): Promise<boolean> {
@@ -117,29 +127,25 @@ async function showTitle(): Promise<void> {
 }
 
 let lastFrameError = '';
-/** Volume controls: 0..100 sliders and a mute box, remembered per browser. */
-function bindAudioControls(): void {
-  const music = $<HTMLInputElement>('volMusic'), sound = $<HTMLInputElement>('volSound'), mute = $<HTMLInputElement>('mute');
-  try { const saved = JSON.parse(localStorage.getItem('ft2.audio') ?? 'null') as { music?: number; sound?: number; mute?: boolean } | null; if (saved) { music.value = String(saved.music ?? 80); sound.value = String(saved.sound ?? 80); mute.checked = saved.mute ?? false; } } catch { /* storage unavailable */ }
-  const apply = () => {
-    const m = mute.checked ? 0 : Number(music.value) / 100, sn = mute.checked ? 0 : Number(sound.value) / 100;
-    stage?.setVolumes(m, sn);
-    try { localStorage.setItem('ft2.audio', JSON.stringify({ music: Number(music.value), sound: Number(sound.value), mute: mute.checked })); } catch { /* storage unavailable */ }
-  };
-  for (const el of [music, sound, mute]) el.addEventListener('input', apply);
-  apply();
+/** Dialog 156's choices, remembered per browser: 효과음 ON/OFF and 전화면 표시 (the music is always the MIDI synth, as the original's MIDI setting). */
+let settings: Settings = { fullscreen: false, sound: true };
+function loadSettings(): void { try { const saved = JSON.parse(localStorage.getItem('ft2.settings') ?? 'null') as Partial<Settings> | null; if (saved) settings = { ...settings, ...saved }; } catch { /* storage unavailable */ } applySettings(); }
+function applySettings(): void {
+  stage?.setVolumes(0.8, settings.sound ? 0.8 : 0);
+  try { localStorage.setItem('ft2.settings', JSON.stringify(settings)); } catch { /* storage unavailable */ }
+  const full = document.fullscreenElement !== null;
+  if (settings.fullscreen && !full) void $('stage').requestFullscreen?.().catch(() => {});
+  else if (!settings.fullscreen && full) void document.exitFullscreen();
 }
 
-let audioNoted = false;
 let endedShown = false;
 function frame(now: number): void {
   try {
     if (core && stage) {
       core.frame(now);
-      if (menuBar && menuRef) { const flags = menuFlags(), sig = JSON.stringify(flags); if (sig !== menuSig) { menuSig = sig; menuBar.setModel(menuModel(menuRef, flags, dev)); } }
+      if (menuBar && menuRef) { const sig = JSON.stringify(menuFlags()) + (core.complete ? '+' : ''); if (sig !== menuSig) { menuSig = sig; menuBar.setModel(currentMenu()); } }
       if (core.mode === 'ended' && !endedShown) { endedShown = true; stage.hideTown(); void showTitle(); }   // the ending (or a game over with nowhere to go) returns to the title
       if (core.mode !== 'ended') endedShown = false;
-      if (!audioNoted && stage.audioTried) { audioNoted = true; const note = $('audioNote'); const text = synthNotice(stage.musicFailure); note.hidden = text === null; note.textContent = text ?? ''; }
       stage.cellMode = core.mode === 'battle';
       const b = core.battle;
       stage.draw(now, core.campaign.units, b?.state.phase ?? IDLE);
@@ -197,7 +203,7 @@ async function boot(): Promise<void> {
       onBattleMenu: (cell, at) => {                                           // the original's right-click popup: the unit's entries over the 맵 menu's own
         if (!core?.battle || !popup || !menuRef) return;
         const s = core.battle.state, u = cell ? s.units.find((v) => v && v.side === 0 && v.c === cell[0] && v.r === cell[1]) ?? null : null;
-        const items: PopupItem[] = [...(u ? unitPopupItems(u, s.inventory, tables) : []), ...menuModel(menuRef, menuFlags(), dev).bar[0]!.items];
+        const items: PopupItem[] = [...(u ? unitPopupItems(u, s.inventory, tables) : []), ...currentMenu().bar[0]!.items];
         void popup.open(at.x, at.y, items).then((pick) => {
           if (!pick || !core?.battle) return;
           if (pick.cmd && u) {
@@ -213,15 +219,15 @@ async function boot(): Promise<void> {
     }, { wave: new Set(index.wave ?? []), midi: new Set(index.midi ?? []) }, visualList, staff);
     core = new GameCore(res, stage); dialogueRef = dialogue;
     if (dev) panel = new Panel(document, { onStart: () => {}, onCommand: (cmd) => core?.dispatch(cmd) }, tables);
-    bindAudioControls();
+    loadSettings();
     const ui = await data.ui().catch((e: unknown) => { showError(e); return null; });
     if (ui) {
-      const model = menuModel(ui.menu, menuFlags(), dev); menuRef = ui.menu; menuSig = JSON.stringify(menuFlags());
+      menuRef = ui.menu; midiTracks = [...(index.midi ?? [])]; const model = currentMenu(); menuSig = JSON.stringify(menuFlags());
       menuBar = new MenuBar($('menubar'), model, menuCommand); popup = new PopupMenu($('win'));
       dialogHost = { layer: $('win'), templates: ui.dialogs }; dialogue.attach(dialogHost);
       document.addEventListener('keydown', (e) => {                            // the original's accelerators: F1 불러오기, F2 유니트 일람, F4 전체 화면, F5 저장, F10 턴 종료 …
         if (e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement || e.target instanceof HTMLTextAreaElement) return;
-        const id = accelOf(menuModel(ui.menu, menuFlags(), dev), e.key, e.ctrlKey || e.metaKey);
+        const id = accelOf(currentMenu(), e.key, e.ctrlKey || e.metaKey);
         if (id !== null) { e.preventDefault(); menuCommand(id); }
       });
     }

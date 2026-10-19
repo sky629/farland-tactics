@@ -53,10 +53,10 @@ export function equipPopupItems(u: Unit, at: EquipTarget, tables: Tables): Equip
 }
 
 export const spellRows = (u: Unit, tables: Tables): { text: string; magic: number }[] =>
-  u.spells.filter((m) => m !== 0 && tables.magic[m]).map((m) => ({ text: `${tables.magic[m]!.name}\t${Math.abs(tables.magic[m]!.mp_cost)}`, magic: m }));
+  u.spells.filter((m) => m !== 0 && tables.magic[m]).map((m) => ({ text: `${tables.magic[m]!.name.replace(/_/g, ' ')}\t${Math.abs(tables.magic[m]!.mp_cost)}`, magic: m }));
 
 export const toolRows = (inv: Inventory, tables: Tables): { text: string; id: number; count: number }[] =>
-  usableItems(inv, tables.item).map((s) => ({ text: `${tables.item[s.id]!.name}\t${s.count}`, id: s.id, count: s.count }));
+  usableItems(inv, tables.item).map((s) => ({ text: `${tables.item[s.id]!.name.replace(/_/g, ' ')}\t${s.count}`, id: s.id, count: s.count }));
 
 /** Dialog 153: how many of `id` to sell; the edit 1086 holds the count, 1087 the purse, 1088 the sum. */
 function sellQuantity(host: DialogHost, inv: Inventory, id: number, tables: Tables): Promise<number> {
