@@ -10,9 +10,15 @@
   body { margin: 0; background: #14120e; color: #eae4d6; font: 13px/1.4 system-ui, sans-serif; display: flex; min-height: 100vh; }
   #panel { width: 300px; padding: 12px; box-sizing: border-box; display: flex; flex-direction: column; gap: 8px; background: #1e1a14; overflow-y: auto; }
   #panel select, #panel button, #panel input { font: inherit; }
+  #panel[hidden] { display: none; }
   #stage { flex: 1; display: grid; place-items: center; overflow: auto; }
-  #screen { position: relative; font-size: 16px; }   /* play/main.ts sets 16px × canvas scale */
-  canvas { display: block; image-rendering: pixelated; image-rendering: crisp-edges; background: #000; }
+  /* the game window: the original's menu bar over the 640×480 surface, scaled as one by play/main.ts (frameScale) */
+  #frameBox { position: relative; }
+  #frame { position: absolute; left: 0; top: 0; width: 640px; transform-origin: top left; }
+  #screen { position: relative; width: 640px; height: 480px; font-size: 16px; }
+  canvas { display: block; width: 640px; height: 480px; image-rendering: pixelated; image-rendering: crisp-edges; background: #000; }
+  #win { position: absolute; inset: 0; pointer-events: none; }
+  #win > * { pointer-events: auto; }
   .row { display: flex; gap: 6px; flex-wrap: wrap; }
   .mono { font-family: ui-monospace, monospace; white-space: pre-wrap; }
   #spells, #items { display: flex; flex-direction: column; gap: 4px; }
@@ -62,7 +68,7 @@
 </style>
 </head>
 <body>
-<aside id="panel">
+<aside id="panel" hidden>
   <div><b>Farland Tactics 2</b> — 이야기 모드</div>
   <div id="battleRow"><label>전투 <select id="battle"></select></label><label>시드 <input id="seed" type="number"></label><button id="start">시작</button></div>
   <div id="objective"></div>
@@ -86,11 +92,15 @@
   <div id="error" class="mono"></div>
 </aside>
 <main id="stage">
+  <div id="frameBox"><div id="frame">
+  <div id="menubar"></div>
   <div id="screen">
     <canvas id="view" width="640" height="480"></canvas>
     <div id="dialogue"></div>
+    <div id="win"></div>
     <div id="title"><div class="row"><button id="newGame">새 게임</button><button id="loadGame">불러오기</button></div><a href="game.html">전투 테스트</a></div>
   </div>
+  </div></div>
 </main>
 <script type="module" src="/src/play/main.ts"></script>
 </body>

@@ -42,3 +42,67 @@ export function accelOf(m: MenuBarModel, key: string, ctrl: boolean): number | n
   };
   return find([...m.bar, ...Object.values(m.popups)].flatMap((p) => p.items));
 }
+
+/** The label with its mnemonic letter underlined, as Win95 draws it. */
+export function labelNodes(doc: Document, label: string, ul: number): Node[] {
+  if (ul < 0) return [doc.createTextNode(label)];
+  const u = doc.createElement('u'); u.textContent = label[ul]!;
+  return [doc.createTextNode(label.slice(0, ul)), u, doc.createTextNode(label.slice(ul + 1))];
+}
+
+/** A popup list of items (submenus open to the right on hover); `pick` gets the command id of an enabled leaf. */
+export function buildMenuList(doc: Document, items: MenuItem[], pick: (id: number) => void): HTMLElement {
+  const box = doc.createElement('div'); box.className = 'w95 w95-popup';
+  for (const it of items) {
+    if (it.separator) { const sep = doc.createElement('div'); sep.className = 'w95-sep'; box.appendChild(sep); continue; }
+    const row = doc.createElement('div'); row.className = `w95-item${it.enabled ? '' : ' disabled'}`;
+    const label = doc.createElement('span'); label.append(...labelNodes(doc, it.label, it.ul)); row.appendChild(label);
+    if (it.accel) { const a = doc.createElement('span'); a.className = 'accel'; a.textContent = it.accel; row.appendChild(a); }
+    if (it.items) {
+      const arrow = doc.createElement('span'); arrow.className = 'arrow'; arrow.textContent = '▶'; row.appendChild(arrow);
+      let sub: HTMLElement | null = null;
+      row.addEventListener('mouseenter', () => { if (!sub && it.enabled) { sub = buildMenuList(doc, it.items!, pick); row.appendChild(sub); row.classList.add('open'); } });
+      row.addEventListener('mouseleave', () => { if (sub) { sub.remove(); sub = null; row.classList.remove('open'); } });
+    } else if (it.enabled && it.id !== null) {
+      const id = it.id;
+      row.addEventListener('mouseup', (e) => { e.stopPropagation(); pick(id); });
+    }
+    box.appendChild(row);
+  }
+  return box;
+}
+
+/** The menu bar in the DOM: click a bar item to drop its popup; Esc, a click elsewhere or a pick closes it. */
+export class MenuBar {
+  private openIdx = -1;
+  private dropdown: HTMLElement | null = null;
+  constructor(private readonly root: HTMLElement, private model: MenuBarModel, private readonly onCommand: (id: number) => void) {
+    root.classList.add('w95', 'w95-menubar');
+    this.render();
+    root.ownerDocument.addEventListener('mousedown', (e) => { if (!root.contains(e.target as Node)) this.close(); });
+    root.ownerDocument.addEventListener('keydown', (e) => { if (e.key === 'Escape' && this.openIdx >= 0) { this.close(); e.stopPropagation(); } });
+  }
+  /** A new enabled/disabled state: rebuilt (the open dropdown too). */
+  setModel(model: MenuBarModel): void { this.model = model; const open = this.openIdx; this.render(); if (open >= 0) this.show(open); }
+  get isOpen(): boolean { return this.openIdx >= 0; }
+  close(): void { this.dropdown?.remove(); this.dropdown = null; this.openIdx = -1; for (const el of this.root.children) el.classList.remove('open'); }
+  private render(): void {
+    this.close();
+    const doc = this.root.ownerDocument;
+    this.root.replaceChildren(...this.model.bar.map((p, i) => {
+      const el = doc.createElement('span'); el.className = 'w95-menu'; el.append(...labelNodes(doc, p.label, p.ul));
+      el.addEventListener('mousedown', (e) => { e.preventDefault(); if (this.openIdx === i) this.close(); else this.show(i); });
+      el.addEventListener('mouseenter', () => { if (this.openIdx >= 0 && this.openIdx !== i) this.show(i); });
+      return el;
+    }));
+  }
+  private show(i: number): void {
+    this.close();
+    const popup = this.model.bar[i]; if (!popup) return;
+    const el = this.root.children[i] as HTMLElement;
+    el.classList.add('open'); this.openIdx = i;
+    const list = buildMenuList(this.root.ownerDocument, popup.items, (id) => { this.close(); this.onCommand(id); });
+    list.style.left = `${el.offsetLeft}px`; list.style.top = `${this.root.offsetHeight}px`;
+    this.root.appendChild(list); this.dropdown = list;
+  }
+}

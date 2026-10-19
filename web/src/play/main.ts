@@ -17,8 +17,10 @@ import { IdbBackend, MemoryBackend, SaveStore } from '../save/store';
 import type { Resources } from '../script/host';
 import type { Program } from '../script/program';
 import { Dialogue } from '../ui/dialogue';
-import { Panel } from '../ui/panel';
-import { fitScale } from '../viewer/scale';
+import { menuEnabled, Panel } from '../ui/panel';
+import '../ui/win/theme.css';
+import { accelOf, MenuBar, menuModel, type MenuTemplate } from '../ui/win/menubar';
+import { frameScale, MENU_BAR_H } from '../viewer/scale';
 
 const $ = <T extends HTMLElement>(id: string): T => { const el = document.getElementById(id); if (!el) throw new Error(`missing element #${id}`); return el as T; };
 const nn = (n: number): string => String(n).padStart(2, '0');
@@ -30,7 +32,9 @@ const assets = new AssetLoader();
 const data = new DataLoader();
 let core: GameCore | null = null;
 let stage: BrowserStage | null = null;
-let panel: Panel | null = null;
+let panel: Panel | null = null;                                               // the developer's side panel (?dev=1): logs, raw unit data, errors
+let menuBar: MenuBar | null = null; let menuSig = '';
+const dev = new URLSearchParams(location.search).get('dev') === '1';
 let shownEvents: BattleEvent[] | null = null;
 let saves: SaveStore | null = null;
 let saveList: (SaveSummary | null)[] = [];
@@ -39,12 +43,33 @@ const refreshSaves = async (): Promise<void> => { if (saves) saveList = await sa
 const showError = (e: unknown) => { const msg = e instanceof AssetError || e instanceof DataError ? e.message : e instanceof Error ? `${e.name}: ${e.message}` : String(e); $('error').textContent = msg; console.error(e); };
 const log = (kind: 'warn' | 'info', text: string) => { panel?.log(kind === 'warn' ? `⚠ ${text}` : text); if (kind === 'warn') console.warn(text); else console.info(text); };
 
+/** The game window (menu bar + 640×480 surface) scales as one by an integer factor; the dialogue and Win95 chrome inside scale with it. */
 function resize(): void {
   const host = $('stage');
-  const k = fitScale(host.clientWidth - 16, host.clientHeight - 16);
-  $('screen').style.width = `${VIEW_W * k}px`; $('screen').style.height = `${VIEW_H * k}px`; $('screen').style.fontSize = `${16 * k}px`;
-  canvas.style.width = `${VIEW_W * k}px`; canvas.style.height = `${VIEW_H * k}px`;
+  const k = frameScale(host.clientWidth - 16, host.clientHeight - 16);
+  $('frameBox').style.width = `${VIEW_W * k}px`; $('frameBox').style.height = `${(VIEW_H + MENU_BAR_H) * k}px`;
+  $('frame').style.transform = `scale(${k})`;
 }
+
+/** Menu 103 → actions. Items without an action yet are disabled in `menuFlags`. */
+function menuCommand(id: number): void {
+  if (!core || !stage) return;
+  switch (id) {
+    case 40009: if (core.battle) core.dispatch({ type: 'endTurn' }); break;                          // 턴 종료 F10
+    case 40028: void refreshSaves().then(() => dialogueRef?.openLoad(saveList, loadHandlersRef!)); break;   // 불러오기 F1
+    case 40029: dialogueRef?.openSaveSlots(saveList, (slot) => core!.save(slot)); break;               // 저장하기 F5
+    case 40010: dialogueRef?.openParty({ tables: tablesRef!, inventory: core.campaign.inventory, party: core.campaign.units.slice(0, PARTY_SLOTS) }); break;   // 유니트 일람 F2
+    case 40003: if (document.fullscreenElement) void document.exitFullscreen(); else void $('stage').requestFullscreen?.(); break;   // 전체 화면 F4
+    case 40032: if (core.battle) dialogueRef?.openModal('message', `${core.battle.state.entry.episode} — ${core.battle.state.entry.objective}`, { tables: tablesRef!, inventory: core.campaign.inventory, party: core.campaign.units.slice(0, PARTY_SLOTS) }); break;   // 클리어 조건
+    default: break;
+  }
+}
+/** Which menu items are live right now: 턴 종료 only in our battle phase; 클리어 조건 only in a battle; the rest of the system menu waits for its dialogs. */
+function menuFlags(): Record<number, boolean> {
+  const b = core?.battle ?? null;
+  return { 40009: b !== null && menuEnabled(b.state, tablesRef?.item ?? []).endTurn, 40032: b !== null, 40030: false, 40012: false, 40004: false };
+}
+let dialogueRef: Dialogue | null = null; let tablesRef: Tables | null = null; let loadHandlersRef: Parameters<Dialogue['openLoad']>[1] | null = null; let menuRef: MenuTemplate | null = null;
 
 let lastFrameError = '';
 /** Volume controls: 0..100 sliders and a mute box, remembered per browser. */
@@ -64,8 +89,9 @@ let audioNoted = false;
 let endedShown = false;
 function frame(now: number): void {
   try {
-    if (core && stage && panel) {
+    if (core && stage) {
       core.frame(now);
+      if (menuBar && menuRef) { const flags = menuFlags(), sig = JSON.stringify(flags); if (sig !== menuSig) { menuSig = sig; menuBar.setModel(menuModel(menuRef, flags, dev)); } }
       if (core.mode === 'ended' && !endedShown) { endedShown = true; stage.hideTown(); $('title').hidden = false; }   // the ending (or a game over with nowhere to go) returns to the title
       if (core.mode !== 'ended') endedShown = false;
       if (!audioNoted && stage.audioTried) { audioNoted = true; const note = $('audioNote'); const text = synthNotice(stage.musicFailure); note.hidden = text === null; note.textContent = text ?? ''; }
@@ -73,10 +99,10 @@ function frame(now: number): void {
       const b = core.battle;
       stage.draw(now, core.campaign.units, b?.state.phase ?? IDLE);
       if (b) {
-        if (core.lastEvents !== shownEvents) { shownEvents = core.lastEvents; panel.logEvents(b.state, shownEvents); }
+        if (core.lastEvents !== shownEvents) { shownEvents = core.lastEvents; panel?.logEvents(b.state, shownEvents); }
         const h = stage.presenter.hover;
-        panel.update(b.state, h ? b.state.units.find((u) => u && u.c === h[0] && u.r === h[1]) ?? null : null);
-        panel.showResult(core.result);
+        panel?.update(b.state, h ? b.state.units.find((u) => u && u.c === h[0] && u.r === h[1]) ?? null : null);
+        panel?.showResult(core.result);
       }
     } else renderer.draw({ map: null, sprites: [], camera: { x: 0, y: 0 }, overlay: { grid: false, height: false, land: false, blocked: false }, seeThrough: false });
   } catch (e) {
@@ -100,7 +126,8 @@ async function boot(): Promise<void> {
   try {
     const index = await assets.index();
     if (!(index as { data?: boolean }).data || !index.events || !index.bmp) throw new AssetError('assets/index.json', 'no story data: run tools/ft2_export.py again');
-    const tables: Tables = await data.tables();
+    const tables: Tables = await data.tables(); tablesRef = tables;
+    $('panel').hidden = !dev;
     const programs = await Promise.all(index.events.map((n) => data.event(n)));
     if (!index.wave || !index.midi) log('warn', '자산 목록이 오래됐다(wave/midi 없음): python3 -I tools/ft2_export.py 를 다시 돌리면 소리가 난다');
     const visualList = await data.visual().catch((e: unknown) => { showError(e); return []; });
@@ -126,9 +153,19 @@ async function boot(): Promise<void> {
       writeSave: (slot, bytes) => { void saves?.write(slot, bytes).then(refreshSaves).catch(showError); },
       log,
     }, { wave: new Set(index.wave ?? []), midi: new Set(index.midi ?? []) }, visualList, staff);
-    core = new GameCore(res, stage);
-    panel = new Panel(document, { onStart: () => {}, onCommand: (cmd) => core?.dispatch(cmd) }, tables);
+    core = new GameCore(res, stage); dialogueRef = dialogue;
+    if (dev) panel = new Panel(document, { onStart: () => {}, onCommand: (cmd) => core?.dispatch(cmd) }, tables);
     bindAudioControls();
+    const ui = await data.ui().catch((e: unknown) => { showError(e); return null; });
+    if (ui) {
+      const model = menuModel(ui.menu, menuFlags(), dev); menuRef = ui.menu; menuSig = JSON.stringify(menuFlags());
+      menuBar = new MenuBar($('menubar'), model, menuCommand);
+      document.addEventListener('keydown', (e) => {                            // the original's accelerators: F1 불러오기, F2 유니트 일람, F4 전체 화면, F5 저장, F10 턴 종료 …
+        if (e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement || e.target instanceof HTMLTextAreaElement) return;
+        const id = accelOf(menuModel(ui.menu, menuFlags(), dev), e.key, e.ctrlKey || e.metaKey);
+        if (id !== null) { e.preventDefault(); menuCommand(id); }
+      });
+    }
     $('newGame').addEventListener('click', () => { stage!.unlockAudio(); $('title').hidden = true; $('error').textContent = ''; core!.newGame(); });
     document.addEventListener('visibilitychange', () => { if (!document.hidden) stage?.resumeAudio(); });
     await refreshSaves();
@@ -157,6 +194,7 @@ async function boot(): Promise<void> {
       },
       onDelete: async (slot: number) => { await saves!.remove(slot); await refreshSaves(); dialogue.openLoad(saveList, loadHandlers); },
     };
+    loadHandlersRef = loadHandlers;
     $('loadGame').addEventListener('click', () => { void refreshSaves().then(() => dialogue.openLoad(saveList, loadHandlers)); });
     void bitmaps.load('title');
   } catch (e) { showError(e); }
