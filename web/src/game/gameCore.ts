@@ -74,6 +74,7 @@ export class GameCore implements Host {
     this.campaign = newCampaign();
     this.vm = new ScriptVm(this.res, this.campaign, this);
     this.battle = null; this.result = null; this.prevMode = 'title'; this.pendingBattle = false; this.completed = false; this.hooks = [];
+    this.stage.closeAll(); this.stage.hideTown();                               // a second new game in one page (after a game over): no town, window or box of the last one
     this.stage.presenter.sync(this.campaign);
     if (!this.startScript(0, 'begin')) this.mode = 'ended';
   }
@@ -178,7 +179,7 @@ export class GameCore implements Host {
         const seen = new Set<number>();
         for (const h of e.hits) if (!seen.has(h.target)) { seen.add(h.target); this.hooks.push({ kind: 'target', slot: h.target, actor: e.slot }); }
         this.hooks.push({ kind: 'settle' });
-      } else if (e.type === 'levelUp') this.hooks.push({ kind: 'levelup', actor: e.slot });
+      } else if (e.type === 'levelUp' && !this.hooks.some((h) => h.kind === 'levelup' && h.actor === e.slot)) this.hooks.push({ kind: 'levelup', actor: e.slot });   // once per unit however many levels the blow gave (the original grows N times, then runs levelup%02d once)
       else if (e.type === 'end') { this.result = e.result; this.hooks.push({ kind: 'end', result: e.result }); }   // before the hook runs the COMPLETE/GAMEOVER script
     }
   }

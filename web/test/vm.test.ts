@@ -137,7 +137,7 @@ describe('ScriptVm: waits, windows and modals', () => {
     const { host, vm, c } = setup([prog(0, ['begin', ['EPISODE', '첫_업무', 1], ['SHOP', [1, 5]], ['END']])]);
     vm.run(0, 'begin'); host.modal = null;
     expect(vm.step(0)).toBe('waiting');
-    expect(c.episode).toBe('첫 업무');
+    expect(c.episode).toBe('첫_업무');                                       // as written: the save header keeps the script's underscores
     expect(host.calls).toContainEqual(['showEpisode', '첫 업무']);
     expect(host.calls.at(-1)).toEqual(['openModal', 'shop', [1, 5]]);         // the shop is already open: EPISODE did not block
     host.modal = 1;

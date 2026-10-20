@@ -191,8 +191,8 @@ export class ScriptVm {
         return 'next';
       }
       case 'SET_SPEAKER_NAME': this.c.speakerName = str(a[0]) ?? ''; return 'next';
-      case 'EPISODE': this.c.episode = scriptText(str(a[0]) ?? ''); if (idx(1) !== 0) this.host.showEpisode(this.c.episode); return 'next';
-      case 'MESSAGE': { this.c.message = scriptText(str(a[0]) ?? ''); return this.modal('message', this.c.message).done ? 'next' : 'wait'; }
+      case 'EPISODE': this.c.episode = str(a[0]) ?? ''; if (idx(1) !== 0) this.host.showEpisode(scriptText(this.c.episode)); return 'next';   // stored as written (the save header keeps the underscores, as the original's does); shown converted
+      case 'MESSAGE': { this.c.message = str(a[0]) ?? ''; return this.modal('message', scriptText(this.c.message)).done ? 'next' : 'wait'; }
       case 'ASK': { const m = this.modal('ask', str(a[0]) ?? ''); if (!m.done) return 'wait'; this.state.result = m.result !== 0 ? 1 : 0; return 'next'; }
       case 'SHOP': return this.modal('shop', list(a[0])).done ? 'next' : 'wait';
       case 'SAVE_GAME': {                                                    // FUN_00423820: a slot ≥ 0 writes at once, < 0 asks (dialog 0x8F)

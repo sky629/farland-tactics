@@ -5,7 +5,7 @@
  * list 1099, the chosen one's bag in static 1100 "현재 소지품", 산다!(1) / 절약하자(2). Consumables go to the shared stacks, equipment
  * to a member's bag (shop.buy).
  */
-import { countOf, isEquipment, type Inventory } from '../../../battle/inventory';
+import { countOf, isEquipment, STACK_MAX, type Inventory } from '../../../battle/inventory';
 import { buy, type BuyResult } from '../../../battle/shop';
 import type { Unit } from '../../../battle/unit';
 import type { ItemData, Tables } from '../../../data/types';
@@ -19,6 +19,9 @@ export const shopRows = (ids: number[], inv: Inventory, tables: Tables): { id: n
   ids.filter((id) => tables.item[id]).map((id) => ({ id, text: `${tables.item[id]!.name.replace(/_/g, ' ')}\t${tables.item[id]!.price}\t${countOf(inv, id)}` }));
 
 export const buyTotal = (item: ItemData, count: number, gold: number): { total: number; ok: boolean } => ({ total: item.price * count, ok: count > 0 && item.price * count <= gold });
+
+/** How many of `item` the purse could ever hold: one piece of equipment, or what the shared stack has room for (STACK_MAX). */
+export const maxCount = (item: ItemData, inv: Inventory, id: number): number => (isEquipment(item) ? 1 : Math.max(0, STACK_MAX - countOf(inv, id)));
 
 export const whoCanTake = (party: (Unit | null)[]): Unit[] => party.filter((u): u is Unit => u !== null && u.status !== 9 && u.bag.includes(0));
 
@@ -63,12 +66,15 @@ export function shopDialog(host: DialogHost, ids: number[], ctx: ShopContext): P
   };
   const purchase = async (id: number) => {
     const item = tables.item[id]; if (!item) return;
-    const n = await howMany(host, item, inv, isEquipment(item) ? 1 : 99);
+    if (isEquipment(item) && whoCanTake(ctx.party).length === 0) { box.setText(1077, BUY_TEXT.full); return; }   // '소유품이 꽉차서 가질수 없다' (0x44ad64): nobody has a free bag slot
+    const cap = maxCount(item, inv, id);
+    if (cap === 0) { box.setText(1077, BUY_TEXT.full); return; }
+    const n = await howMany(host, item, inv, cap);
     if (n === 0) return;
     let result: BuyResult = 'ok';
     if (isEquipment(item)) { const who = await whoTakes(host, ctx.party, tables); if (!who) return; result = buy(inv, who, id, tables.item); }
     else for (let k = 0; k < n && result === 'ok'; k++) result = buy(inv, null, id, tables.item);
-    box.setText(1077, result === 'ok' ? '사고싶은 물건을 더블클릭해 주십시오.' : BUY_TEXT[result]);
+    box.setText(1077, result === 'ok' ? '사고싶은 물건을 더블클릭해 주십시오.' : BUY_TEXT[result]);   // a stopped stack purchase shows what the list's count column already tells
     refresh();
   };
   box.onClick(8001, () => { if (pick !== null) void purchase(pick); });

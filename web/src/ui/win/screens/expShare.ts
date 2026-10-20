@@ -41,7 +41,7 @@ export function expShareDialog(host: DialogHost, party: { exp: number; name: str
   const refresh = () => { party.forEach((_, i) => { bars[i]!.value = String(m.shares[i]); box.setText(ROW_IDS[i]![3], m.label(i)); }); box.setText(1110, m.text()); };
   box.onClick(1109, () => { m.balance(); refresh(); });
   box.onClick(1108, () => { m.even(); refresh(); });
-  box.onClick(1, () => box.close(m.shares));
+  box.onClick(1, () => box.close(m.shares));                                 // 결정 with a remainder: the shares go in and the rest of the pool is dropped — not verified against the original's OK handler [추정]
   refresh();
   return box.show();
 }

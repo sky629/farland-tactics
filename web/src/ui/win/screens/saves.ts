@@ -17,7 +17,7 @@ export function savesRows(saves: (SaveSummary | null)[], mode: SaveMode): { slot
     if (s === null) return { slot: i, text: `${no}:           미등록`, enabled: mode === 'save' };
     if (s.broken) return { slot: i, text: `${no}:           손상됨`, enabled: mode === 'save' };
     const where = s.turn >= 0 ? `Turn${String(s.turn).padEnd(3, ' ')} ` : '어트랙터  ';   // the header counts finished rounds: 0 at BATTLE_START, −1 in town
-    return { slot: i, text: `${no}: ${pad2(s.stage)}일째  ${where}${s.title}`, enabled: true };
+    return { slot: i, text: `${no}: ${pad2(s.stage)}일째  ${where}${s.title.replace(/_/g, ' ').replace(/\*/g, '')}`, enabled: true };   // the header's title as the script wrote it, shown as the script shows it
   });
 }
 

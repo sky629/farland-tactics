@@ -18,11 +18,12 @@ const withTimeout = <T,>(p: Promise<T>, ms: number, what: string): Promise<T> =>
  * MIDI through spessasynth_lib (AudioWorklet) with the GM soundfont at assets/sf2/gm.sf3.
  * `ready` stays false — and every call is a no-op — when the soundfont or the worklet is missing; the MusicPlayer logs once.
  */
-export type SynthFailure = 'soundfont' | 'synth' | null;
+export type SynthFailure = 'soundfont' | 'synth' | 'audio' | null;
 /** The panel note after init settled: what is missing and what to do; null when music plays. */
 export function synthNotice(failure: SynthFailure): string | null {
   if (failure === 'soundfont') return '음악 없음: 사운드폰트가 없다. python3 -I tools/ft2_soundfont.py web/public/assets 를 실행한 뒤 새로고침.';
   if (failure === 'synth') return '음악 없음: 이 브라우저에서 MIDI 합성기를 만들지 못했다(AudioWorklet). 효과음은 난다.';
+  if (failure === 'audio') return '소리 없음: 이 브라우저에서 AudioContext 를 만들지 못했다. 음악도 효과음도 나지 않는다.';
   return null;
 }
 

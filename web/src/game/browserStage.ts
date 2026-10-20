@@ -245,7 +245,7 @@ export class BrowserStage implements Stage {
     if (this.audio) return;
     const log = (k: 'warn' | 'info', t: string) => this.hooks.log(k, t);
     let ctx: AudioContext;
-    try { ctx = new AudioContext(); } catch (e) { log('warn', `소리를 켤 수 없다: ${e instanceof Error ? e.message : String(e)}`); this.gate.synthSettled(); return; }
+    try { ctx = new AudioContext(); } catch (e) { log('warn', `소리를 켤 수 없다: ${e instanceof Error ? e.message : String(e)}`); this.audioFailed = true; this.gate.synthSettled(); return; }
     const out = new WebAudioOut(ctx), synth = new SpessaSynth(ctx, 'assets', log);
     this.audio = { out, synth };
     this.gate.unlock({ sounds: new SoundPlayer(out, this.audioAssets.wave, log), music: new MusicPlayer(synth, log) });
@@ -257,7 +257,8 @@ export class BrowserStage implements Stage {
   setVolumes(music: number, sound: number): void { this.gate.setVolumes(music, sound); }
   get musicReady(): boolean { return this.audio?.synth.ready ?? false; }
   /** Why music is silent after init settled (null = it plays, or no AudioContext at all). */
-  get musicFailure(): SynthFailure { return this.audio?.synth.failure ?? null; }
+  get musicFailure(): SynthFailure { return this.audioFailed ? 'audio' : (this.audio?.synth.failure ?? null); }
+  private audioFailed = false;                                               // the AudioContext itself could not be made: no sound at all
   /** true once the synthesizer init settled (so the page can show the soundfont notice exactly once). */
   get audioTried(): boolean { return this.gate.settled; }
   get currentMusic(): number { return this.gate.current; }

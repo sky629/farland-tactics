@@ -53,8 +53,10 @@ const refreshSaves = async (): Promise<void> => { if (saves) saveList = await sa
 
 const showError = (e: unknown) => { const msg = e instanceof AssetError || e instanceof DataError ? e.message : e instanceof Error ? `${e.name}: ${e.message}` : String(e); $('error').textContent = msg; console.error(e); };
 /** A failure that leaves no game to play (missing assets, no dialog templates): shown in the frame, dev panel or not. */
-const showFatal = (e: unknown) => { showError(e); const el = $('fatal'); el.textContent = `${$('error').textContent}\n(python3 -I tools/ft2_export.py extracted/FarlandTactics2 web/public/assets 로 자산을 다시 내보낸다)`; el.hidden = false; };
-const log = (kind: 'warn' | 'info', text: string) => { panel?.log(kind === 'warn' ? `⚠ ${text}` : text); if (kind === 'warn') console.warn(text); else console.info(text); };
+const showFatal = (e: unknown) => { showError(e); notice(`${$('error').textContent}\n(python3 -I tools/ft2_export.py extracted/FarlandTactics2 web/public/assets 로 자산을 다시 내보낸다)`); };
+const log = (kind: 'warn' | 'info', text: string) => { panel?.log(kind === 'warn' ? `⚠ ${text}` : text); if (kind === 'warn') { console.warn(text); notice(text); } else console.info(text); };
+/** The frame's notice strip: a warning the player should see (a missing asset, a save that could not be read); a click hides it. */
+function notice(text: string): void { const el = $('fatal'); el.textContent = text; el.hidden = false; }
 
 /** The game window (menu bar + 640×480 surface) scales as one by an integer factor; the dialogue and Win95 chrome inside scale with it. */
 function resize(): void {
@@ -205,6 +207,7 @@ async function boot(): Promise<void> {
     if (!(index as { data?: boolean }).data || !index.events || !index.bmp) throw new AssetError('assets/index.json', 'no story data: run tools/ft2_export.py again');
     const tables: Tables = await data.tables(); tablesRef = tables;
     $('panel').hidden = !dev;
+    $('fatal').addEventListener('click', () => { $('fatal').hidden = true; });
     const programs = await Promise.all(index.events.map((n) => data.event(n)));
     if (!index.wave || !index.midi) log('warn', '자산 목록이 오래됐다(wave/midi 없음): python3 -I tools/ft2_export.py 를 다시 돌리면 소리가 난다');
     const visualList = await data.visual().catch((e: unknown) => { showError(e); return []; });

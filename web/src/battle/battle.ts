@@ -343,9 +343,9 @@ export class Battle {
   private beginEnemyPhase(): BattleEvent[] {
     const s = this.state;
     const party = liveUnits(s.units).filter((u) => u.slot < PARTY_SLOTS);
+    const events: BattleEvent[] = [{ type: 'phase', kind: 'enemy' }, ...statusTick(s, (u) => u.slot >= PARTY_SLOTS)];   // the tick first: one it wakes acts this phase, one it fells does not
     const queue = liveUnits(s.units).filter((u) => u.slot >= PARTY_SLOTS && u.side !== 1 && u.side !== 7 && u.hp > 0 && !incap(u.status) && party.some((p) => hostile(u, p))).map((u) => u.slot);
     s.phase = { kind: 'enemy', queue };
-    const events: BattleEvent[] = [{ type: 'phase', kind: 'enemy' }, ...statusTick(s, (u) => u.slot >= PARTY_SLOTS)];
     const end = endIfOver(s);                                                   // poison can kill the last enemy here
     if (end.length > 0) return [...events, ...end];
     return queue.length === 0 ? [...events, ...this.endEnemyPhase()] : events;
