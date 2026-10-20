@@ -1,6 +1,6 @@
 # 원작 UI 재현 구현 계획
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** 플레이 페이지의 인터페이스를 게임 창 안으로 옮긴다 — 원작의 메뉴 바·유닛 명령 팝업·대화상자 21개를 FT2.exe 리소스 데이터로 다시 만들고, HTML 옆 패널은 개발 도구로만 남긴다.
 
@@ -39,7 +39,7 @@
 - Produces: `read_resources(exe: bytes) -> dict` → `{'dialogs': {id: Dialog}, 'menus': {id: Menu}}`; `Dialog = {ex, style, title, font: [pt, name] | None, cx, cy, items: [{id, cls, text, x, y, cx, cy, style}]}`; `Menu = {items: [{text, id, flags, items?}]}`; 클래스 원자 0x80~0x85는 `button/edit/static/listbox/scrollbar/combobox`, 문자열 클래스는 그대로(`SysTabControl32`), id 0xFFFF/−1은 `null`.
 - Consumes: 없음.
 
-- [ ] **Step 1: 실패하는 테스트**
+- [x] **Step 1: 실패하는 테스트**
 
 ```python
 # tools/test_ft2_dialogs.py
@@ -74,15 +74,15 @@ if __name__ == '__main__':
     unittest.main()
 ```
 
-- [ ] **Step 2: 실패 확인** — Run: `python3 -I -m unittest tools.test_ft2_dialogs -v` (저장소 루트, `tools` 가 패키지가 아니면 `cd tools && python3 -I -m unittest test_ft2_dialogs -v`). Expected: `ModuleNotFoundError: ft2_dialogs`.
+- [x] **Step 2: 실패 확인** — Run: `python3 -I -m unittest tools.test_ft2_dialogs -v` (저장소 루트, `tools` 가 패키지가 아니면 `cd tools && python3 -I -m unittest test_ft2_dialogs -v`). Expected: `ModuleNotFoundError: ft2_dialogs`.
 
-- [ ] **Step 3: 구현** — `tools/ft2_dialogs.py`: 스크래치 `probe_dialogs.py`(2026-10-19)의 PE 섹션 → RVA 변환, 리소스 디렉터리 순회(`readdir`, `leaf`), `parse_dialog(raw: bytes) -> dict`(DLGTEMPLATE/EX, DS_SETFONT 0x40, 컨트롤 DWORD 정렬, 클래스·텍스트 `sz_or_ord`, `extra` 생성 데이터 건너뛰기), `parse_menu(raw: bytes) -> dict`(MENUITEMTEMPLATEHEADER ver 0, MF_POPUP 0x10, MF_END 0x80), `read_resources(exe: bytes) -> dict`(RT_MENU 4, RT_DIALOG 5), `dialog_json`은 id −1/0xFFFF → `None`. `main(argv)`: `ft2_dialogs.py FT2.exe out.json`.
+- [x] **Step 3: 구현** — `tools/ft2_dialogs.py`: 스크래치 `probe_dialogs.py`(2026-10-19)의 PE 섹션 → RVA 변환, 리소스 디렉터리 순회(`readdir`, `leaf`), `parse_dialog(raw: bytes) -> dict`(DLGTEMPLATE/EX, DS_SETFONT 0x40, 컨트롤 DWORD 정렬, 클래스·텍스트 `sz_or_ord`, `extra` 생성 데이터 건너뛰기), `parse_menu(raw: bytes) -> dict`(MENUITEMTEMPLATEHEADER ver 0, MF_POPUP 0x10, MF_END 0x80), `read_resources(exe: bytes) -> dict`(RT_MENU 4, RT_DIALOG 5), `dialog_json`은 id −1/0xFFFF → `None`. `main(argv)`: `ft2_dialogs.py FT2.exe out.json`.
 
-- [ ] **Step 4: 통과 확인** — Run: 위 명령. Expected: 2 tests OK. 실제 EXE 로 `python3 -I tools/ft2_dialogs.py extracted/FarlandTactics2/FT2.exe /tmp/ui.json` → `dialogs 21, menus 1`.
+- [x] **Step 4: 통과 확인** — Run: 위 명령. Expected: 2 tests OK. 실제 EXE 로 `python3 -I tools/ft2_dialogs.py extracted/FarlandTactics2/FT2.exe /tmp/ui.json` → `dialogs 21, menus 1`.
 
-- [ ] **Step 5: 내보내기 연결** — `ft2_export.py`에 `export_ui(game, out, report)`: `FT2.exe` 를 읽어 `out/data/dialogs.json`(키 = 문자열 id), `out/data/menu.json`(메뉴 103) 을 쓰고, `index.json` 에 `"ui": true`. `test_ft2_export.py` 에 `export_ui` 가 두 파일을 쓰는 테스트(가짜 EXE 는 Task 1의 `dlg()` 를 리소스 섹션에 넣기 어렵다 → `read_resources` 를 monkeypatch 하여 호출·파일 쓰기만 확인).
+- [x] **Step 5: 내보내기 연결** — `ft2_export.py`에 `export_ui(game, out, report)`: `FT2.exe` 를 읽어 `out/data/dialogs.json`(키 = 문자열 id), `out/data/menu.json`(메뉴 103) 을 쓰고, `index.json` 에 `"ui": true`. `test_ft2_export.py` 에 `export_ui` 가 두 파일을 쓰는 테스트(가짜 EXE 는 Task 1의 `dlg()` 를 리소스 섹션에 넣기 어렵다 → `read_resources` 를 monkeypatch 하여 호출·파일 쓰기만 확인).
 
-- [ ] **Step 6: 커밋** — `git add tools/ft2_dialogs.py tools/test_ft2_dialogs.py tools/ft2_export.py tools/test_ft2_export.py && git commit -m "feat(tools): export the executable's dialog and menu resources (RT_DIALOG 21, RT_MENU 103) as JSON"`
+- [x] **Step 6: 커밋** — `git add tools/ft2_dialogs.py tools/test_ft2_dialogs.py tools/ft2_export.py tools/test_ft2_export.py && git commit -m "feat(tools): export the executable's dialog and menu resources (RT_DIALOG 21, RT_MENU 103) as JSON"`
 
 ### Task 2: 레이아웃 모델 — `web/src/ui/win/layout.ts`
 
@@ -94,7 +94,7 @@ if __name__ == '__main__':
 - Produces: `interface DialogTemplate { ex: boolean; style: number; title: string; font: [number, string] | null; cx: number; cy: number; items: ControlTemplate[] }`, `interface ControlTemplate { id: number | null; cls: string; text: string | null; x: number; y: number; cx: number; cy: number; style: number }`, `interface Metrics { charW: number; charH: number }`(글꼴의 평균 문자폭·높이, px), `duToPx(m: Metrics, x, y, cx, cy) -> { left, top, width, height }`(가로 ×charW/4, 세로 ×charH/8, 반올림), `layoutDialog(t: DialogTemplate, m: Metrics) -> { width, height, controls: LaidControl[] }`, `mnemonic(text) -> { label: string; key: string | null; accel: string | null }`('유니트 일람(&L)\tF2' → label '유니트 일람(L)', key 'l', accel 'F2'; 밑줄 위치는 `label` 안의 인덱스 `ul`).
 - Consumes: Task 1의 JSON 모양.
 
-- [ ] **Step 1: 실패하는 테스트**
+- [x] **Step 1: 실패하는 테스트**
 
 ```ts
 // web/test/winLayout.test.ts
@@ -123,10 +123,10 @@ describe('Win95 dialog layout', () => {
 });
 ```
 
-- [ ] **Step 2: 실패 확인** — Run: `cd web && npx vitest run test/winLayout.test.ts`. Expected: FAIL, 모듈 없음.
-- [ ] **Step 3: 구현** — `layout.ts`: 위 인터페이스. `default` = `(style & 0xF) === 1`(BS_DEFPUSHBUTTON) for buttons; `radio` = 0x9, `group` = 0x7, `ownerDraw` = 0xB; static `right` = `(style & 0x3) === 2`, `center` = 1; listbox `sort/notify` 무시.
-- [ ] **Step 4: 통과 확인** — Run: 같은 명령. Expected: 3 passed.
-- [ ] **Step 5: 커밋** — `git commit -am "feat(web): Win95 dialog layout model from the original templates"`
+- [x] **Step 2: 실패 확인** — Run: `cd web && npx vitest run test/winLayout.test.ts`. Expected: FAIL, 모듈 없음.
+- [x] **Step 3: 구현** — `layout.ts`: 위 인터페이스. `default` = `(style & 0xF) === 1`(BS_DEFPUSHBUTTON) for buttons; `radio` = 0x9, `group` = 0x7, `ownerDraw` = 0xB; static `right` = `(style & 0x3) === 2`, `center` = 1; listbox `sort/notify` 무시.
+- [x] **Step 4: 통과 확인** — Run: 같은 명령. Expected: 3 passed.
+- [x] **Step 5: 커밋** — `git commit -am "feat(web): Win95 dialog layout model from the original templates"`
 
 ### Task 3: 프레임·테마·메뉴 바
 
@@ -138,7 +138,7 @@ describe('Win95 dialog layout', () => {
 - Produces: `menuModel(menu: Menu, enabled: Record<number, boolean>, dev: boolean) -> MenuBarModel`(바 항목 = 메뉴 103의 첫 팝업 '맵' 하위 항목들: 표시 ▸, 턴 종료, 구분선, 시스템 ▸; `dev` 가 false 면 '디버그' 팝업은 제외 — 바에는 원래 '맵' 하나만 있으므로 바 = ['맵']), `accelOf(key: string, ctrl: boolean) -> number | null`(F1→40028, F2→40010, F3→40030, F4→40003, F5→40029, F10→40009, F11→40012), `class MenuBar { constructor(root: HTMLElement, model, onCommand(id: number)) ; setEnabled(id, on) }`. 명령 id → 동작 매핑은 Task 8의 `BrowserStage`.
 - Consumes: Task 2의 `mnemonic`.
 
-- [ ] **Step 1: 실패하는 테스트**
+- [x] **Step 1: 실패하는 테스트**
 
 ```ts
 // web/test/winMenu.test.ts
@@ -166,10 +166,10 @@ describe('menu bar model', () => {
 });
 ```
 
-- [ ] **Step 2: 실패 확인** — Run: `npx vitest run test/winMenu.test.ts`. Expected: FAIL.
-- [ ] **Step 3: 구현** — `menubar.ts`(모델 함수 + 얇은 DOM 클래스: `<div class="w95-menubar">` 안의 `<span class="w95-menu">`, 드롭다운 `<div class="w95-popup">`, 항목 `<div class="w95-item" data-id>`; 열림/닫힘, 니모닉 Alt+키, 바깥 클릭 닫기). `theme.css`: 토큰(`--w95-face:#c0c0c0; --w95-shadow:#808080; --w95-dark:#000; --w95-light:#fff; --w95-sel:#000080`), 베벨(`box-shadow: inset -1px -1px var(--w95-dark), inset 1px 1px var(--w95-light), inset -2px -2px var(--w95-shadow)`), 글꼴 스택 `'Gulim','굴림','Apple SD Gothic Neo','Malgun Gothic',sans-serif`, 메뉴 바 높이 19px. `play.html`: `<div id="frame"><div id="menubar"></div><div id="screen">…</div></div>`; `#panel` 는 `hidden` 기본, `?dev=1` 이면 보임. `main.ts`의 `resize()`: `k = fitScale(availW, availH - 19 * k…)` → `frameScale`: 정수 k 중 `640k ≤ W && (480 + 19)k ≤ H` 최대값; `#frame { transform: scale(k); transform-origin: top left; width: 640px; height: 499px }` 로 프레임 전체를 키운다(캔버스 CSS 크기는 640×480 고정).
-- [ ] **Step 4: 통과 확인** — Run: 같은 명령 + `npx tsc --noEmit`. Expected: 3 passed, tsc clean. 브라우저: 메뉴 바가 캔버스 위에 같은 배율로 보인다.
-- [ ] **Step 5: 커밋** — `git commit -am "feat(web): Win95 frame, theme and the original menu bar (menu 103)"`
+- [x] **Step 2: 실패 확인** — Run: `npx vitest run test/winMenu.test.ts`. Expected: FAIL.
+- [x] **Step 3: 구현** — `menubar.ts`(모델 함수 + 얇은 DOM 클래스: `<div class="w95-menubar">` 안의 `<span class="w95-menu">`, 드롭다운 `<div class="w95-popup">`, 항목 `<div class="w95-item" data-id>`; 열림/닫힘, 니모닉 Alt+키, 바깥 클릭 닫기). `theme.css`: 토큰(`--w95-face:#c0c0c0; --w95-shadow:#808080; --w95-dark:#000; --w95-light:#fff; --w95-sel:#000080`), 베벨(`box-shadow: inset -1px -1px var(--w95-dark), inset 1px 1px var(--w95-light), inset -2px -2px var(--w95-shadow)`), 글꼴 스택 `'Gulim','굴림','Apple SD Gothic Neo','Malgun Gothic',sans-serif`, 메뉴 바 높이 19px. `play.html`: `<div id="frame"><div id="menubar"></div><div id="screen">…</div></div>`; `#panel` 는 `hidden` 기본, `?dev=1` 이면 보임. `main.ts`의 `resize()`: `k = fitScale(availW, availH - 19 * k…)` → `frameScale`: 정수 k 중 `640k ≤ W && (480 + 19)k ≤ H` 최대값; `#frame { transform: scale(k); transform-origin: top left; width: 640px; height: 499px }` 로 프레임 전체를 키운다(캔버스 CSS 크기는 640×480 고정).
+- [x] **Step 4: 통과 확인** — Run: 같은 명령 + `npx tsc --noEmit`. Expected: 3 passed, tsc clean. 브라우저: 메뉴 바가 캔버스 위에 같은 배율로 보인다.
+- [x] **Step 5: 커밋** — `git commit -am "feat(web): Win95 frame, theme and the original menu bar (menu 103)"`
 
 ### Task 4: 팝업 메뉴와 유닛 명령
 
@@ -181,7 +181,7 @@ describe('menu bar model', () => {
 - Produces: `unitCommandItems(en: MenuEnabled, u: Unit, tables) -> PopupItem[]`(이동하다(M) · 공격하다(A) · 마법(G) ▸ 주문들(`${name} MP n`, MP 부족은 비활성; 없으면 '마법을 걸 상대가 없다.' 비활성) · 도구(I) ▸ 사용 가능 아이템 · 대기(W)), 각 항목에 `cmd: Command | null`; `class PopupMenu { open(x, y, items): Promise<PopupItem | null> }`(Esc/바깥/오른쪽 클릭 → null).
 - Consumes: `menuEnabled`(panel.ts → `web/src/ui/menuEnabled.ts` 로 옮긴다; panel.ts 는 Task 8에서 개발 전용이 된다), `usableItems`.
 
-- [ ] **Step 1: 실패하는 테스트**
+- [x] **Step 1: 실패하는 테스트**
 
 ```ts
 // web/test/winPopup.test.ts
@@ -204,10 +204,10 @@ describe('unit command popup', () => {
 });
 ```
 
-- [ ] **Step 2: 실패 확인** — Run: `npx vitest run test/winPopup.test.ts`. Expected: FAIL.
-- [ ] **Step 3: 구현** — `popup.ts`: 모델 함수 + DOM 클래스(프레임 좌표로 위치, 프레임 밖이면 안쪽으로 민다, 하위 메뉴는 오른쪽에). `browserStage.ts`: 전투 모드에서 아군 유닛 클릭 → `select` 명령 뒤 `popup.open(x, y, unitCommandItems(...))` → 고른 `cmd` 를 `hooks.onCommand(cmd)`(새 훅) 로; null 이면 `cancel`. 기존 `onCell` 은 범위 선택 중에만.
-- [ ] **Step 4: 통과 확인** — 테스트 + tsc + 브라우저(전투 테스트 `game.html` 또는 플레이에서 유닛 클릭 → 팝업 → 이동).
-- [ ] **Step 5: 커밋** — `git commit -am "feat(web): the original unit command popup (이동하다·공격하다·마법·도구·대기)"`
+- [x] **Step 2: 실패 확인** — Run: `npx vitest run test/winPopup.test.ts`. Expected: FAIL.
+- [x] **Step 3: 구현** — `popup.ts`: 모델 함수 + DOM 클래스(프레임 좌표로 위치, 프레임 밖이면 안쪽으로 민다, 하위 메뉴는 오른쪽에). `browserStage.ts`: 전투 모드에서 아군 유닛 클릭 → `select` 명령 뒤 `popup.open(x, y, unitCommandItems(...))` → 고른 `cmd` 를 `hooks.onCommand(cmd)`(새 훅) 로; null 이면 `cancel`. 기존 `onCell` 은 범위 선택 중에만.
+- [x] **Step 4: 통과 확인** — 테스트 + tsc + 브라우저(전투 테스트 `game.html` 또는 플레이에서 유닛 클릭 → 팝업 → 이동).
+- [x] **Step 5: 커밋** — `git commit -am "feat(web): the original unit command popup (이동하다·공격하다·마법·도구·대기)"`
 
 ### Task 5: 대화상자 엔진 + 확인(126) · 데이터 선택(143) · 스테이지 선택(124)
 
@@ -219,7 +219,7 @@ describe('unit command popup', () => {
 - Produces: `class DialogBox<T> { constructor(frame, template, metrics) ; bind(id, fn(el)) ; show(): Promise<T> ; close(value: T) }`; `confirm(frame, templates, text) -> Promise<boolean>`(126: 1058 에 글, 6 예 → true, 7 아니오/Esc → false); `pickSave(frame, templates, saves, mode: 'load' | 'save') -> Promise<{ slot } | { fresh: true } | null>`(143: 리스트 1060 에 32 슬롯 `NN  stage SS  턴 T  Gold G` 또는 `-- 비어 있음 --`/`손상됨`(불러오기에서 비활성), 1 결정, 2 취소, 8000 처음부터 는 load 모드에서만 보임); `titleDialog(frame, templates) -> Promise<'new' | 'load'>`(124: 리스트 1051 은 스테이지 이름 1개 "파랜드 택틱스 2"(원작의 스테이지 선택은 데모용 [추정]), 1 게임 개시, 2 불러오기).
 - Consumes: Task 2 `layoutDialog`, `SaveSummary`(`src/game/save*.ts`).
 
-- [ ] **Step 1: 실패하는 테스트** — 모델 수준: `dialog.ts` 의 `resolveResult(template, controlId, state)` 와 `savesRows(saves, mode)`:
+- [x] **Step 1: 실패하는 테스트** — 모델 수준: `dialog.ts` 의 `resolveResult(template, controlId, state)` 와 `savesRows(saves, mode)`:
 
 ```ts
 // web/test/winDialog.test.ts
@@ -244,10 +244,10 @@ describe('title dialog 124', () => {
 });
 ```
 
-- [ ] **Step 2: 실패 확인** — Run: `npx vitest run test/winDialog.test.ts`. Expected: FAIL.
-- [ ] **Step 3: 구현** — `dialog.ts`: 템플릿 → DOM(`<div class="w95-dialog" role="dialog">` 제목 막대(파란 그라데이션 없이 단색 `--w95-sel`), 컨트롤: button → `<button>`, static → `<span>`(정렬), edit → `<input>`, listbox → `<select size>` 또는 `<div role=listbox>`(더블클릭 지원), SysTabControl32 → 탭 헤더 + 자식 템플릿 교체), 모달 스택(`frame` 안 `#modals`), 포커스 기본 버튼, Esc = IDCANCEL(2) 또는 아니오(7), Enter = 기본 버튼. `screens/*.ts`: 위 함수. `dialogue.ts`: 'ask' 는 `confirm`, 'save' 는 `pickSave(mode 'save')`, `openLoad` 는 `pickSave('load')`, 옛 `slotPicker`/`openSaveSlots`/`openLoad` 와 관련 CSS·테스트 삭제. `browserStage`/`main`: 타이틀 → `titleDialog`.
-- [ ] **Step 4: 통과 확인** — 테스트 + tsc + `npx vitest run`(dialogue.test.ts 갱신 포함) + 브라우저: 새 게임 → 124 → 저장 F5 → 143.
-- [ ] **Step 5: 커밋** — `git commit -am "feat(web): dialog engine from the original templates; 확인 126, 데이터 선택 143, 스테이지 선택 124 replace the HTML modals"`
+- [x] **Step 2: 실패 확인** — Run: `npx vitest run test/winDialog.test.ts`. Expected: FAIL.
+- [x] **Step 3: 구현** — `dialog.ts`: 템플릿 → DOM(`<div class="w95-dialog" role="dialog">` 제목 막대(파란 그라데이션 없이 단색 `--w95-sel`), 컨트롤: button → `<button>`, static → `<span>`(정렬), edit → `<input>`, listbox → `<select size>` 또는 `<div role=listbox>`(더블클릭 지원), SysTabControl32 → 탭 헤더 + 자식 템플릿 교체), 모달 스택(`frame` 안 `#modals`), 포커스 기본 버튼, Esc = IDCANCEL(2) 또는 아니오(7), Enter = 기본 버튼. `screens/*.ts`: 위 함수. `dialogue.ts`: 'ask' 는 `confirm`, 'save' 는 `pickSave(mode 'save')`, `openLoad` 는 `pickSave('load')`, 옛 `slotPicker`/`openSaveSlots`/`openLoad` 와 관련 CSS·테스트 삭제. `browserStage`/`main`: 타이틀 → `titleDialog`.
+- [x] **Step 4: 통과 확인** — 테스트 + tsc + `npx vitest run`(dialogue.test.ts 갱신 포함) + 브라우저: 새 게임 → 124 → 저장 F5 → 143.
+- [x] **Step 5: 커밋** — `git commit -am "feat(web): dialog engine from the original templates; 확인 126, 데이터 선택 143, 스테이지 선택 124 replace the HTML modals"`
 
 ### Task 6: 유니트 일람 107 (탭 117 상태 · 119 장비 · 118 매각)
 
@@ -259,7 +259,7 @@ describe('title dialog 124', () => {
 - Produces: `statusRows(u: Unit, tables) -> { id: number; text: string }[]`(1014 체력 `hp/hpMax`, 1015 마력, 1016 공격력 `totals.atk`, 1017 방어력, 1018 지력 `wis`, 1019 마항력 `mgr`, 1020 민첩성 `agi`, 1032 경험치, 1033 레벨, 1008 이름, 1010 종족), `equipRows(u, tables) -> { 1035: 무기, 1037: 방패, 1034: 장비1, 1032: 장비2, 1036: 소지물[] }`, `sellRows(u, inv, tables) -> { 1048: [소지금], 1023: 가방 항목(이름, 반값) }`, `unitList(frame, templates, ctx, extra?) -> Promise<void>`(리스트 1002 = 파티원, 탭 전환, 1004 이동 = 원작의 "이동(&M)" 은 전투 중 선택 유닛으로 커서 이동 [추정] → 비활성으로 둔다, 1005 닫기; 매각 탭 더블클릭 → `sell()` → 문구 `SELL_TEXT[result]`).
 - Consumes: `totals`, `itemsOf`, `sell`(shop.ts), `equip/unequip`(equipment.ts), Task 5 `DialogBox`.
 
-- [ ] **Step 1: 실패하는 테스트**
+- [x] **Step 1: 실패하는 테스트**
 
 ```ts
 // web/test/winUnitList.test.ts
@@ -285,10 +285,10 @@ describe('unit list 107', () => {
 });
 ```
 
-- [ ] **Step 2: 실패 확인** — Run: `npx vitest run test/winUnitList.test.ts`. Expected: FAIL.
-- [ ] **Step 3: 구현** — 위 함수들 + `unitList` DOM 바인딩(탭 117/119/118 템플릿을 1022 자리에 겹침, 더블클릭 → 장비 탭은 장착/해제 메뉴(팝업 재사용: '장착한다/벗는다/그만둔다' [추정 문구]), 매각 탭은 `confirm` 없이 즉시 판매 → 원작 153 "몇개 팔았습니까?" 는 소모품 묶음 판매용이므로 가방 1개 판매에는 쓰지 않는다 [추정]). `dialogue.ts` 의 `openParty` 와 그 테스트·CSS 삭제.
-- [ ] **Step 4: 통과 확인** — 테스트 + tsc + 전체 Vitest + 브라우저 F2.
-- [ ] **Step 5: 커밋** — `git commit -am "feat(web): 유니트 일람 dialog 107 with the status, equipment and sale tabs"`
+- [x] **Step 2: 실패 확인** — Run: `npx vitest run test/winUnitList.test.ts`. Expected: FAIL.
+- [x] **Step 3: 구현** — 위 함수들 + `unitList` DOM 바인딩(탭 117/119/118 템플릿을 1022 자리에 겹침, 더블클릭 → 장비 탭은 장착/해제 메뉴(팝업 재사용: '장착한다/벗는다/그만둔다' [추정 문구]), 매각 탭은 `confirm` 없이 즉시 판매 → 원작 153 "몇개 팔았습니까?" 는 소모품 묶음 판매용이므로 가방 1개 판매에는 쓰지 않는다 [추정]). `dialogue.ts` 의 `openParty` 와 그 테스트·CSS 삭제.
+- [x] **Step 4: 통과 확인** — 테스트 + tsc + 전체 Vitest + 브라우저 F2.
+- [x] **Step 5: 커밋** — `git commit -am "feat(web): 유니트 일람 dialog 107 with the status, equipment and sale tabs"`
 
 ### Task 7: 상점(150·151·152) · 환경설정(156) · BGM(160) · 경험치 배분(162) · 클리어 조건
 
@@ -300,7 +300,7 @@ describe('unit list 107', () => {
 - Produces: `shopRows(ids, inv, tables) -> { 1081: ['이름  가격  보유'], 1082: rows }`, `buyFlow(frame, templates, ctx, id) -> Promise<void>`(151 갯수 edit 1073 기본 1, 1076 소지금, 1077 금액 = 가격×갯수; 장비면 152 누가 사나(1099 파티원, 1100 소지품) → `buy()` 결과 문구), `settingsModel(audio) -> { 1092/1093 전체화면, 1094/1095 효과음, 1096 안내문(사운드폰트 상태) }` + 음악 음량은 1090/1091 자리 대신 슬라이더 1개 추가 [추정: 원작 음원 선택은 웹에 없음], `expShareDialog(frame, templates, party, pool) -> Promise<number[]>`(162: 막대 7개 = 파티원 순서, 소유자 그리기 막대는 `<input type=range>` 로 대체 [추정], 1114~1120 `exp(+share)`, 1110 남은 풀, 1109 밸런스 = `equalizeShare`, 1108 균등 = `evenShare`, 1 결정), `objectiveMessage(entry) -> string`(메뉴 40032 → 메시지창 `MESSAGE` 와 같은 자리).
 - Consumes: `buy`, `countOf`, `evenShare`, `equalizeShare`, `EXP_CAP`, `AudioGate`/음량 API(`src/audio/*`).
 
-- [ ] **Step 1: 실패하는 테스트**
+- [x] **Step 1: 실패하는 테스트**
 
 ```ts
 // web/test/winExpShare.test.ts
@@ -341,10 +341,10 @@ describe('shop dialogs 150/151', () => {
 });
 ```
 
-- [ ] **Step 2: 실패 확인** — Run: `npx vitest run test/winShop.test.ts test/winExpShare.test.ts`. Expected: FAIL.
-- [ ] **Step 3: 구현** — 위 모델 + DOM 바인딩. `dialogue.ts` 의 `shop`/`battleResult`/`BUY_TEXT` 사용처를 옮기고 삭제; `openModal` 은 `message` 만 남긴다(메시지창은 화면 안 — 그대로). `main.ts` 의 음량 슬라이더 → 156 바인딩(`localStorage` 유지).
-- [ ] **Step 4: 통과 확인** — 테스트 + tsc + 전체 Vitest(dialogue.test.ts·gameHooks.test.ts 의 상점·결과 테스트를 새 모델 테스트로 대체) + 브라우저: 마을 상점 → 150 → 151 → 152; 전투 승리 → 162; F11 → 156.
-- [ ] **Step 5: 커밋** — `git commit -am "feat(web): shop, settings, BGM and EXP-share dialogs from the original templates; the HTML modals are gone"`
+- [x] **Step 2: 실패 확인** — Run: `npx vitest run test/winShop.test.ts test/winExpShare.test.ts`. Expected: FAIL.
+- [x] **Step 3: 구현** — 위 모델 + DOM 바인딩. `dialogue.ts` 의 `shop`/`battleResult`/`BUY_TEXT` 사용처를 옮기고 삭제; `openModal` 은 `message` 만 남긴다(메시지창은 화면 안 — 그대로). `main.ts` 의 음량 슬라이더 → 156 바인딩(`localStorage` 유지).
+- [x] **Step 4: 통과 확인** — 테스트 + tsc + 전체 Vitest(dialogue.test.ts·gameHooks.test.ts 의 상점·결과 테스트를 새 모델 테스트로 대체) + 브라우저: 마을 상점 → 150 → 151 → 152; 전투 승리 → 162; F11 → 156.
+- [x] **Step 5: 커밋** — `git commit -am "feat(web): shop, settings, BGM and EXP-share dialogs from the original templates; the HTML modals are gone"`
 
 ### Task 8: 개발 패널 격리, 캠페인 워크, 문서
 
@@ -352,14 +352,14 @@ describe('shop dialogs 150/151', () => {
 - Modify: `web/play.html`(`#panel` 은 `?dev=1` 에서만; 안내문 줄 삭제), `web/src/game/main.ts`(`new Panel` 은 dev 에서만; `panel` null 허용 — `handle()`/`dispatch()` 의 `!panel` 조건 제거), `web/src/ui/panel.ts`(개발 전용 주석; `menuEnabled` 는 Task 4 에서 옮겨짐), `web/src/game/browserStage.ts`(메뉴 명령 id → 동작: 40010 유니트 일람, 40030 전체 맵 [추정: 축소 맵 캔버스 오버레이], 40003 전체 화면, 40032 클리어 조건, 40009 턴 종료, 40028/40029 불러오기/저장, 40012 환경설정, 40004 게임종료 → `confirm` 뒤 타이틀), `docs/manual.md`(§7 플레이 조작: 메뉴·F키·팝업·대화상자, `?dev=1`), `README.md`(로드맵 행 7), `analysis/story_flow.md` §7a(내보내기와 웹 구현 표시)
 - Test: `web/test/campaignWalk.test.ts` 는 변경 없이 통과해야 한다; `web/test/gameHooks.test.ts` 의 패널 가정 제거
 
-- [ ] **Step 1: 실패하는 테스트** — `web/test/winCommands.test.ts`: `menuCommand(id) -> Action` 매핑(40009 → `{ type: 'endTurn' }`, 40010 → `'unitList'`, 40003 → `'fullscreen'`, 40032 → `'objective'`, 40028 → `'load'`, 40029 → `'save'`, 40012 → `'settings'`, 40004 → `'quit'`, 40030 → `'fullMap'`, 모르는 id → null).
-- [ ] **Step 2: 실패 확인** — Run: `npx vitest run test/winCommands.test.ts`. Expected: FAIL.
-- [ ] **Step 3: 구현** — 매핑 + `browserStage` 연결 + dev 격리 + 전체 맵 오버레이(맵 전체를 1/4 로 그린 캔버스, 클릭으로 닫기, [추정]) + 문서.
-- [ ] **Step 4: 통과 확인** — `cd web && npm run check`(tsc + Vitest 전부, 캠페인 워크 포함) + `python3 -I -m unittest discover -s tools -p 'test_*.py'` + 브라우저 확인(§1-7 순서, 스크린샷을 `docs/img/ui-*.png` 에 저장).
-- [ ] **Step 5: 커밋** — `git commit -am "feat(web): the interface lives inside the game window — dev panel behind ?dev=1; manual and README"`
+- [x] **Step 1: 실패하는 테스트** — `web/test/winCommands.test.ts`: `menuCommand(id) -> Action` 매핑(40009 → `{ type: 'endTurn' }`, 40010 → `'unitList'`, 40003 → `'fullscreen'`, 40032 → `'objective'`, 40028 → `'load'`, 40029 → `'save'`, 40012 → `'settings'`, 40004 → `'quit'`, 40030 → `'fullMap'`, 모르는 id → null).
+- [x] **Step 2: 실패 확인** — Run: `npx vitest run test/winCommands.test.ts`. Expected: FAIL.
+- [x] **Step 3: 구현** — 매핑 + `browserStage` 연결 + dev 격리 + 전체 맵 오버레이(맵 전체를 1/4 로 그린 캔버스, 클릭으로 닫기, [추정]) + 문서.
+- [x] **Step 4: 통과 확인** — `cd web && npm run check`(tsc + Vitest 전부, 캠페인 워크 포함) + `python3 -I -m unittest discover -s tools -p 'test_*.py'` + 브라우저 확인(§1-7 순서, 스크린샷을 `docs/img/ui-*.png` 에 저장).
+- [x] **Step 5: 커밋** — `git commit -am "feat(web): the interface lives inside the game window — dev panel behind ?dev=1; manual and README"`
 
 ### Task 9: 최종 리뷰와 보고
 
-- [ ] 리뷰 패키지 → Fable 리뷰어(파일 수정 금지) → Critical/Important 수정(RED→GREEN) → 두 스위트 → 커밋.
-- [ ] 보고 아티팩트(완성 보고)에 §11 "원작 UI 재현" 추가: 메뉴·팝업·대화상자 화면 7장, 추정 목록(전체 맵, 소유자 그리기 그림, 탭 '이동' 버튼, 음원 선택 대체), 테스트 수.
-- [ ] 메모리 파일 갱신.
+- [x] 리뷰 패키지 → Fable 리뷰어(파일 수정 금지) → Critical/Important 수정(RED→GREEN) → 두 스위트 → 커밋.
+- [x] 보고 아티팩트(완성 보고)에 §11 "원작 UI 재현" 추가: 메뉴·팝업·대화상자 화면 7장, 추정 목록(전체 맵, 소유자 그리기 그림, 탭 '이동' 버튼, 음원 선택 대체), 테스트 수.
+- [x] 메모리 파일 갱신.
