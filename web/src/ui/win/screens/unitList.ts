@@ -2,8 +2,9 @@
  * Dialog 107 "유니트 일람" (F2, menu 40010): the party in listbox 1002, tab control 1022 with the original's tabs (strings 0x491d4..:
  * 능력 · 장비 · 마법 · 도구) laid out from their own templates — 117 (ability: portrait, name 1008, race 1010, level 1033, totals
  * 1014-1020, elements 1029-1031, EXP 1032), 119 (equipment: 무기 1035, 소지물 1036, 방패 1037, 장비1 1034, 장비2 1032), 121 (a header
- * list 1043 "명칭 … 마력" / "명칭 … 갯수" over list 1040) for 마법 and 도구 — and 118 (매각) in a shop. 이동(1004) is the original's
- * cursor jump [not implemented, disabled]; 닫기(1005) closes. Right-clicking a piece in 장비 opens the equipment popup (strings
+ * list 1043 "명칭 … 마력" / "명칭 … 갯수" over list 1040) for 마법 and 도구 — and 118 (매각) in a shop. 이동(1004), live in a battle
+ * and also a double-click on a row (dialog proc 0x422480), scrolls the view to the unit (FUN_0042dc70) and closes; 닫기(1005) closes.
+ * The 능력 tab's owner-draw 1011 shows the unit's face bitmap (names.ts faceName). Right-clicking a piece in 장비 opens the equipment popup (strings
  * 0x44ad54..: 장비하다(&E) · 벗는다(&R) · %d에 판다(&S)); right-clicking a stack in 도구 opens the "팔기" popup and dialog 153.
  * Mapping of the five equipment lists to the engine's weapon · armor · acc[0] · acc[1] · bag is [추정] (the original screen is not recovered).
  */
@@ -69,7 +70,12 @@ function sellQuantity(host: DialogHost, inv: Inventory, id: number, tables: Tabl
   return box.show();
 }
 
-export interface UnitListContext { tables: Tables; inventory: Inventory; party: (Unit | null)[]; sale?: boolean }
+export interface UnitListContext {
+  tables: Tables; inventory: Inventory; party: (Unit | null)[];
+  sale?: boolean;                                                              // from the shop: the 매각 tab 118
+  face?: (u: Unit) => string | null;                                           // the portrait bitmap's URL, if the unit has one
+  onMove?: (u: Unit) => void;                                                  // 이동: given in a battle (mode 1), where the original enables the button
+}
 
 /** The unit list over the game frame; resolves when closed. `sale` (from the shop) adds the 매각 tab 118. */
 export function unitList(host: DialogHost, ctx: UnitListContext): Promise<void> {
@@ -77,7 +83,9 @@ export function unitList(host: DialogHost, ctx: UnitListContext): Promise<void> 
   const box = new DialogBox<void>(host, 107, { cancel: () => undefined });
   const popup = new PopupMenu(host.layer);
   let current = party[0] ?? null;
-  box.setEnabled(1004, false);
+  const move = () => { const u = current; if (u && ctx.onMove) { ctx.onMove(u); box.close(); } };
+  box.setEnabled(1004, ctx.onMove !== undefined);
+  box.onClick(1004, move);
   box.onClick(1005, () => box.close());
   const tabs = box.setTabs(1022, [
     { label: '능력', template: 117 }, { label: '장비', template: 119 }, { label: '마법', template: 121 }, { label: '도구', template: 121 }, ...(ctx.sale ? [{ label: '매각', template: 118 }] : []),
@@ -86,6 +94,8 @@ export function unitList(host: DialogHost, ctx: UnitListContext): Promise<void> 
     const u = current; if (!u) return;
     const [ability, gear, magic, tool, saleTab] = tabs;
     for (const r of abilityRows(u, tables)) ability!.setText(r.id, r.text);
+    const portrait = ability!.control(1011), url = ctx.face?.(u) ?? null; portrait.replaceChildren();
+    if (url) { const im = host.layer.ownerDocument.createElement('img'); im.src = url; im.className = 'w95-face'; portrait.appendChild(im); }
     const e = equipRows(u, tables);
     const worn = (id: number, where: EquipSlot) => gear!.setList(id, [{ text: e[id as 1035 | 1037 | 1034 | 1032] }], () => {}, (_i, ev) => { void openEquipPopup(u, { worn: where }, ev); });   // '더블클릭하면 메뉴가 나옵니다.' (static 1026 of the template)
     worn(1035, 'weapon'); worn(1037, 'armor'); worn(1034, 0); worn(1032, 1);
@@ -121,7 +131,7 @@ export function unitList(host: DialogHost, ctx: UnitListContext): Promise<void> 
     if (n > 0) sellStack(inv, id, n, tables.item);
     render();
   };
-  box.setList(1002, party.map((u) => ({ text: unitName(u, tables) })), (i) => { current = party[i] ?? null; render(); });
+  box.setList(1002, party.map((u) => ({ text: unitName(u, tables) })), (i) => { current = party[i] ?? null; render(); }, ctx.onMove ? () => move() : undefined);
   box.control(1002).firstElementChild?.classList.add('selected');
   render();
   return box.show();

@@ -3,6 +3,8 @@
  * parts; each part is a command list executed in order. Objects are the original's 10 drawables (object 0 opaque, the
  * others color-keyed 249); image slots are vsllst records of the scene.
  */
+import type { StarKind } from './stars';
+
 /** One animation frame: image slot, source rect, how long it stays (FUN_0041a970 particle record). */
 export interface Frame { slot: number; sx: number; sy: number; w: number; h: number; ms: number; x?: number; y?: number }   // x/y override the anim's position
 /** FUN_0041aac0 / FUN_0041aa20: effect `fx` (0..7) animates object `obj` at (x, y) through `frames`; loop = repeat 0 (until `effect off`), else once. */
@@ -26,6 +28,7 @@ export type Cmd =
   | { op: 'waitUntil'; ms: number }                                                                // FUN_0041dbc0 / FUN_00402050: scene clock ≥ ms
   | AnimCmd
   | { op: 'effect'; fx: number; on: boolean }                                                      // FUN_0041a890
+  | { op: 'stars'; obj: number; kind: StarKind }                                                 // FUN_00405920(obj, k, 0xf0, 2): star field k (stars.ts) drawn as object obj
   | { op: 'waitEffect'; fx: number }                                                               // FUN_0041a910: running and not finished
   | { op: 'sound'; name: string }                                                                  // FUN_0041dc50 + FUN_0041dca0(ch, 1)
   | { op: 'sprite'; id: number; apd: string; anim: string; x: number; y: number; times: number }   // FUN_0041c0e0 (file) + FUN_0041c240 (place) + FUN_0041c300 (play n times): an APD anim at a screen point [추정: the point is the sprite origin]
@@ -50,8 +53,8 @@ export function slides(slots: number[], w: number, h: number, ms: number): Frame
   return slots.map((slot) => ({ slot, sx: 0, sy: 0, w, h, ms }));
 }
 export interface VisualImage { image: CanvasImageSource; w: number; h: number }
-/** Slot images of the current scene; null while loading or when the bitmap is missing. */
-export interface VisualImages { get(slot: number, key: number | null): VisualImage | null }
+/** Slot images of the current scene, and named bitmaps (bmp\%s.bmp — the star strip) with a color key; null while loading or missing. */
+export interface VisualImages { get(slot: number, key: number | null): VisualImage | null; bitmap(name: string, key: number | null): VisualImage | null }
 
 /** Table 0x449058: when each opening part ends, in ms since the scene started (part 17 ends by itself). */
 export const OPENING_PART_END_MS: number[] = [9000, 24000, 32000, 45000, 53000, 57000, 62000, 66000, 71000, 76000, 85000, 93000, 97000, 103000, 108000, 128000, 139000];

@@ -30,7 +30,7 @@ export function parseTextTags(line: string): TextRun[] {
 }
 
 /** What the modals need from the game: item/race names, the shared inventory, the party for equipment purchases. */
-export interface ModalContext { tables: Tables; inventory: Inventory; party: (Unit | null)[]; saves?: (SaveSummary | null)[] }
+export interface ModalContext { tables: Tables; inventory: Inventory; party: (Unit | null)[]; saves?: (SaveSummary | null)[]; face?: (u: Unit) => string | null }
 
 
 
@@ -120,7 +120,7 @@ export class Dialogue {
       case 'result': {                                                       // dialog 162 경험치 배분: the shares go onto the units, then the VM levels them up
         if (!this.dialogs) throw new Error('dialogs not attached');
         const party = ctx.party.filter((u): u is Unit => u !== null && u.status !== 9), pool = (payload as { pool: number }).pool;
-        void expShareDialog(this.dialogs, party.map((u) => ({ exp: u.exp, name: unitName(u, ctx.tables) })), pool).then((shares) => { party.forEach((u, i) => { u.exp = Math.min(u.exp + (shares[i] ?? 0), EXP_CAP); }); this.result = 0; });
+        void expShareDialog(this.dialogs, party.map((u) => ({ exp: u.exp, name: unitName(u, ctx.tables), face: ctx.face?.(u) ?? null })), pool).then((shares) => { party.forEach((u, i) => { u.exp = Math.min(u.exp + (shares[i] ?? 0), EXP_CAP); }); this.result = 0; });
         return;
       }
       case 'shop': { if (!this.dialogs) throw new Error('dialogs not attached'); void shopDialog(this.dialogs, payload as number[], ctx).then(() => { this.result = 1; }); return; }   // dialogs 150/151/152

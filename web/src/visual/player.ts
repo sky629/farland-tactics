@@ -4,6 +4,7 @@ import type { Backdrop } from '../render/renderer';
 import type { SpriteProvider } from '../field/presenter';
 import { AnimPlayer } from '../sprite/animPlayer';
 import type { ApdModel } from '../sprite/apdModel';
+import { STAR_CELL, STAR_KEY, StarField } from './stars';
 import type { AnimCmd, Cmd, Frame, SceneDef, ScreenText, TextLine, VisualImages } from './timeline';
 
 /** An APD animation at a screen point (the opening's characters). */
@@ -23,12 +24,12 @@ const OBJECTS = 10;
  * `end` (or running out of commands) finishes the scene. Two clocks as in the original: the part clock (reset at each
  * part start and by `resetClock`) for `wait`, the scene clock for `waitUntil`. An effect is a frame animation on an
  * object (FUN_0041d6e0 steps the frame when its ms have passed, FUN_0041d640 shows it on the object): once, or looping
- * until `effect off`; the object keeps the last frame shown.
+ * until `effect off`; the object keeps the last frame shown. A `stars` object is a procedural star field (stars.ts).
  */
 export class VisualPlayer {
   onSound?: (name: string) => void;
   private def: SceneDef | null = null;
-  private images: VisualImages = { get: () => null };
+  private images: VisualImages = { get: () => null, bitmap: () => null };
   private partIndex = 0;
   private i = 0;
   private list: Cmd[] = [];
@@ -42,6 +43,7 @@ export class VisualPlayer {
   private readonly objs = new Map<number, Obj>();
   private readonly moves = new Map<number, Move>();
   private readonly effects = new Map<number, Effect>();
+  private readonly stars = new Map<number, StarField>();
   private fadeState: Fade | null = null;
   private fadeLevel = 0;                                                       // 0 clear … 1 covered when no fade runs
   private fadeColor: 'black' | 'white' = 'black';
@@ -69,7 +71,7 @@ export class VisualPlayer {
     this.partIndex = part; this.i = 0; this.partStart = now;
     this.list = this.def?.parts[part] ?? []; this.deadline = null; this.inOutro = false;
     this.order = Array.from({ length: OBJECTS }, (_, k) => k);
-    this.objs.clear(); this.moves.clear(); this.effects.clear(); this.sprites.clear();
+    this.objs.clear(); this.moves.clear(); this.effects.clear(); this.stars.clear(); this.sprites.clear();
   }
 
   /** A click or Enter: the scene ends now (the original's cancel flag DAT_0044a63c). */
@@ -132,6 +134,7 @@ export class VisualPlayer {
         return true;
       }
       case 'waitEffect': { const e = this.effects.get(c.fx); return !e || e.start === null || (!e.def.loop && now - e.start >= e.total); }
+      case 'stars': this.stars.set(c.obj, new StarField(c.kind)); return true;
       case 'sound': this.onSound?.(c.name); return true;
       case 'sprite': this.sprites.set(c.id, { apd: c.apd, anim: c.anim, x: c.x, y: c.y, times: Math.max(c.times, 1), model: null, player: null, played: 0 }); return true;
       case 'textRoll': this.roll = { start: now, ms: Math.max(c.ms, 1) }; return true;
@@ -187,10 +190,20 @@ export class VisualPlayer {
     }
     const out: Backdrop[] = [];
     for (const id of this.order) {
+      const field = this.stars.get(id);
+      if (field) { out.push(...this.starPieces(field, now)); continue; }
       const o = this.objs.get(id);
       if (o && o.visible) { const b = this.piece(o, id, now); if (b) out.push(b); }
     }
     return out;
+  }
+
+  /** A star field's object: it ticks on its 20 ms clock and draws its stars as pieces of the strip (the original clears the surface to key 252, so only the stars show). */
+  private starPieces(field: StarField, now: number): Backdrop[] {
+    field.tick(now);
+    const strip = this.images.bitmap('star', STAR_KEY);
+    if (!strip) return [];
+    return field.blits().map((b) => ({ image: strip.image, sx: b.frame * STAR_CELL, sy: 0, w: STAR_CELL, h: STAR_CELL, dx: b.x, dy: b.y }));
   }
 
   private piece(o: Obj, id: number, now: number): Backdrop | null {

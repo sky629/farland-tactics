@@ -25,6 +25,7 @@
 .w95-item.disabled { color: var(--w95-gray); text-shadow: 1px 1px var(--w95-light); }
 .w95-item.disabled:hover { background: transparent; }
 .w95-item .arrow { position: absolute; right: 6px; top: 3px; }
+.w95-item .check { position: absolute; left: 6px; top: 3px; }
 .w95-item > .w95-popup { left: 100%; top: -3px; }
 .w95-sep { height: 0; margin: 3px 1px; border-top: 1px solid var(--w95-shadow); border-bottom: 1px solid var(--w95-light); }
 
@@ -54,6 +55,10 @@
 .w95-group { border: 0; padding: 0; box-shadow: inset -1px -1px var(--w95-light), inset 1px 1px var(--w95-shadow), inset -2px -2px var(--w95-shadow), inset 2px 2px var(--w95-light); }
 .w95-group legend { padding: 0 2px; margin-left: 6px; background: var(--w95-face); }
 .w95-owner { background: var(--w95-face); }
+.w95-face { display: block; width: 100%; height: 100%; object-fit: contain; image-rendering: pixelated; }
+/* the 전체맵 child window (fullMap.ts): a caption over a stretched map canvas, under the popups and dialogs */
+.w95-window { position: absolute; z-index: 20; padding: 3px; }
+.w95-window .w95-map { display: block; width: 320px; height: 240px; cursor: crosshair; }   /* its own size: the page sizes #screen's canvases to the full view */
 .w95-strip { left: 0; right: 0; height: 22px; display: flex; gap: 4px; align-items: center; justify-content: flex-end; padding: 0 2px; }
 .w95-strip .w95-btn { height: 18px; padding: 0 8px; }
 /* tab control: header row, then the page (another template's controls) in a raised frame */

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { emptyInventory, giveItem } from '../src/battle/inventory';
 import type { Unit } from '../src/battle/unit';
+import { faceName } from '../src/ui/names';
 import { abilityRows, equipPopupItems, equipRows, spellRows, toolRows } from '../src/ui/win/screens/unitList';
 import { tables, unit } from './helpers/battleFixtures';
 
@@ -39,5 +40,11 @@ describe('마법 tab and 도구 tab (dialog 121 with the list headers "명칭 �
     expect(spellRows(karin(), t)).toEqual([{ text: `${t.magic[1]!.name}\t${Math.abs(t.magic[1]!.mp_cost)}`, magic: 1 }]);
     const inv = emptyInventory(); giveItem(inv, null, 7, 3, t.item);
     expect(toolRows(inv, t)).toEqual([{ text: `${t.item[7]!.name}\t3`, id: 7, count: 3 }]);
+  });
+});
+describe('portraits (117 owner-draw 1011, 162 buttons 1121..)', () => {
+  it('a party member shows face%02da of its speaker id (1..7); other units have none', () => {
+    expect(faceName(karin())).toBe('face01a');
+    expect(faceName(unit({ slot: 12, id: 40, race: 3 }))).toBeNull();
   });
 });

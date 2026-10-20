@@ -4,8 +4,8 @@ import { apd } from './helpers/presenterFixtures';
 import { dispatch, sheet, slides, type Cmd, type SceneDef, type TextLine, type VisualImages } from '../src/visual/timeline';
 
 const img = (w: number, h: number) => ({ image: { w, h } as unknown as CanvasImageSource, w, h });
-const images = (sizes: Record<number, [number, number]>): VisualImages => ({ get: (slot) => (sizes[slot] ? img(...sizes[slot]!) : null) });
-const keyed = (sizes: Record<number, [number, number]>, seen: (number | null)[]): VisualImages => ({ get: (slot, key) => { seen.push(key); return sizes[slot] ? img(...sizes[slot]!) : null; } });
+const images = (sizes: Record<number, [number, number]>): VisualImages => ({ get: (slot) => (sizes[slot] ? img(...sizes[slot]!) : null), bitmap: () => null });
+const keyed = (sizes: Record<number, [number, number]>, seen: (number | null)[]): VisualImages => ({ get: (slot, key) => { seen.push(key); return sizes[slot] ? img(...sizes[slot]!) : null; }, bitmap: () => null });
 const scene = (...parts: Cmd[][]): SceneDef => ({ id: 1, parts });
 
 describe('VisualPlayer', () => {

@@ -58,7 +58,7 @@ describe('visual scenes (corpus)', () => {
   function sceneImages(sceneId: number): VisualImages {
     const sizes = new Map<number, [number, number]>();
     for (const r of list) if (r.scene === sceneId) sizes.set(r.slot, pngSize(r.name));
-    return { get: (slot) => { const s = sizes.get(slot); return s ? { image: {} as CanvasImageSource, w: s[0], h: s[1] } : null; } };
+    return { get: (slot) => { const s = sizes.get(slot); return s ? { image: {} as CanvasImageSource, w: s[0], h: s[1] } : null; }, bitmap: (name) => { if (!index.bmp.includes(name)) return null; const s = pngSize(name); return { image: {} as CanvasImageSource, w: s[0], h: s[1] }; } };
   }
   function trace(sceneId: number, untilMs: number, stepMs = 100): { starts: number[]; frames: { t: number; pieces: number; visible: number; texts: number; fade: number | null }[]; doneAt: number | null } {
     const staff: TextLine[] = Array.from({ length: 60 }, (_, i) => (i % 4 === 3 ? { space: 12 } : { text: `line ${i}`, size: 24, font: 'mincho' as const, bold: true, gap: 6 }));
@@ -108,6 +108,10 @@ describe('visual scenes (corpus)', () => {
     const { starts, doneAt } = trace(13, 70000);
     expect(starts.map((s) => Math.round(s / 1000))).toEqual([0, 10, 23, 29, 45, 53]);
     expect(doneAt).toBeGreaterThanOrEqual(60000);
+  });
+  it('ending 2 sprinkles the star fields of FUN_00405920 as its six setups do: (obj 1, kind 0) · (2, 2) · (3, 1) · (1, 0) · (2, 2) · (3, 1)', () => {
+    const stars = scenes[13]!.parts.map((p) => p.flatMap((c) => (c.op === 'stars' ? [[c.obj, c.kind]] : [])));
+    expect(stars).toEqual([[[1, 0]], [[2, 2]], [[3, 1]], [[1, 0]], [[2, 2]], [[3, 1]]]);
   });
   it('every sprite a scene plays has its APD and anim exported', () => {
     for (const def of Object.values(scenes)) for (const c of def.parts.flat()) {

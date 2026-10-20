@@ -1,5 +1,5 @@
 /**
- * Dialog 162 "경험치 배분" (EXT BATTLE_RESULT): seven rows — portrait button 1121.., name static 1122.., owner-drawn bar 1104.. and
+ * Dialog 162 "경험치 배분" (EXT BATTLE_RESULT): seven rows — portrait button 1121.. (the face bitmap), name static 1122.., owner-drawn bar 1104.. and
  * label 1114.. "exp(+share)" — the pool left in 1110 "경험치  n", 밸런스 배분(1109) = the equalizing split the dialog opens on,
  * 균등배분(1108) = the even split, 결정(1) adds the shares. The bars are ranges here (the original draws them itself [추정]).
  */
@@ -25,7 +25,7 @@ export function expShareModel(party: { exp: number }[], pool: number): ExpShareM
 }
 
 /** The dialog; resolves with the shares in party order (the caller adds them to the units). */
-export function expShareDialog(host: DialogHost, party: { exp: number; name: string }[], pool: number): Promise<number[]> {
+export function expShareDialog(host: DialogHost, party: { exp: number; name: string; face?: string | null }[], pool: number): Promise<number[]> {
   const box = new DialogBox<number[]>(host, 162);
   const m = expShareModel(party, pool);
   const doc = host.layer.ownerDocument;
@@ -34,6 +34,7 @@ export function expShareDialog(host: DialogHost, party: { exp: number; name: str
     const u = party[i];
     if (!u) { for (const id of [portrait, name, bar, label]) box.hide(id); return; }
     box.setText(name, u.name);
+    if (u.face) { const im = doc.createElement('img'); im.src = u.face; im.className = 'w95-face'; box.control(portrait).replaceChildren(im); }
     const range = doc.createElement('input'); range.type = 'range'; range.min = '0'; range.max = String(pool); range.className = 'w95-bar';
     box.control(bar).replaceChildren(range); bars.push(range);
     range.addEventListener('input', () => { m.set(i, Number(range.value)); refresh(); });

@@ -22,6 +22,7 @@ import { clampCamera } from '../viewer/scale';
 import type { Stage } from './gameCore';
 import type { VisualRecord } from '../data/types';
 import { VisualPlayer } from '../visual/player';
+import { STAR_KEY } from '../visual/stars';
 import type { SceneDef, TextLine, VisualImage } from '../visual/timeline';
 import type { VisualFrame } from '../visual/player';
 import type { SpriteCache } from './spriteCache';
@@ -224,6 +225,10 @@ export class BrowserStage implements Stage {
   mapData(): MapData | null { return this.mapModel?.data ?? null; }
   cellOf(c: number, r: number): { x: number; y: number } | null { const p = this.mapModel?.cellAt(c, r); return p ? { x: p.x, y: p.y } : null; }
   pixelSize(): [number, number] | null { return this.mapModel ? [this.mapModel.data.pixelSize[0], this.mapModel.data.pixelSize[1]] : null; }
+  /** FUN_0042dc70: the view scrolls so the map point sits at the screen centre, clamped to the map (the unit list's 이동, the 전체맵 window). */
+  scrollTo(x: number, y: number): void { this.camera = this.clampTo(x - VIEW_W / 2, y - VIEW_H / 2); }
+  /** The whole map as one picture for the 전체맵 window (FUN_0042c290's chunk surfaces); null until the map is ready. */
+  wholeMap(): { image: CanvasImageSource; w: number; h: number } | null { const size = this.pixelSize(); return this.mapModel && size ? { image: this.renderer.wholeMap(this.mapModel), w: size[0], h: size[1] } : null; }
 
   // ---- Stage: dialogue ----
   openWindow(where: Where, speaker: number, face: string | null): void { this.dialogue.openWindow(where, speaker, face); }
@@ -275,7 +280,8 @@ export class BrowserStage implements Stage {
     this.visualImages.clear();                                                 // the original frees each part's images (FUN_00401000)
     for (const slot of this.visualNames.get(def.id)!.keys()) this.visualImage(slot, slot === 0 ? null : 249);   // preload (FUN_00401f70); object 0 shows slot 0 in every transcribed scene
     for (const c of def.parts.flat()) if (c.op === 'sprite') this.sprites.apd(c.apd);   // and the characters' APDs
-    this.player.start(def, part, { get: (slot, key) => this.visualImage(slot, key) }, this.lastNow, this.staff, this.sprites);
+    if (def.parts.flat().some((c) => c.op === 'stars')) this.visualBitmap('star', STAR_KEY);   // and the star strip (bmp\star.bmp, FUN_004340c0 format 7)
+    this.player.start(def, part, { get: (slot, key) => this.visualImage(slot, key), bitmap: (name, key) => this.visualBitmap(name, key) }, this.lastNow, this.staff, this.sprites);
   }
   /**
    * The scene is over: its last picture stays as the script's SHOW_IMAGE picture until HIDE_IMAGE (every PLAY_VISUAL is
@@ -299,7 +305,10 @@ export class BrowserStage implements Stage {
   /** Slot image of the current scene with the object's color key; null while it loads or when the list has no such slot. */
   private visualImage(slot: number, key: number | null): VisualImage | null {
     const name = this.visualNames.get(this.visualScene)?.get(slot);
-    if (!name) return null;
+    return name ? this.visualBitmap(name, key) : null;
+  }
+  /** A bitmap of bmp/ with a color key, loading on first use. */
+  private visualBitmap(name: string, key: number | null): VisualImage | null {
     const id = `${name}/${key ?? 'opaque'}`;
     if (!this.visualImages.has(id)) {
       this.visualImages.set(id, null);

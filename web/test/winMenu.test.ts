@@ -29,3 +29,11 @@ describe('menu bar model from menu 103', () => {
     expect(m.bar[0]!.items[3]!.items![0]).toMatchObject({ id: 40028, enabled: true });
   });
 });
+describe('check marks (CheckMenuItem in the original)', () => {
+  it('전체 맵 carries a check while its window is open; the others stay plain', () => {
+    const m = menuModel(menu, {}, false, { 40030: true });
+    const show = m.bar[0]!.items[0]!.items!;
+    expect(show.find((i) => i.id === 40030)!.checked).toBe(true);
+    expect(show.find((i) => i.id === 40010)!.checked).toBe(false);
+  });
+});

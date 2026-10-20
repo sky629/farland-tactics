@@ -3,7 +3,7 @@ import { synthNotice } from '../audio/spessa';
 import { AssetError, AssetLoader } from '../assets/loader';
 import { Rng } from '../battle/rng';
 import type { BattleEvent } from '../battle/types';
-import { PARTY_SLOTS } from '../battle/unit';
+import { PARTY_SLOTS, type Unit } from '../battle/unit';
 import { DataError, DataLoader } from '../data/loader';
 import type { RosterUnit, Tables } from '../data/types';
 import { cellCommands } from '../game/battleInput';
@@ -27,8 +27,10 @@ import { HOTSPOTS } from '../town/town';
 import { Dialogs } from '../ui/win/dialog';
 import { confirm } from '../ui/win/screens/confirm';
 import { pickSave } from '../ui/win/screens/saves';
-import { titleDialog } from '../ui/win/screens/title';
 import { unitList } from '../ui/win/screens/unitList';
+import { scenes } from '../visual/scenes';
+import { FULL_MAP_H, FULL_MAP_W, FullMapWindow, fullMapMarkers } from '../ui/win/fullMap';
+import { faceName } from '../ui/names';
 import { settingsDialog, type Settings } from '../ui/win/screens/settings';
 import { bgmDialog } from '../ui/win/screens/bgm';
 import { frameScale, MENU_BAR_H } from '../viewer/scale';
@@ -76,26 +78,30 @@ function menuCommand(id: number): void {
     case 'endTurn': if (core.battle && dialogHost) void confirm(dialogHost, '턴을 종료해도 좋습니까?').then((yes) => { if (yes && core?.battle) core.dispatch({ type: 'endTurn' }); }); break;   // F10 — the original asks (string 0x44ba98)
     case 'load': void openLoadDialog(); break;                                                                 // F1
     case 'save': if (dialogHost) void refreshSaves().then(() => pickSave(dialogHost!, saveList, 'save')).then((p) => { if (p && 'slot' in p) core?.save(p.slot); }); break;   // F5
-    case 'unitList': if (dialogHost) void unitList(dialogHost, { tables: tablesRef!, inventory: core.campaign.inventory, party: core.campaign.units.slice(0, PARTY_SLOTS) }); break;   // F2 (dialog 107)
+    case 'unitList': if (dialogHost) void unitList(dialogHost, { tables: tablesRef!, inventory: core.campaign.inventory, party: core.campaign.units.slice(0, PARTY_SLOTS), face: faceOf, onMove: core.mode === 'battle' ? (u) => { const p = stage?.cellOf(u.c, u.r); if (p) stage?.scrollTo(p.x, p.y); } : undefined }); break;   // F2 (dialog 107)
     case 'fullscreen': settings = { ...settings, fullscreen: !document.fullscreenElement }; applySettings(); break;   // F4
     case 'settings': if (dialogHost) void settingsDialog(dialogHost, settings, synthNotice(stage.musicFailure) ?? 'MIDI: 사운드폰트 합성 (FluidR3Mono_GM)').then((s) => { if (s) { settings = s; applySettings(); } }); break;   // F11 (dialog 156)
     case 'bgm': if (dialogHost && midiTracks.length > 0) { const names = midiTracks.map((n) => `BGM ${String(n).padStart(2, '0')}`); void bgmDialog(dialogHost, names).then((name) => { const i = name ? names.indexOf(name) : -1; if (i >= 0) stage?.playMusic(midiTracks[i]!); }); } break;   // dialog 160 — its rows are not recovered: file names [추정]
     case 'objective': if (core.battle) dialogueRef?.openModal('message', `${core.battle.state.entry.episode} — ${core.battle.state.entry.objective}`, { tables: tablesRef!, inventory: core.campaign.inventory, party: core.campaign.units.slice(0, PARTY_SLOTS) }); break;   // 클리어 조건
     case 'quit': if (dialogHost) void confirm(dialogHost, '게임을 종료합니까?').then((yes) => { if (yes) location.reload(); }); break;   // 게임종료: the web's exit is the title page; the question is ours [추정]
     case 'showPlaces': stage.toggleTownHighlights(); break;                                               // 갈 수 있는 장소 표시
-    case 'fullMap': break;                                                                                 // 전체 맵 F3: the original's screen is not recovered — disabled in menuFlags
+    case 'fullMap': fullMap?.toggle(); break;                                                              // 전체 맵 F3: the 전체맵 window (fullMap.ts)
   }
 }
 /** Which menu items are live right now: 턴 종료 only in our battle phase; 클리어 조건 only in a battle; the rest of the system menu waits for its dialogs. */
 function menuFlags(): Record<number, boolean> {
   const b = core?.battle ?? null;
   const inGame = core !== null && core.mode !== 'title' && core.mode !== 'ended';
-  return { 40009: b !== null && menuEnabled(b.state, tablesRef?.item ?? []).endTurn, 40032: b !== null, 40030: false, 40029: inGame, 40010: inGame, 40035: core?.mode === 'town' };
+  return { 40009: b !== null && menuEnabled(b.state, tablesRef?.item ?? []).endTurn, 40032: b !== null, 40030: core?.mode === 'battle', 40029: inGame, 40010: inGame, 40035: core?.mode === 'town' };
 }
 let dialogueRef: Dialogue | null = null; let tablesRef: Tables | null = null; let menuRef: MenuTemplate | null = null; let dialogHost: Dialogs | null = null; let midiTracks: number[] = [];
+let fullMap: FullMapWindow | null = null;
+let faceOf: (u: Unit) => string | null = () => null;                          // a party member's portrait URL (names.ts faceName over the exported bitmaps)
+/** The menu's state in one string: enabled flags, BGM 선택 after the ending, the 전체 맵 check. */
+function menuSignature(): string { return JSON.stringify(menuFlags()) + (core?.complete ? '+' : '') + (fullMap?.visible ? 'M' : ''); }
 /** The menu as the original builds it at the time: menu 103 plus 'BGM 선택(&B)' (0x44b524, id 0x6b) once the game has been completed. */
 function currentMenu(): ReturnType<typeof menuModel> {
-  const m = menuModel(menuRef!, menuFlags(), dev);
+  const m = menuModel(menuRef!, menuFlags(), dev, { 40030: fullMap?.visible ?? false });
   if (core?.complete) m.bar[0]?.items.push({ label: 'BGM 선택(B)', ul: 7, key: 'b', accel: null, id: 107, enabled: true, separator: false });
   return m;
 }
@@ -120,7 +126,7 @@ async function openLoadDialog(): Promise<boolean> {
     if ('fresh' in p) { startNew(); return false; }
     stage.unlockAudio();
     const bytes = await saves.read(p.slot);
-    if (bytes && core.loadGame(bytes)) { $('title').hidden = true; $('error').textContent = ''; return false; }
+    if (bytes && core.loadGame(bytes)) { leaveTitle(); return false; }
     return true;
   }
 }
@@ -134,22 +140,31 @@ async function importSave(file: File): Promise<void> {
   if (!into || !('slot' in into)) return;
   try { const sum = await saves.importBytes(into.slot, bytes); await refreshSaves(); log('info', `${SaveStore.fileName(into.slot)} ← ${file.name} (${sum.title})`); } catch (e) { showError(e); }
 }
-function startNew(): void { stage!.unlockAudio(); $('title').hidden = true; $('error').textContent = ''; core!.newGame(); }
-/** The title picture with dialog 124 over it: 게임 개시 or 불러오기 (back to the dialog when loading is cancelled). One loop at a time. */
+function leaveTitle(): void { $('title').hidden = true; $('error').textContent = ''; titleWake?.(); }
+function startNew(): void { stage!.unlockAudio(); leaveTitle(); core!.newGame(); }
+/**
+ * The title picture with dialog 143 over it, as the field frame opens FUN_004239b0(-1) at stage 0 (story_flow.md §1): a slot
+ * loads, 처음부터 starts a new game. 취소 leaves the picture; a click or Enter on it brings the dialog back [추정 — the
+ * original's cancel path is not recovered]. One loop at a time; the menu's 불러오기 ends it through leaveTitle.
+ */
 let titleShowing = false;
+let titleWake: (() => void) | null = null;
 async function showTitle(): Promise<void> {
   if (!dialogHost || titleShowing) return;
   titleShowing = true;
   try { await titleLoop(); } finally { titleShowing = false; }
 }
 async function titleLoop(): Promise<void> {
-  const host = dialogHost; if (!host) return;
-  $('title').hidden = false;
+  const title = $('title');
+  title.hidden = false;
   for (;;) {
-    const c = await titleDialog(host);
-    if (c === 'new') { startNew(); return; }
-    if (c !== 'load') return;                                                 // cancelled from outside (closeAll on a load): the title screen is over
     if (!(await openLoadDialog())) return;
+    await new Promise<void>((resolve) => {
+      const done = () => { title.removeEventListener('click', done); document.removeEventListener('keydown', onKey); titleWake = null; resolve(); };
+      const onKey = (e: KeyboardEvent) => { if (e.key === 'Enter' && !dialogHost?.busy) done(); };
+      titleWake = done; title.addEventListener('click', done); document.addEventListener('keydown', onKey);
+    });
+    if (title.hidden) return;                                                 // a load from the menu or a new game took over meanwhile
   }
 }
 
@@ -171,12 +186,16 @@ function frame(now: number): void {
   try {
     if (core && stage) {
       core.frame(now);
-      if (menuBar && menuRef) { const sig = JSON.stringify(menuFlags()) + (core.complete ? '+' : ''); if (sig !== menuSig) { menuSig = sig; menuBar.setModel(currentMenu()); } }
+      if (menuBar && menuRef) { const sig = menuSignature(); if (sig !== menuSig) { menuSig = sig; menuBar.setModel(currentMenu()); } }
       if (core.mode === 'ended' && !endedShown) { endedShown = true; stage.hideTown(); void showTitle(); }   // the ending (or a game over with nowhere to go) returns to the title
       if (core.mode !== 'ended') endedShown = false;
       stage.cellMode = core.mode === 'battle';
       const b = core.battle;
       stage.draw(now, core.campaign.units, b?.state.phase ?? IDLE);
+      if (fullMap?.visible) {                                                  // the 전체맵 window follows the battle map; a map change closes it (FUN_0042d5d0)
+        const whole = core.mode === 'battle' ? stage.wholeMap() : null;
+        if (!whole) fullMap.hide(); else fullMap.paint(whole, fullMapMarkers(core.campaign.units, (c, r) => stage!.cellOf(c, r), [whole.w, whole.h], FULL_MAP_W, FULL_MAP_H));
+      }
       if (b) {
         if (core.lastEvents !== shownEvents) { shownEvents = core.lastEvents; panel?.logEvents(b.state, shownEvents); }
         const h = stage.presenter.hover;
@@ -222,7 +241,9 @@ async function boot(): Promise<void> {
     saves = new SaveStore((await Promise.race([opening, timeout])) ?? memory('2초 안에 열리지 않음'));   // a hanging open must not keep the title dead
     const bmpSet = new Set(index.bmp);
     const bitmaps = new BitmapCache('assets', bmpSet, (name) => log('warn', `bitmap ${name} failed to load`));
-    const dialogue = new Dialogue(document, $('dialogue'), (spk, letter) => { const name = `face${nn(spk)}${letter}`; return bmpSet.has(name) ? `assets/bmp/${name}.png` : null; });
+    const faceUrl = (name: string) => (bmpSet.has(name) ? `assets/bmp/${name}.png` : null);
+    const dialogue = new Dialogue(document, $('dialogue'), (spk, letter) => faceUrl(`face${nn(spk)}${letter}`));
+    faceOf = (u) => { const name = faceName(u); return name ? faceUrl(name) : null; };
     const sprites = new SpriteCache(assets, renderer, new Set(index.sprites), showError);
     stage = new BrowserStage(canvas, renderer, assets, bitmaps, dialogue, sprites, tables, {
       onCell: (cell) => { if (!core?.battle) return; for (const cmd of cellCommands(core.battle.state, cell)) { core.dispatch(cmd); if (core.lastEvents.some((e) => e.type === 'rejected')) break; } },   // one click may be several commands: stop at the first the rules refuse
@@ -246,7 +267,7 @@ async function boot(): Promise<void> {
           } else if (pick.id !== null) menuCommand(pick.id);
         });
       },
-      modalContext: () => ({ tables, inventory: core!.campaign.inventory, party: core!.campaign.units.slice(0, PARTY_SLOTS), saves: saveList }),
+      modalContext: () => ({ tables, inventory: core!.campaign.inventory, party: core!.campaign.units.slice(0, PARTY_SLOTS), saves: saveList, face: faceOf }),
       writeSave: (slot, bytes) => { void saves?.write(slot, bytes).then(refreshSaves).catch(showError); },
       log,
     }, { wave: new Set(index.wave ?? []), midi: new Set(index.midi ?? []) }, visualList, staff);
@@ -255,9 +276,10 @@ async function boot(): Promise<void> {
     loadSettings();
     const ui = await data.ui().catch((e: unknown) => { showFatal(e); return null; });
     if (ui) {
-      menuRef = ui.menu; midiTracks = [...(index.midi ?? [])]; const model = currentMenu(); menuSig = JSON.stringify(menuFlags());
+      menuRef = ui.menu; midiTracks = [...(index.midi ?? [])]; const model = currentMenu(); menuSig = menuSignature();
       menuBar = new MenuBar($('menubar'), model, menuCommand, () => dialogHost?.busy ?? false); popup = new PopupMenu($('win'));
       dialogHost = new Dialogs($('win'), ui.dialogs); dialogue.attach(dialogHost);
+      fullMap = new FullMapWindow($('win'), (x, y) => stage?.scrollTo(x, y));
       document.addEventListener('keydown', (e) => {                            // the original's accelerators: F1 불러오기, F2 유니트 일람, F4 전체 화면, F5 저장, F10 턴 종료 …
         if (dialogHost?.busy || e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement || e.target instanceof HTMLTextAreaElement) return;
         const id = accelOf(currentMenu(), e.key, e.ctrlKey || e.metaKey);
@@ -272,6 +294,6 @@ async function boot(): Promise<void> {
 }
 
 /** Debug hook for scripted browser checks: window.__ft2().core.mode, .campaign.flags, .vm.state … */
-(window as unknown as { __ft2: () => unknown }).__ft2 = () => ({ core, campaign: core?.campaign, vm: core?.vm, battle: core?.battle, stage, dialogs: dialogHost, mode: core?.mode, saves, saveList, music: stage ? { ready: stage.musicReady, current: stage.currentMusic } : null, visual: stage?.visualPlaying ?? false });
+(window as unknown as { __ft2: () => unknown }).__ft2 = () => ({ core, campaign: core?.campaign, vm: core?.vm, battle: core?.battle, stage, dialogs: dialogHost, mode: core?.mode, saves, saveList, music: stage ? { ready: stage.musicReady, current: stage.currentMusic } : null, visualScenes: scenes, visual: stage?.visualPlaying ?? false });
 
 void boot();

@@ -1,9 +1,9 @@
 /**
  * Scene 13 (PLAY_VISUAL 33, second ending): FUN_00407440 drives six parts FUN_00407510, 407680, 4078f0, 407a50, 407ed0,
  * 408140 (setups FUN_00407590, 4076e0, 407950, 407ca0, 407f30, 4081d0); each ends on the scene clock (10, 23, 29, 45, 53, 60 s).
- * Not reproduced [추정]: the procedural star effect of FUN_00405920 ("star": parts 0, 1, 3 sprinkle stars over black or the
- * picture — part 0 is therefore 10 s of plain black here), the 4 s palette cross-fades of part 3 (FUN_00419b80, plain cuts),
- * the final wave of part 5 (name unknown).
+ * Every setup sprinkles a star field (FUN_00405920, stars.ts): kind 0 on object 1 over black (part 0) and over the picture (part 3),
+ * kind 2 on object 2 under the panning pictures (parts 1, 4), kind 1 on object 3 between the portrait and its frame (parts 2, 5).
+ * Not reproduced [추정]: the 4 s palette cross-fades of part 3 (FUN_00419b80, plain cuts) and the final wave of part 5 (name unknown).
  */
 import { slides, type Cmd, type SceneDef } from '../timeline';
 
@@ -11,7 +11,7 @@ const part = (endMs: number, fadeSteps: number, cmds: Cmd[]): Cmd[] => [{ op: 'd
 const range = (a: number, b: number): number[] => Array.from({ length: b - a + 1 }, (_, i) => a + i);
 /** Parts 1 and 4: v05a/v05b pan down slowly while the v05d/v05e figures sink (FUN_004076e0 = FUN_00407f30). */
 const pan: Cmd[] = [
-  { op: 'order', ids: [0, 2, 3, 1, 4, 5, 6] },
+  { op: 'order', ids: [0, 2, 3, 1, 4, 5, 6] }, { op: 'stars', obj: 2, kind: 2 },
   { op: 'show', obj: 5, slot: 10, sx: 0, sy: 0, w: 640, h: 480, dx: 0, dy: 0 }, { op: 'show', obj: 4, slot: 11, sx: 0, sy: 0, w: 640, h: 480, dx: 0, dy: 40 },
   { op: 'show', obj: 3, slot: 12, sx: 0, sy: 0, w: 224, h: 296, dx: 200, dy: -20 }, { op: 'show', obj: 1, slot: 13, sx: 0, sy: 0, w: 250, h: 296, dx: 400, dy: 0 },
   { op: 'move', obj: 3, by: [0, 40], ms: 15000 }, { op: 'move', obj: 1, by: [0, 60], ms: 15000 },
@@ -20,16 +20,16 @@ const pan: Cmd[] = [
 ];
 /** Parts 2 and 5: v08b with the v08a portrait (FUN_00407950 = FUN_004081d0). */
 const portrait: Cmd[] = [
-  { op: 'order', ids: [0, 3, 4] }, { op: 'show', obj: 4, slot: 21, sx: 0, sy: 0, w: 640, h: 480, dx: 0, dy: 0 },
+  { op: 'order', ids: [0, 3, 4] }, { op: 'stars', obj: 3, kind: 1 }, { op: 'show', obj: 4, slot: 21, sx: 0, sy: 0, w: 640, h: 480, dx: 0, dy: 0 },
   { op: 'show', obj: 0, slot: 20, sx: 0, sy: 0, w: 328, h: 232, dx: 176, dy: 104 }, { op: 'fade', dir: 'in', steps: 2 },
 ];
 
 export const scene13: SceneDef = { id: 13, parts: [
-  part(10000, 2, [{ op: 'order', ids: [0, 3, 1, 4] }, { op: 'fade', dir: 'in', steps: 8 }]),
+  part(10000, 2, [{ op: 'order', ids: [0, 3, 1, 4] }, { op: 'stars', obj: 1, kind: 0 }, { op: 'fade', dir: 'in', steps: 8 }]),
   part(23000, 2, pan),
   part(29000, 2, portrait),
   part(45000, 2, [
-    { op: 'order', ids: [0, 3, 1, 4] }, { op: 'show', obj: 3, slot: 0, sx: 0, sy: 0, w: 640, h: 480, dx: 0, dy: 0 },
+    { op: 'order', ids: [0, 3, 1, 4] }, { op: 'stars', obj: 1, kind: 0 }, { op: 'show', obj: 3, slot: 0, sx: 0, sy: 0, w: 640, h: 480, dx: 0, dy: 0 },
     { op: 'anim', fx: 0, obj: 3, x: 128, y: 0, frames: slides(range(31, 42), 384, 480, 50), loop: false },
     { op: 'anim', fx: 1, obj: 4, x: 160, y: 32, frames: slides(range(51, 62), 320, 448, 50), loop: false },
     { op: 'fade', dir: 'in', steps: 2 },

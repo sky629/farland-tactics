@@ -8,7 +8,7 @@ import type { MenuItemTemplate, MenuTemplate } from '../../data/types';
 import { mnemonic } from './layout';
 
 export type { MenuTemplate };
-export interface MenuItem { label: string; ul: number; key: string | null; accel: string | null; id: number | null; enabled: boolean; separator: boolean; items?: MenuItem[] }
+export interface MenuItem { label: string; ul: number; key: string | null; accel: string | null; id: number | null; enabled: boolean; separator: boolean; checked?: boolean; items?: MenuItem[] }
 export interface MenuPopup { label: string; ul: number; key: string | null; items: MenuItem[] }
 export interface MenuBarModel { bar: MenuPopup[]; popups: Record<string, MenuPopup> }
 
@@ -18,15 +18,16 @@ const MF_GRAYED = 0x1, MF_DISABLED = 0x2;
 export function mnemonicItem(text: string): MenuItem { const mn = mnemonic(text); return { label: mn.label, ul: mn.ul, key: mn.key, accel: mn.accel, id: null, enabled: true, separator: false }; }
 const DEV_POPUPS = new Set(['디버그']);
 
-function item(t: MenuItemTemplate, enabled: Record<number, boolean>): MenuItem {
+function item(t: MenuItemTemplate, enabled: Record<number, boolean>, checked: Record<number, boolean>): MenuItem {
   if (t.items === undefined && t.text === '' && (t.id === 0 || t.id === null)) return { label: '-', ul: -1, key: null, accel: null, id: null, enabled: false, separator: true };
   const mn = mnemonic(t.text);
   const on = (t.flags & (MF_GRAYED | MF_DISABLED)) === 0 && (t.id === null || (enabled[t.id] ?? true));
-  return { label: mn.label, ul: mn.ul, key: mn.key, accel: mn.accel, id: t.id, enabled: on, separator: false, ...(t.items ? { items: t.items.map((c) => item(c, enabled)) } : {}) };
+  return { label: mn.label, ul: mn.ul, key: mn.key, accel: mn.accel, id: t.id, enabled: on, separator: false, checked: t.id !== null && (checked[t.id] ?? false), ...(t.items ? { items: t.items.map((c) => item(c, enabled, checked)) } : {}) };
 }
 
-export function menuModel(menu: MenuTemplate, enabled: Record<number, boolean>, dev: boolean): MenuBarModel {
-  const popups = menu.items.filter((t) => t.items !== undefined).map((t) => { const mn = mnemonic(t.text); return { label: mn.label, ul: mn.ul, key: mn.key, items: t.items!.map((c) => item(c, enabled)) }; });
+/** `enabled` greys items by id (default on); `checked` marks items by id (CheckMenuItem — 전체 맵 while its window is open). */
+export function menuModel(menu: MenuTemplate, enabled: Record<number, boolean>, dev: boolean, checked: Record<number, boolean> = {}): MenuBarModel {
+  const popups = menu.items.filter((t) => t.items !== undefined).map((t) => { const mn = mnemonic(t.text); return { label: mn.label, ul: mn.ul, key: mn.key, items: t.items!.map((c) => item(c, enabled, checked)) }; });
   const [bar, ...rest] = popups;
   const out: MenuBarModel = { bar: bar ? [bar] : [], popups: {} };
   for (const p of rest) if (dev || !DEV_POPUPS.has(p.label)) out.popups[p.label] = p;
@@ -60,6 +61,7 @@ export function buildMenuList(doc: Document, items: MenuItem[], pick: (id: numbe
     if (it.separator) { const sep = doc.createElement('div'); sep.className = 'w95-sep'; box.appendChild(sep); continue; }
     const row = doc.createElement('div'); row.className = `w95-item${it.enabled ? '' : ' disabled'}`;
     const label = doc.createElement('span'); label.append(...labelNodes(doc, it.label, it.ul)); row.appendChild(label);
+    if (it.checked) { const c = doc.createElement('span'); c.className = 'check'; c.textContent = '✓'; row.prepend(c); }
     if (it.accel) { const a = doc.createElement('span'); a.className = 'accel'; a.textContent = it.accel; row.appendChild(a); }
     if (it.items) {
       const arrow = doc.createElement('span'); arrow.className = 'arrow'; arrow.textContent = '▶'; row.appendChild(arrow);

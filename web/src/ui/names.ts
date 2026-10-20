@@ -15,3 +15,6 @@ export const itemName = (item: ItemData): string => item.name.replace(/_/g, ' ')
 export function unitName(u: Unit, tables: Tables): string {
   return (!isTreasure(u) && u.id !== 8 && u.id < 30 && SPEAKER_NAMES[u.id]) || tables.race[u.race]?.name.replace(/_/g, ' ') || `종족 ${u.race}`;
 }
+
+/** The portrait of a party member (dialog 117's owner-draw 1011, 162's buttons 1121..): the speaker's face%02d with its first expression 'a' [추정]; ids 1..7 are the seven party members. */
+export function faceName(u: Unit): string | null { return u.id >= 1 && u.id <= 7 ? `face${String(u.id).padStart(2, '0')}a` : null; }

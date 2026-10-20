@@ -31,6 +31,7 @@ export class Renderer {
   private readonly scratch = document.createElement('canvas');
   private readonly mapBitmaps = new WeakMap<MapModel, MapGfx>();
   private readonly apdBitmaps = new WeakMap<ApdModel, IndexedBitmaps[]>();
+  private readonly wholeMaps = new WeakMap<MapModel, HTMLCanvasElement>();
   private checker: CanvasPattern | null = null;
 
   constructor(readonly canvas: HTMLCanvasElement) {
@@ -60,6 +61,22 @@ export class Renderer {
     for (const [sheet, keys] of model.keysBySheet()) for (const key of keys) jobs.push(sheets[sheet]!.prepare(key));
     await Promise.all(jobs);
     this.apdBitmaps.set(model, sheets);
+  }
+
+  /** FUN_0042c290's chunk surfaces: the map alone, drawn once in 640×480 pieces into one canvas the size of the map (the 전체맵 window stretches it). */
+  wholeMap(model: MapModel): HTMLCanvasElement {
+    const have = this.wholeMaps.get(model);
+    if (have) return have;
+    const [w, h] = model.data.pixelSize;
+    const whole = document.createElement('canvas'); whole.width = w; whole.height = h;
+    const g = whole.getContext('2d');
+    if (!g) throw new Error('2D canvas context unavailable');
+    for (let y = 0; y < h; y += VIEW_H) for (let x = 0; x < w; x += VIEW_W) {
+      this.draw({ map: model, sprites: [], camera: { x, y }, overlay: { grid: false, height: false, land: false, blocked: false }, seeThrough: false });
+      g.drawImage(this.canvas, x, y);
+    }
+    this.wholeMaps.set(model, whole);
+    return whole;
   }
 
   draw(scene: Scene): void {
