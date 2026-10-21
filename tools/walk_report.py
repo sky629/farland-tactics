@@ -105,7 +105,8 @@ def render_report(manifest, thumbs, inline, per_chapter=None):
     parts.append(f'<h2>걸린 프레임 ({len(flagged)})</h2>')
     if flagged:
         parts.append('<div class="flags">' + ''.join(
-            f'<figure><img src="{src(s, False)}" alt="{html.escape(cap(s))}"><figcaption>{html.escape(", ".join(FLAG_LABEL.get(f.replace("flag-", ""), f) for f in s["flags"]))} — {html.escape(cap(s))} — {html.escape(s["file"])}</figcaption></figure>'
+            f'<figure><img src="{src(s, False)}" alt="{html.escape(cap(s))}"><figcaption>{html.escape(", ".join(FLAG_LABEL.get(f.replace("flag-", ""), f) for f in s["flags"]))} — {html.escape(cap(s))} — {html.escape(s["file"])}'
+            + (f'<br><code>{html.escape(s["note"])}</code>' if s.get('note') else '') + '</figcaption></figure>'
             for s in flagged) + '</div>')
     else:
         parts.append('<p class="ok">없음</p>')

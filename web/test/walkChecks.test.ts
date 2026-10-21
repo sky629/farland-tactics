@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { blankFlag, blankRatio, momentsBetween, overflowing, StuckWatch, type WalkSnapshot } from '../src/dev/walkChecks';
 
-const snap = (over: Partial<WalkSnapshot> = {}): WalkSnapshot => ({ t: 0, mode: 'script', mapGen: 0, turn: null, phase: null, selMode: null, town: false, visualPart: null, visualPlaying: false, dialogsOpened: 0, dialogTemplate: null, fadeAlpha: 0, pc: 0, ...over });
+const snap = (over: Partial<WalkSnapshot> = {}): WalkSnapshot => ({ t: 0, mode: 'script', mapGen: 0, turn: null, phase: null, selMode: null, town: false, visualPart: null, visualPlaying: false, dialogsOpened: 0, dialogTemplate: null, fadeAlpha: 0, pc: 0, content: true, ...over });
 
 describe('momentsBetween: what a frame is worth a picture for', () => {
   it('the first frame sets the baseline and is no moment', () => {
@@ -33,10 +33,11 @@ describe('blank frames', () => {
     expect(blankRatio(solid(10, [7, 7, 7]))).toBe(1);
   });
   it('a one-colour frame is blank only outside a fade and outside a visual scene', () => {
-    expect(blankFlag(0.995, 0, false)).toBe(true);
-    expect(blankFlag(1, 1, false)).toBe(false);                                  // covered by the fade
-    expect(blankFlag(1, 0, true)).toBe(false);                                   // a scene's black is its own
-    expect(blankFlag(0.98, 0, false)).toBe(false);
+    expect(blankFlag(0.995, 0, false, true)).toBe(true);
+    expect(blankFlag(1, 1, false, true)).toBe(false);                            // covered by the fade
+    expect(blankFlag(1, 0, true, true)).toBe(false);                             // a scene's black is its own
+    expect(blankFlag(0.98, 0, false, true)).toBe(false);
+    expect(blankFlag(1, 0, false, false)).toBe(false);                           // no map, town or picture is up: black is the right picture
   });
 });
 

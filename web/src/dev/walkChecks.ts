@@ -16,6 +16,7 @@ export interface WalkSnapshot {
   dialogsOpened: number;     // Dialogs.openedCount
   dialogTemplate: string | null;   // the newest box's template id
   fadeAlpha: number;         // 0 clear … 1 covered
+  content: boolean;          // a map, the town or a script picture is up — something the frame should show
   pc: number;                // the VM's program counter
 }
 
@@ -49,9 +50,12 @@ export function blankRatio(rgba: Uint8ClampedArray): number {
   return best / n;
 }
 
-/** A frame of one colour is blank unless a fade covers it or a visual scene (whose black is its own) plays. */
-export function blankFlag(ratio: number, fadeAlpha: number, visualPlaying: boolean): boolean {
-  return ratio >= 0.99 && fadeAlpha < 1 && !visualPlaying;
+/**
+ * A frame of one colour is blank unless a fade covers it, a visual scene (whose black is its own) plays, or nothing is up
+ * (no map, town or picture: the original's window is black there too — between a save load and its script's first FADE_OUT).
+ */
+export function blankFlag(ratio: number, fadeAlpha: number, visualPlaying: boolean, content: boolean): boolean {
+  return ratio >= 0.99 && fadeAlpha < 1 && !visualPlaying && content;
 }
 
 export interface Rect { left: number; top: number; right: number; bottom: number }

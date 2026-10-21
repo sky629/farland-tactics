@@ -21,7 +21,8 @@ MANIFEST = {
     'shots': [
         {'id': 1, 'tag': 'map', 'file': '0001-map.png', 't': 0, 'stage': 1, 'battle': 0, 'turn': None, 'mode': 'script', 'flags': []},
         {'id': 2, 'tag': 'battle-start', 'file': '0002-battle-start.png', 't': 5000, 'stage': 1, 'battle': 1, 'turn': 1, 'mode': 'battle', 'flags': []},
-        {'id': 3, 'tag': 'flag-blank', 'file': '0003-flag-blank.png', 't': 9000, 'stage': 1, 'battle': 1, 'turn': 2, 'mode': 'battle', 'flags': ['flag-blank']},
+        {'id': 3, 'tag': 'flag-blank', 'file': '0003-flag-blank.png', 't': 9000, 'stage': 1, 'battle': 1, 'turn': 2, 'mode': 'battle', 'flags': ['flag-blank'],
+         'note': 'event01@7426 LOAD_MAP[51] fade=none map=none town=false camera=0,0'},
     ],
     'counts': {'map': 1, 'battle-start': 1, 'flag-blank': 1},
     'log': ['walk: stage 1 town → facility 2'],
@@ -41,6 +42,11 @@ class WalkReport(unittest.TestCase):
         self.assertIn('전투 1', html)
         self.assertIn('shots/0002-battle-start.png', html)
         self.assertIn('3장', html)
+
+    def test_flagged_frame_shows_its_note(self):
+        html = render_report(MANIFEST, None, inline=False)
+        self.assertIn('LOAD_MAP[51] fade=none', html)
+        self.assertLess(html.index('LOAD_MAP[51]'), html.index('전투 1'))
 
     def test_main_writes_report_and_summary(self):
         with tempfile.TemporaryDirectory() as d:

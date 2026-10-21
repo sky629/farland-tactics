@@ -30,6 +30,15 @@ describe('GameCore', () => {
     expect(core.mode).toBe('ended');
     expect(stage.calls.some((x) => x[0] === 'log' && x[1] === 'warn')).toBe(true);
   });
+  it('LOAD_MAP puts the camera at the new map\'s top-left (FUN_0042d5d0 zeroes the scroll): a scenery cut with no camera command shows the map, not the last camera\'s void', () => {
+    const stage = new FakeStage();
+    const core = new GameCore(res([prog(0, ['begin', ['LOAD_MAP', 9], ['CAMERA_TILE', 20, 10], ['WAIT', 1000], ['LOAD_MAP', 9], ['WAIT', 1000], ['END']])]), stage);
+    core.newGame(); core.frame(0); core.frame(16);
+    expect(stage.camera).toEqual({ x: 320, y: 240 });                           // CAMERA_TILE centred cell (20,10) = (640,480)
+    core.frame(1100);
+    expect(stage.calls.filter((c) => c[0] === 'loadMap')).toHaveLength(2);
+    expect(stage.camera).toEqual({ x: 0, y: 0 });
+  });
   it('TOWN enters town mode; a hotspot runs its label from the stage file, else from EVENT00; inactive hotspots do nothing', () => {
     const stage = new FakeStage();
     const core = new GameCore(res([

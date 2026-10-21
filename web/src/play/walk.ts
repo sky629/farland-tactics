@@ -21,7 +21,7 @@ export interface WalkContext {
   tick(now: number): void; draw(now: number): void; core: GameCore; stage: BrowserStage; dialogs: Dialogs; dialogue: Dialogue; res: Resources; tables: Tables; params: URLSearchParams;
   onLog(fn: (kind: 'warn' | 'info', text: string) => void): void;
 }
-export interface WalkShot { id: number; tag: string; file: string; t: number; stage: number; battle: number; turn: number | null; mode: string; flags: string[] }
+export interface WalkShot { id: number; tag: string; file: string; t: number; stage: number; battle: number; turn: number | null; mode: string; flags: string[]; note?: string }   // note: the game's state behind a flagged frame (the script's instruction, fade, map, town, camera)
 export interface WalkManifest {
   run: { seed: number; from: string | null; startedAt: string; frames: number; simulatedMs: number; done: boolean; stopped: string | null };
   shots: WalkShot[]; counts: Record<string, number>; log: string[]; console: { kind: 'error' | 'warn'; text: string }[];
@@ -111,10 +111,15 @@ async function run(ctx: WalkContext): Promise<void> {
   };
   const startedAt = new Date().toISOString();
   (window as unknown as { __walk: WalkWindow }).__walk = win;
+  /** Why a frame looks as it does: the script's next instruction, the fade, whether a map or the town is up, the camera. */
+  const describe = (): string => {
+    const vm = core.vm.state, ins = vm.program?.code[vm.pc], fx = stage.effects.snapshot(now);
+    return `event${String(vm.program?.stage ?? -1).padStart(2, '0')}@${vm.pc} ${ins ? `${ins.op}${JSON.stringify(ins.args)}` : '-'} fade=${fx.fade ? fx.fade.alpha : 'none'} map=${stage.mapData() ? 'yes' : 'none'} town=${stage.townFlags !== null} camera=${Math.round(stage.camera.x)},${Math.round(stage.camera.y)}`;
+  };
   const capture = async (tag: string, flags: string[]): Promise<void> => {
     shotId++;
     const file = `${String(shotId).padStart(4, '0')}-${tag}.png`, b = core.battle;
-    shots.push({ id: shotId, tag, file, t: Math.round(now), stage: core.campaign.stage, battle: chapterNo, turn: b?.state.turn ?? null, mode: core.mode, flags });
+    shots.push({ id: shotId, tag, file, t: Math.round(now), stage: core.campaign.stage, battle: chapterNo, turn: b?.state.turn ?? null, mode: core.mode, flags, ...(flags.length > 0 ? { note: describe() } : {}) });
     count(tag.replace(/-\d+$/, ''));
     if (!pauseForShots) return;
     await nextPaint();
@@ -129,9 +134,9 @@ async function run(ctx: WalkContext): Promise<void> {
     const b = core.battle, fx = stage.effects.snapshot(now), map = stage.mapData();
     if (map !== null && map !== lastMap) mapGen++;
     lastMap = map;
-    return { t: now, mode: core.mode, mapGen, turn: b?.state.turn ?? null, phase: b?.state.phase.kind ?? null, selMode: b && b.state.phase.kind === 'player' ? b.state.phase.sel.mode : null, town: stage.townFlags !== null, visualPart: stage.visualPart, visualPlaying: stage.visualPlaying, dialogsOpened: dialogs.openedCount + messages, dialogTemplate: lastTemplate, fadeAlpha: fx.fade?.alpha ?? 0, pc: core.vm.state.pc };
+    return { t: now, mode: core.mode, mapGen, turn: b?.state.turn ?? null, phase: b?.state.phase.kind ?? null, selMode: b && b.state.phase.kind === 'player' ? b.state.phase.sel.mode : null, town: stage.townFlags !== null, visualPart: stage.visualPart, visualPlaying: stage.visualPlaying, dialogsOpened: dialogs.openedCount + messages, dialogTemplate: lastTemplate, fadeAlpha: fx.fade?.alpha ?? 0, content: map !== null || stage.townFlags !== null || fx.image !== null, pc: core.vm.state.pc };
   };
-  const blank = (cur: WalkSnapshot): boolean => { if (cur.mode === 'ended') return false; sctx.drawImage(view, 0, 0, 32, 24); return blankFlag(blankRatio(sctx.getImageData(0, 0, 32, 24).data), cur.fadeAlpha, cur.visualPlaying); };   // a game over's black is the script's
+  const blank = (cur: WalkSnapshot): boolean => { if (cur.mode === 'ended') return false; sctx.drawImage(view, 0, 0, 32, 24); return blankFlag(blankRatio(sctx.getImageData(0, 0, 32, 24).data), cur.fadeAlpha, cur.visualPlaying, cur.content); };   // a game over's black is the script's
   const overflow = (): boolean => {
     const boxes = [...document.querySelectorAll<HTMLElement>('#win .w95-dialog, #win .w95-popup, #win .w95-window')].filter((el) => !el.hidden);
     return boxes.length > 0 && overflowing(boxes.map((el) => el.getBoundingClientRect()), screen.getBoundingClientRect()) > 0;

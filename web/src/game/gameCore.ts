@@ -279,7 +279,7 @@ export class GameCore implements Host {
   setVisible(): void { this.syncUnits(); }
   allVisible(): void { this.syncUnits(); }
   resetSprites(): void { this.syncUnits(); }
-  loadMap(n: number): void { this.lastMap = n; this.stage.loadMap(n); }
+  loadMap(n: number): void { this.lastMap = n; this.stage.loadMap(n); this.stage.camera = { x: 0, y: 0 }; }   // FUN_0042d5d0 zeroes the scroll with the map: a scenery cut without a camera command shows the map's top-left
   mapBusy(): boolean { return !this.stage.mapReady(); }
   unitsChanged(): void { this.syncUnits(); }
   music(n: number): void { if (n < 0) this.stage.stopMusic(); else this.stage.playMusic(n); }
