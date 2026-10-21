@@ -73,6 +73,7 @@ main { max-width: 1100px; margin: 0 auto; } h1 { font-size: 22px; margin: 0 0 4p
 .sum { display: flex; flex-wrap: wrap; gap: 8px 20px; color: var(--muted); } .sum b { color: var(--fg); }
 .flags { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 12px; }
 .flags figure { margin: 0; background: var(--card); border: 1px solid var(--line); padding: 6px; } .flags img { width: 100%; height: auto; display: block; image-rendering: pixelated; }
+.lost { color: var(--bad); font-size: 12px; margin: 24px 0; text-align: center; }
 .flags figcaption { color: var(--bad); font-size: 12px; margin-top: 4px; }
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 6px; }
 .grid a { display: block; background: var(--card); border: 1px solid var(--line); padding: 3px; color: inherit; text-decoration: none; min-width: 0; }
@@ -87,8 +88,14 @@ def render_report(manifest, thumbs, inline, per_chapter=None):
     flagged = [s for s in shots if s.get('flags')]
     errors = [c for c in manifest.get('console', []) if c['kind'] == 'error']
     def src(s, thumb):
+        d = manifest.get('_dir')
+        if d is not None and not (Path(d) / 'shots' / s['file']).is_file():
+            return None                                                        # the harvester skipped this shot (a capture failed twice)
         rel = thumbs.get(s['file']) if (thumbs and thumb) else f"shots/{s['file']}"
-        return data_url(Path(manifest['_dir']) / rel) if inline else rel
+        return data_url(Path(d) / rel) if inline else rel
+    def img(s, thumb, lazy=False):
+        u = src(s, thumb)
+        return (f'<img src="{u}" alt="{html.escape(cap(s))}"' + (' loading="lazy"' if lazy else '') + '>') if u else '<p class="lost">사진 없음 (수집기가 건너뜀)</p>'
     def cap(s):
         return f"{s['tag']} · {fmt_t(s['t'])} · stage {s['stage']}" + (f" · turn {s['turn']}" if s['turn'] is not None else '')
     parts = ['<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><title>브라우저 워크 보고</title>',
@@ -105,7 +112,7 @@ def render_report(manifest, thumbs, inline, per_chapter=None):
     parts.append(f'<h2>걸린 프레임 ({len(flagged)})</h2>')
     if flagged:
         parts.append('<div class="flags">' + ''.join(
-            f'<figure><img src="{src(s, False)}" alt="{html.escape(cap(s))}"><figcaption>{html.escape(", ".join(FLAG_LABEL.get(f.replace("flag-", ""), f) for f in s["flags"]))} — {html.escape(cap(s))} — {html.escape(s["file"])}'
+            f'<figure>{img(s, False)}<figcaption>{html.escape(", ".join(FLAG_LABEL.get(f.replace("flag-", ""), f) for f in s["flags"]))} — {html.escape(cap(s))} — {html.escape(s["file"])}'
             + (f'<br><code>{html.escape(s["note"])}</code>' if s.get('note') else '') + '</figcaption></figure>'
             for s in flagged) + '</div>')
     else:
@@ -115,7 +122,7 @@ def render_report(manifest, thumbs, inline, per_chapter=None):
     for n, group in sorted(chapters(shots).items()):
         shown = group if per_chapter is None else group[:per_chapter]
         parts.append(f'<h2>{chapter_title(n)} <small>({len(group)}장)</small></h2><div class="grid">' + ''.join(
-            f'<a href="shots/{s["file"]}" class="{"flagged" if s.get("flags") else ""}"><img src="{src(s, True)}" alt="{html.escape(cap(s))}" loading="lazy"><small>{html.escape(cap(s))}</small></a>'
+            f'<a href="shots/{s["file"]}" class="{"flagged" if s.get("flags") else ""}">{img(s, True, lazy=True)}<small>{html.escape(cap(s))}</small></a>'
             for s in shown) + '</div>' + (f'<p class="sum">… {len(group) - len(shown)}장 더 (report.html)</p>' if len(shown) < len(group) else ''))
     parts.append('</main></body></html>')
     return '\n'.join(parts)

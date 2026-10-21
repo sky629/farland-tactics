@@ -16,6 +16,7 @@ import { MapModel } from '../map/mapModel';
 import type { Backdrop, Renderer } from '../render/renderer';
 import type { ModalKind, Where } from '../script/host';
 import { IndexedBitmaps } from '../gfx/indexed';
+import { LoadTable } from '../assets/loadTable';
 import { HOTSPOTS, hitTest, layerFrame, townLayerKey, townLayers } from '../town/town';
 import type { Dialogue, ModalContext } from '../ui/dialogue';
 import { clampCamera } from '../viewer/scale';
@@ -65,12 +66,12 @@ export class BrowserStage implements Stage {
   private loading: string | null = null;
   private town: { set: 1 | 2 | 3; extra: boolean; flags: number[]; hover: number | null; showAll: boolean } | null = null;
   /** Town sheets as keyed bitmaps (layer 0 opaque, 1..4 color-keyed); null while loading or missing. */
-  private readonly sheets = new Map<string, { bmp: IndexedBitmaps; key: number | null } | null>();
+  private readonly sheets = new LoadTable<{ bmp: IndexedBitmaps; key: number | null }>();
   private drag: { x: number; y: number; cx: number; cy: number } | null = null;
   /** Visual scenes: the player, the slot → bitmap names per scene, and keyed images per (name, key). */
   private readonly player = new VisualPlayer();
   private readonly visualNames = new Map<number, Map<number, string>>();
-  private readonly visualImages = new Map<string, VisualImage | null>();
+  private readonly visualImages = new LoadTable<VisualImage>();
   private visualScene = 0;
 
   constructor(private readonly canvas: HTMLCanvasElement, private readonly renderer: Renderer, private readonly assets: AssetLoader,
@@ -103,16 +104,15 @@ export class BrowserStage implements Stage {
   }
 
   private sheet(name: string, layer: number): CanvasImageSource | null {
-    if (!this.sheets.has(name)) {
-      this.sheets.set(name, null);
+    if (this.sheets.start(name)) {
       void (async () => {
         try {
           const img = await this.assets.image('bmp', name);
           const key = townLayerKey(img, layer);
           const bmp = new IndexedBitmaps(img);
           await bmp.prepare(key);
-          this.sheets.set(name, { bmp, key });
-        } catch (e) { this.hooks.log('warn', `${name}: ${e instanceof Error ? e.message : String(e)}`); }
+          this.sheets.done(name, { bmp, key });
+        } catch (e) { this.sheets.fail(name); this.hooks.log('warn', `${name}: ${e instanceof Error ? e.message : String(e)}`); }
       })();
     }
     const s = this.sheets.get(name);
@@ -205,7 +205,7 @@ export class BrowserStage implements Stage {
   /** Asset loads started and not yet settled anywhere on the stage: the map, bitmaps, town sheets, visual bitmaps, sprite files. The auto-play clock waits while this is above zero. */
   get pendingLoads(): number {
     return this.assets.inflight + this.bitmaps.inflight + this.sprites.inflight + (this.loading !== null ? 1 : 0)
-      + [...this.sheets.values()].filter((v) => v === null).length + [...this.visualImages.values()].filter((v) => v === null).length;
+      + this.sheets.pending + this.visualImages.pending;
   }
 
   // ---- Stage: map ----
@@ -318,18 +318,17 @@ export class BrowserStage implements Stage {
   /** A bitmap of bmp/ with a color key, loading on first use. */
   private visualBitmap(name: string, key: number | null): VisualImage | null {
     const id = `${name}/${key ?? 'opaque'}`;
-    if (!this.visualImages.has(id)) {
-      this.visualImages.set(id, null);
+    if (this.visualImages.start(id)) {
       void (async () => {
         try {
           const img = await this.assets.image('bmp', name);
           const bmp = new IndexedBitmaps(img);
           await bmp.prepare(key);
-          this.visualImages.set(id, { image: bmp.get(key), w: img.width, h: img.height });
-        } catch (e) { this.hooks.log('warn', `${name}: ${e instanceof Error ? e.message : String(e)}`); }
+          this.visualImages.done(id, { image: bmp.get(key), w: img.width, h: img.height });
+        } catch (e) { this.visualImages.fail(id); this.hooks.log('warn', `${name}: ${e instanceof Error ? e.message : String(e)}`); }
       })();
     }
-    return this.visualImages.get(id) ?? null;
+    return this.visualImages.get(id);
   }
 
   // ---- Stage: pictures and town ----

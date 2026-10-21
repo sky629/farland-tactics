@@ -10,6 +10,7 @@ import { PARTY_SLOTS, type Unit } from '../battle/unit';
 import type { Tables } from '../data/types';
 import { blankFlag, blankRatio, momentsBetween, overflowing, StuckWatch, type WalkSnapshot } from '../dev/walkChecks';
 import { Walker, type WalkModalKind, type WalkWorld } from '../dev/walker';
+import { applyAnswer, type AnswerBox } from '../dev/walkAnswers';
 import type { BrowserStage } from '../game/browserStage';
 import type { GameCore } from '../game/gameCore';
 import { VIEW_W } from '../iso/grid';
@@ -72,22 +73,15 @@ async function run(ctx: WalkContext): Promise<void> {
     reseed: (s) => { res.rng = Rng.fromSeed(s); },
     log: (line) => { walkLog.push(line); if (line.startsWith('warn')) { consoleList.push({ kind: 'warn', text: line }); flag('warn'); } },
   };
-  const press = (box: HTMLElement | null, id: number): boolean => { const b = box?.querySelector<HTMLElement>(`[data-id="${id}"]`); if (!b) return false; b.click(); return true; };
-  /** The walker's answer through the real controls (spec §5.3). The EXP pool is already on the unit the walker chose, so dialog 162 gets every bar at 0 before 결정. */
-  const applyAnswer = (a: { kind: WalkModalKind; value: number }): void => {
-    const top = dialogs.top;
-    let ok = false;
-    switch (a.kind) {
-      case 'message': { const b = dialogue.modal.querySelector<HTMLElement>('button'); if (b) { b.click(); ok = true; } break; }
-      case 'ask': ok = press(top, a.value ? 6 : 7); break;
-      case 'save': ok = press(top, 2); break;
-      case 'shop': ok = press(top, 1078); break;
-      case 'result': {
-        for (const bar of top?.querySelectorAll<HTMLInputElement>('input.w95-bar') ?? []) { bar.value = '0'; bar.dispatchEvent(new Event('input', { bubbles: true })); }
-        ok = press(top, 1); break;
-      }
-    }
-    if (!ok) world.log(`warn:walk no dialog to answer for ${a.kind} (template ${top?.dataset['template'] ?? 'none'})`);
+  /** The top dialog box as an AnswerBox: controls by data-id, the 162 bars as range inputs that fire 'input'. */
+  const answerBox = (top: HTMLElement | null): AnswerBox | null => top && {
+    control: (id) => top.querySelector<HTMLElement>(`[data-id="${id}"]`),
+    bars: () => [...top.querySelectorAll<HTMLInputElement>('input.w95-bar')].map((bar) => ({ set: (v) => { bar.value = String(v); bar.dispatchEvent(new Event('input', { bubbles: true })); } })),
+    template: top.dataset['template'] ?? null,
+  };
+  const answer = (a: { kind: WalkModalKind; value: number }): void => {
+    const top = answerBox(dialogs.top);
+    if (!applyAnswer(a, top, dialogue.modal.querySelector<HTMLElement>('button'))) world.log(`warn:walk no dialog to answer for ${a.kind} (template ${top?.template ?? 'none'})`);
   };
 
   // ---- errors and warnings of the page
@@ -175,7 +169,7 @@ async function run(ctx: WalkContext): Promise<void> {
   };
   for (;;) {
     await settle();
-    while (answers.length > 0) applyAnswer(answers.shift()!);
+    while (answers.length > 0) answer(answers.shift()!);
     const r = walker.step(now);
     if (r === 'stop') { stopped = walker.summary().stopped; break; }
     if (r === 'frame') { now += FRAME_MS; frames++; tick(now); await settle(); }

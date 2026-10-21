@@ -473,9 +473,9 @@ function shopping(core: GameCore, ids: number[], tables: Tables, log: string[]):
 }
 
 
-  // A replay with the same plan ends the same way (the dice rarely decide a battle): a player who lost tries another way. Retry n
-  // takes the n-th stance — the usual margin, a careful one, a bold one, a timid one, a reckless one — and every other retry advances
-  // from the first turn instead of holding the line.
+// A replay with the same plan ends the same way (the dice rarely decide a battle): a player who lost tries another way. Retry n
+// takes the n-th stance — the usual margin, a careful one, a bold one, a timid one, a reckless one — and every other retry advances
+// from the first turn instead of holding the line.
 const STANCES = [1, 0.6, 1.6, 0.4, 2.4] as const;
 let boldness = 1, rushing = false;
 
@@ -498,7 +498,7 @@ export class Walker {
     }
     const autosave = (n: 30 | 31): Uint8Array | null => world.autosave(n) ?? (n === 30 ? from : null);
     const log: string[] = []; const stages: number[] = []; const battles: number[] = []; const towns: string[] = [];
-    let now = 0, seen = 0, lastStage = -1, lastMode = '';
+    let lastStage = -1, lastMode = '';
     const HOLD = 7;                                                             // just outside a 6-cell move + melee reach: they come to us
     let hold = HOLD, holdTurn = -1, enemyPos = '', stalled = false;            // per battle: lowered by 2 each turn the enemies did not move at all (guards)
     let front = Infinity, focus: Unit | null = null, tank: Unit | null = null, topLevel = 0, mendTurns = 0, hpSig = '', quiet = 0, still = 0, lowFoeHp = Infinity, lastLow = 0;   // quiet: turns in which nobody lost HP; still: turns the enemy has not moved; lastLow: the turn the enemies' total HP last reached a new low (progress)   // mendTurns: turns spent with a single enemy left while the party heals up
@@ -517,7 +517,7 @@ export class Walker {
     const strikes = new Map<string, number>();                                 // `${stage}:${slot}` → blows struck: who the walker really lets fight
     let counted: unknown = null;                                                 // the Battle whose BATTLE_START autosave was counted
     let endSummary: string | null = null;                                       // the party as the last battle ended (taken at its `end`, before the next script moves anyone)
-    const lastStrike = new Map<number, number>();                              // slot → the turn of its last blow (a tank idle for four turns turns bold)mped when a battle stalls
+    const lastStrike = new Map<number, number>();                              // slot → the turn of its last blow (a tank idle for four turns turns bold)
     const who = (v: Unit | null) => { if (!v) return 'nobody'; const t = totals(v, itemsOf(v, tables.item)); return `slot${v.slot}:id${v.id}:s${v.side}:st${v.status}:hp${v.hp}/${v.hpMax}:lv${v.level}:a${t.atk}:d${t.def}:w${t.wis}:m${t.mgr}`; };
     const summary = (st: BattleState) => liveUnits(st.units).filter((v) => v.hp > 0).map((v) => `${v.slot}:s${v.side}:${v.c},${v.r}:h${st.grid.height(v.c, v.r)}:hp${v.hp}:lv${v.level}:st${v.status}:mp${v.mp}`).join(' ');
     const townTries = new Map<string, number>(); const retries = new Map<string, number>();
@@ -528,64 +528,53 @@ export class Walker {
     const flush = () => { for (; flushed < log.length; flushed++) world.log(log[flushed]!); };
     const stop = (why: string): StepResult => { stopped = why; flush(); return 'stop'; };
     this.onModal = (kind: WalkModalKind, payload: unknown): void => {
-      const c: [string, WalkModalKind, unknown] = ['openModal', kind, payload];
-      {
-
-
-
-        if (c[0] === 'openModal') {
-          if (c[1] === 'shop') { log.push(`walk: shop at stage ${core.campaign.stage}: ${JSON.stringify(c[2])}, ${core.campaign.inventory.gold} gold`); shopping(core, c[2] as number[], tables, log); world.answer('shop', 1); }                   // buy upgrades, then 돌아오기
-          else if (c[1] === 'ask') { const key = `${core.campaign.stage}:${String(c[2])}`; asksSince.push(key); const ans = askFlip.has(key) ? 0 : 1; world.answer('ask', ans); log.push(`walk: ask ${key} → ${ans}`); }   // yes (the inn's "end the day?" moves the story on) unless this choice led nowhere
-          else if (c[1] === 'result') {
-            // the EXP pool. The bundled walkthrough (파랜드택틱스2 공략.docx) says the duel of stage 3 needs the swordsman to have had
-            // nearly all the EXP so far (day 2, mission 3), the mine cart of stage 8 is the mage's alone (day 8), and "Al and Karin
-            // at 25 or more" (character tips). So: the fighter until the duel is behind us, then the lower of fighter and attack
-            // caster. The fallen count too: they stand up at the next battle.
-            const { pool } = c[2] as { gold: number; pool: number };
-            const party = liveUnits(core.campaign.units).filter((u) => u.slot < PARTY_SLOTS && u.status !== 9);   // the rows of dialog 162 (dialogue.ts): a hidden member cannot take the pool through the real dialog
-            const fighter = [...party].sort((a, b) => b.str - a.str)[0]!;
-            // the fighter until the author's milestone ("Al 25+": the duel of day 3 is his alone, at level 17 his defence tops the hall of
-            // day 5, at 22 the golems' blows of day 7), then the lower of the fighter and the flyer — the one whose wings reach what the
-            // sword cannot (the lighthouse top of day 13, the mages on the beds of day 15: "라딧슈는 날개가 달려있음을 상기하자"). A fighter
-            // kept near the enemies' level earns his own EXP on every kill (FUN_0043a2e0 case 7: +20 % per level the victim has on him,
-            // 10 % at the floor); one levelled far past them earns nothing, and the pools poured into him are lost to the party.
-            // The two climb a ladder together: the fighter to 28 (the duel of day 3, the hall of day 5 at 17, the golems of day 7 at 22, the
-            // halls of day 15 at 30 — the pool of day 8 is his whether he stands at 24 or 25 then), then the flyer to 25 and straight on to 35 (the mages on the beds of day 15 fall only to a flyer of 35
-            // with the mage's 히트블레이드 and a pike bought on day 15), then the fighter to 35, the flyer to 45, the fighter to 45. Past the
-            // ladder the pools are the flyer's: nothing later asks more of the swordsman, and day 17 sends him away. The angel lord of day 16
-            // (274 HP, heals himself whole) falls to 사이렌즈 and three turns of both blades, not to levels.
-            const flyer = party.find((u) => u !== fighter && tables.race[u.race]!.cost_land0 !== 99) ?? null;
-            const ladder: [Unit | null, number][] = [[fighter, 28], [flyer, 25], [flyer, 35], [fighter, 35], [flyer, 45], [fighter, 45]];
-            const who = ladder.find(([u, lv]) => u !== null && u.level < lv)?.[0] ?? flyer ?? fighter;
-            if (who) { who.exp = Math.min(who.exp + pool, EXP_CAP); log.push(`walk: ${pool} EXP at stage ${core.campaign.stage} → slot ${who.slot} lv${who.level} (now ${who.exp} EXP)`); }
-            world.answer('result', 0);
-          }
-          else world.answer(kind, kind === 'save' ? -1 : 0);
-        }
+      if (kind === 'shop') { log.push(`walk: shop at stage ${core.campaign.stage}: ${JSON.stringify(payload)}, ${core.campaign.inventory.gold} gold`); shopping(core, payload as number[], tables, log); world.answer('shop', 1); }                   // buy upgrades, then 돌아오기
+      else if (kind === 'ask') { const key = `${core.campaign.stage}:${String(payload)}`; asksSince.push(key); const ans = askFlip.has(key) ? 0 : 1; world.answer('ask', ans); log.push(`walk: ask ${key} → ${ans}`); }   // yes (the inn's "end the day?" moves the story on) unless this choice led nowhere
+      else if (kind === 'result') {
+        // the EXP pool. The bundled walkthrough (파랜드택틱스2 공략.docx) says the duel of stage 3 needs the swordsman to have had
+        // nearly all the EXP so far (day 2, mission 3), the mine cart of stage 8 is the mage's alone (day 8), and "Al and Karin
+        // at 25 or more" (character tips). So: the fighter until the duel is behind us, then the lower of fighter and attack
+        // caster. The fallen count too: they stand up at the next battle.
+        const { pool } = payload as { gold: number; pool: number };
+        const party = liveUnits(core.campaign.units).filter((u) => u.slot < PARTY_SLOTS && u.status !== 9);   // the rows of dialog 162 (dialogue.ts): a hidden member cannot take the pool through the real dialog
+        const fighter = [...party].sort((a, b) => b.str - a.str)[0]!;
+        // the fighter until the author's milestone ("Al 25+": the duel of day 3 is his alone, at level 17 his defence tops the hall of
+        // day 5, at 22 the golems' blows of day 7), then the lower of the fighter and the flyer — the one whose wings reach what the
+        // sword cannot (the lighthouse top of day 13, the mages on the beds of day 15: "라딧슈는 날개가 달려있음을 상기하자"). A fighter
+        // kept near the enemies' level earns his own EXP on every kill (FUN_0043a2e0 case 7: +20 % per level the victim has on him,
+        // 10 % at the floor); one levelled far past them earns nothing, and the pools poured into him are lost to the party.
+        // The two climb a ladder together: the fighter to 28 (the duel of day 3, the hall of day 5 at 17, the golems of day 7 at 22, the
+        // halls of day 15 at 30 — the pool of day 8 is his whether he stands at 24 or 25 then), then the flyer to 25 and straight on to 35 (the mages on the beds of day 15 fall only to a flyer of 35
+        // with the mage's 히트블레이드 and a pike bought on day 15), then the fighter to 35, the flyer to 45, the fighter to 45. Past the
+        // ladder the pools are the flyer's: nothing later asks more of the swordsman, and day 17 sends him away. The angel lord of day 16
+        // (274 HP, heals himself whole) falls to 사이렌즈 and three turns of both blades, not to levels.
+        const flyer = party.find((u) => u !== fighter && tables.race[u.race]!.cost_land0 !== 99) ?? null;
+        const ladder: [Unit | null, number][] = [[fighter, 28], [flyer, 25], [flyer, 35], [fighter, 35], [flyer, 45], [fighter, 45]];
+        const who = ladder.find(([u, lv]) => u !== null && u.level < lv)?.[0] ?? flyer ?? fighter;
+        if (who) { who.exp = Math.min(who.exp + pool, EXP_CAP); log.push(`walk: ${pool} EXP at stage ${core.campaign.stage} → slot ${who.slot} lv${who.level} (now ${who.exp} EXP)`); }
+        world.answer('result', 0);
       }
+      else world.answer(kind, kind === 'save' ? -1 : 0);
       flush();
     };
     this.onLog = (kind: 'warn' | 'info', text: string): void => {
-      const c: [string, string, string] = ['log', kind, text];
-      {
-        if (c[0] === 'log') log.push(`${String(c[1])}:${String(c[2])} @stage${core.campaign.stage} mode ${core.mode}`);
-        if (c[0] === 'log' && c[2] === 'save 31' && core.battle) turnSaves.set(core.battle.state.turn, autosave(31)!);
-        if (c[0] === 'log' && c[1] === 'info' && typeof c[2] === 'string' && c[2].startsWith('TEST_IS_ACTOR: slot ')) {   // the boss stood back up: not lastActor's blow to make
-          const slot = parseInt(c[2].slice('TEST_IS_ACTOR: slot '.length), 10), v = core.campaign.units[slot];
-          needed.delete(lastActor);
-          if (v && !stoodUp.has(slot)) {
-            stoodUp.add(slot);
-            const hands = core.campaign.units.filter((w): w is Unit => w !== null && w.slot < PARTY_SLOTS && w.slot !== lastActor && w.status !== 9 && dmgTo(w, v) * 10 >= v.hpMax).map((w) => w.slot);
-            for (const h of hands) needed.add(h);
-            log.push(`walk: slot ${slot} stood back up after slot ${lastActor}'s blow — the script waits for another hand: ${hands.length > 0 ? `slot ${hands.join(', ')} kept out of the melee until the finish` : 'nobody else dents it'}`);
-          }
+      log.push(`${kind}:${text} @stage${core.campaign.stage} mode ${core.mode}`);
+      if (text === 'save 31' && core.battle) turnSaves.set(core.battle.state.turn, autosave(31)!);
+      if (kind === 'info' && text.startsWith('TEST_IS_ACTOR: slot ')) {   // the boss stood back up: not lastActor's blow to make
+        const slot = parseInt(text.slice('TEST_IS_ACTOR: slot '.length), 10), v = core.campaign.units[slot];
+        needed.delete(lastActor);
+        if (v && !stoodUp.has(slot)) {
+          stoodUp.add(slot);
+          const hands = core.campaign.units.filter((w): w is Unit => w !== null && w.slot < PARTY_SLOTS && w.slot !== lastActor && w.status !== 9 && dmgTo(w, v) * 10 >= v.hpMax).map((w) => w.slot);
+          for (const h of hands) needed.add(h);
+          log.push(`walk: slot ${slot} stood back up after slot ${lastActor}'s blow — the script waits for another hand: ${hands.length > 0 ? `slot ${hands.join(', ')} kept out of the melee until the finish` : 'nobody else dents it'}`);
         }
-        if (c[0] === 'log' && c[2] === 'save 30' && core.battle !== null && core.battle !== counted) {   // the BATTLE_START autosave of a new battle — not the stage-11 script's own SAVE_GAME 30 right after it
-          counted = core.battle;
-          if (endSummary !== null) { log.push(`walk: battle ${battles.length} ended with ${endSummary}; last:\n${turnLog.slice(-3).join('\n')}`); endSummary = null; }
-          battles.push(core.campaign.stage); autosaves[battles.length] = autosave(30)!;
-          onAutosave?.(battles.length, autosaves[battles.length]!); needed.clear(); stoodUp.clear(); hold = HOLD; holdTurn = -1; enemyPos = ''; still = 0; quiet = 0; hpSig = ''; lowFoeHp = Infinity; lastLow = 0; LESSONS = new Map(); lastStrike.clear(); turnLog.length = 0; turnSaves.clear(); caution.clear(); undoAt.clear(); undos = 0; }   // BATTLE_START autosave: a new battle (a retry reloads it without one)
       }
+      if (text === 'save 30' && core.battle !== null && core.battle !== counted) {   // the BATTLE_START autosave of a new battle — not the stage-11 script's own SAVE_GAME 30 right after it
+        counted = core.battle;
+        if (endSummary !== null) { log.push(`walk: battle ${battles.length} ended with ${endSummary}; last:\n${turnLog.slice(-3).join('\n')}`); endSummary = null; }
+        battles.push(core.campaign.stage); autosaves[battles.length] = autosave(30)!;
+        onAutosave?.(battles.length, autosaves[battles.length]!); needed.clear(); stoodUp.clear(); hold = HOLD; holdTurn = -1; enemyPos = ''; still = 0; quiet = 0; hpSig = ''; lowFoeHp = Infinity; lastLow = 0; LESSONS = new Map(); lastStrike.clear(); turnLog.length = 0; turnSaves.clear(); caution.clear(); undoAt.clear(); undos = 0; }   // BATTLE_START autosave: a new battle (a retry reloads it without one)
       flush();
     };
     this.step = (now: number): StepResult => {
@@ -921,8 +910,6 @@ export class Walker {
       flush();
       return 'frame';
     };
-
-
 
     this.battleCount = () => battles.length;
     this.summary = (): WalkSummary => {

@@ -48,6 +48,20 @@ class WalkReport(unittest.TestCase):
         self.assertIn('LOAD_MAP[51] fade=none', html)
         self.assertLess(html.index('LOAD_MAP[51]'), html.index('전투 1'))
 
+    def test_a_shot_without_its_png_is_skipped_not_fatal(self):
+        with tempfile.TemporaryDirectory() as d:
+            run = Path(d); (run / 'shots').mkdir()
+            for s in MANIFEST['shots'][:2]:
+                tiny_png(run / 'shots' / s['file'])                      # the flagged shot's PNG is missing (the harvester skipped it)
+            (run / 'manifest.json').write_text(json.dumps(MANIFEST), encoding='utf-8')
+            self.assertEqual(main([str(run)]), 0)
+            summary = (run / 'summary.html').read_text(encoding='utf-8')
+            report = (run / 'report.html').read_text(encoding='utf-8')
+            self.assertNotIn('src="None"', report)
+            self.assertIn('0003-flag-blank.png', summary)                   # the caption still names the lost picture
+            self.assertNotIn('src="None"', summary)
+            self.assertIn('사진 없음', summary)
+
     def test_main_writes_report_and_summary(self):
         with tempfile.TemporaryDirectory() as d:
             run = Path(d); (run / 'shots').mkdir()

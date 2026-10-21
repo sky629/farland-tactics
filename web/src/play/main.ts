@@ -202,23 +202,21 @@ function tick(now: number): void {
 }
 /** The picture of the frame: the stage, the 전체맵 window and the dev panel (the auto-play redraws after assets arrive). */
 function draw(now: number): void {
-  {
-    if (core && stage) {
-      stage.cellMode = core.mode === 'battle';
-      const b = core.battle;
-      stage.draw(now, core.campaign.units, b?.state.phase ?? IDLE);
-      if (fullMap?.visible) {                                                  // the 전체맵 window follows the battle map; a map change closes it (FUN_0042d5d0)
-        const whole = core.mode === 'battle' ? stage.wholeMap() : null;
-        if (!whole) fullMap.hide(); else fullMap.paint(whole, fullMapMarkers(core.campaign.units, (c, r) => stage!.cellOf(c, r), [whole.w, whole.h], FULL_MAP_W, FULL_MAP_H));
-      }
-      if (b) {
-        if (core.lastEvents !== shownEvents) { shownEvents = core.lastEvents; panel?.logEvents(b.state, shownEvents); }
-        const h = stage.presenter.hover;
-        panel?.update(b.state, h ? b.state.units.find((u) => u && u.c === h[0] && u.r === h[1]) ?? null : null);
-        panel?.showResult(core.result);
-      }
-    } else renderer.draw({ map: null, sprites: [], camera: { x: 0, y: 0 }, overlay: { grid: false, height: false, land: false, blocked: false }, seeThrough: false });
-  }
+  if (core && stage) {
+    stage.cellMode = core.mode === 'battle';
+    const b = core.battle;
+    stage.draw(now, core.campaign.units, b?.state.phase ?? IDLE);
+    if (fullMap?.visible) {                                                  // the 전체맵 window follows the battle map; a map change closes it (FUN_0042d5d0)
+      const whole = core.mode === 'battle' ? stage.wholeMap() : null;
+      if (!whole) fullMap.hide(); else fullMap.paint(whole, fullMapMarkers(core.campaign.units, (c, r) => stage!.cellOf(c, r), [whole.w, whole.h], FULL_MAP_W, FULL_MAP_H));
+    }
+    if (b) {
+      if (core.lastEvents !== shownEvents) { shownEvents = core.lastEvents; panel?.logEvents(b.state, shownEvents); }
+      const h = stage.presenter.hover;
+      panel?.update(b.state, h ? b.state.units.find((u) => u && u.c === h[0] && u.r === h[1]) ?? null : null);
+      panel?.showResult(core.result);
+    }
+  } else renderer.draw({ map: null, sprites: [], camera: { x: 0, y: 0 }, overlay: { grid: false, height: false, land: false, blocked: false }, seeThrough: false });
 }
 function frame(now: number): void { tick(now); requestAnimationFrame(frame); }
 
