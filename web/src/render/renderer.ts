@@ -27,7 +27,7 @@ const LAND_COLORS = ['rgba(0,0,0,0)', 'rgba(80,200,80,.35)', 'rgba(60,120,220,.3
 
 /** Draws a Scene into a 640×480 canvas in the original's order (FUN_0042a990): per row s = c + r, back objects → sprites → front objects. */
 export class Renderer {
-  private readonly ctx: CanvasRenderingContext2D;
+  private ctx: CanvasRenderingContext2D;                                        // swapped to an offscreen context while wholeMap renders its chunks
   private readonly scratch = document.createElement('canvas');
   private readonly mapBitmaps = new WeakMap<MapModel, MapGfx>();
   private readonly apdBitmaps = new WeakMap<ApdModel, IndexedBitmaps[]>();
@@ -70,11 +70,18 @@ export class Renderer {
     const [w, h] = model.data.pixelSize;
     const whole = document.createElement('canvas'); whole.width = w; whole.height = h;
     const g = whole.getContext('2d');
-    if (!g) throw new Error('2D canvas context unavailable');
-    for (let y = 0; y < h; y += VIEW_H) for (let x = 0; x < w; x += VIEW_W) {
-      this.draw({ map: model, sprites: [], camera: { x, y }, overlay: { grid: false, height: false, land: false, blocked: false }, seeThrough: false });
-      g.drawImage(this.canvas, x, y);
-    }
+    const chunk = document.createElement('canvas'); chunk.width = VIEW_W; chunk.height = VIEW_H;
+    const cctx = chunk.getContext('2d');
+    if (!g || !cctx) throw new Error('2D canvas context unavailable');
+    cctx.imageSmoothingEnabled = false;
+    const visible = this.ctx;
+    this.ctx = cctx;                                                           // the chunks never touch the screen: the frame being drawn stays whole
+    try {
+      for (let y = 0; y < h; y += VIEW_H) for (let x = 0; x < w; x += VIEW_W) {
+        this.draw({ map: model, sprites: [], camera: { x, y }, overlay: { grid: false, height: false, land: false, blocked: false }, seeThrough: false });
+        g.drawImage(chunk, x, y);
+      }
+    } finally { this.ctx = visible; }
     this.wholeMaps.set(model, whole);
     return whole;
   }
