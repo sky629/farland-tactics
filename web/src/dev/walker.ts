@@ -540,7 +540,7 @@ export class Walker {
             // at 25 or more" (character tips). So: the fighter until the duel is behind us, then the lower of fighter and attack
             // caster. The fallen count too: they stand up at the next battle.
             const { pool } = c[2] as { gold: number; pool: number };
-            const party = liveUnits(core.campaign.units).filter((u) => u.slot < PARTY_SLOTS);
+            const party = liveUnits(core.campaign.units).filter((u) => u.slot < PARTY_SLOTS && u.status !== 9);   // the rows of dialog 162 (dialogue.ts): a hidden member cannot take the pool through the real dialog
             const fighter = [...party].sort((a, b) => b.str - a.str)[0]!;
             // the fighter until the author's milestone ("Al 25+": the duel of day 3 is his alone, at level 17 his defence tops the hall of
             // day 5, at 22 the golems' blows of day 7), then the lower of the fighter and the flyer — the one whose wings reach what the
