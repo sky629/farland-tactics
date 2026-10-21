@@ -6,7 +6,7 @@ import type { SaveSummary } from '../save/format';
 import type { ModalKind, Where } from '../script/host';
 import { unitName } from './names';
 import type { DialogHost } from './win/dialog';
-import { confirm } from './win/screens/confirm';
+import { askPrompt, confirm } from './win/screens/confirm';
 import { pickSave } from './win/screens/saves';
 import { unitList } from './win/screens/unitList';
 import { expShareDialog } from './win/screens/expShare';
@@ -115,7 +115,7 @@ export class Dialogue {
     const close = (value: number) => (): void => { this.result = value; box.hidden = true; };
     switch (kind) {
       case 'message': box.append(this.el('div', 'text', String(payload)), this.button('닫기', close(0))); break;
-      case 'ask': { if (!this.dialogs) throw new Error('dialogs not attached'); void confirm(this.dialogs, String(payload)).then((yes) => { this.result = yes ? 1 : 0; }); return; }   // dialog 126 확인
+      case 'ask': { if (!this.dialogs) throw new Error('dialogs not attached'); const q = askPrompt(String(payload)); void confirm(this.dialogs, q.text, q.template).then((yes) => { this.result = yes ? 1 : 0; }); return; }   // dialog 126 확인, or 163 for a "+" question
       case 'save': { if (!this.dialogs) throw new Error('dialogs not attached'); void pickSave(this.dialogs, ctx.saves ?? [], 'save').then((p) => { this.result = p && 'slot' in p ? p.slot : -1; }); return; }   // dialog 143 데이터 선택
       case 'result': {                                                       // dialog 162 경험치 배분: the shares go onto the units, then the VM levels them up
         if (!this.dialogs) throw new Error('dialogs not attached');

@@ -139,6 +139,7 @@ async function run(ctx: WalkContext): Promise<void> {
   const loading = (): boolean => stage.pendingLoads > 0 || [...document.querySelectorAll<HTMLImageElement>('#win img, #dialogue img')].some((i) => !i.complete);
   const stuck = new StuckWatch();
   let prev: WalkSnapshot | null = null, lastTick = 0;
+  let sceneDue: { tag: string; at: number } | null = null;                     // a scene part's picture waits a virtual second: its first frame is the fade's black
   const frameStep = async (): Promise<void> => { now += FRAME_MS; frames++; tick(now); await yieldNow(); };
 
   /** Once a battle: the screens a player opens — F2 유니트 일람 (its tabs), F3 전체 맵, the right-click popup on a party unit. Real input paths, Esc closes. */
@@ -181,7 +182,11 @@ async function run(ctx: WalkContext): Promise<void> {
     if (overflow()) flag('overflow');
     if (stuck.update(cur)) { flag('stuck'); stopped = 'stuck'; }
     const flags = pendingFlags.splice(0);
-    for (const m of [...moments, ...flags]) await capture(m, flags);
+    const due: string[] = [];
+    for (const m of moments) { if (m.startsWith('scene-')) sceneDue = { tag: m, at: now + 1000 }; else due.push(m); }
+    if (sceneDue && now >= sceneDue.at) { due.push(sceneDue.tag); sceneDue = null; }
+    if (!cur.visualPlaying) sceneDue = null;
+    for (const m of [...due, ...flags]) await capture(m, flags);
     if (moments.includes('battle-start') && newBattle) { await uiTour(); prev = snapshot(); }   // once a battle, not again on its retries; the tour's own boxes are not moments
     if (stopped) break;
     if (walker.finished) { await capture('end', []); break; }
