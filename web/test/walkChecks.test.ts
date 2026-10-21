@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { blankFlag, blankRatio, momentsBetween, overflowing, StuckWatch, type WalkSnapshot } from '../src/dev/walkChecks';
 
-const snap = (over: Partial<WalkSnapshot> = {}): WalkSnapshot => ({ t: 0, mode: 'script', mapGen: 0, turn: null, phase: null, selMode: null, town: false, visualPart: null, visualPlaying: false, dialogsOpened: 0, dialogTemplate: null, fadeAlpha: 0, pc: 0, content: true, ...over });
+const snap = (over: Partial<WalkSnapshot> = {}): WalkSnapshot => ({ t: 0, mode: 'script', mapGen: 0, turn: null, phase: null, selMode: null, town: false, visualPart: null, visualPlaying: false, dialogsOpened: 0, dialogTemplate: null, cover: 0, pc: 0, content: true, ...over });
 
 describe('momentsBetween: what a frame is worth a picture for', () => {
   it('the first frame sets the baseline and is no moment', () => {
@@ -38,6 +38,7 @@ describe('blank frames', () => {
     expect(blankFlag(1, 0, true, true)).toBe(false);                             // a scene's black is its own
     expect(blankFlag(0.98, 0, false, true)).toBe(false);
     expect(blankFlag(1, 0, false, false)).toBe(false);                           // no map, town or picture is up: black is the right picture
+    expect(blankFlag(1, 0.995, false, true)).toBe(false);                        // a fade (or a DIM_UI blackout) covering 99 % is a cover: a dark scene under it rounds to black
   });
 });
 
@@ -56,7 +57,7 @@ describe('StuckWatch', () => {
     expect(w.update(snap({ t: 59000, pc: 5 }))).toBe(false);
     expect(w.update(snap({ t: 60000, pc: 5 }))).toBe(true);
     expect(w.update(snap({ t: 60100, pc: 6 }))).toBe(false);
-    expect(w.update(snap({ t: 120000, pc: 6, fadeAlpha: 0.5 }))).toBe(false);   // the fade moving counts as change
+    expect(w.update(snap({ t: 120000, pc: 6, cover: 0.5 }))).toBe(false);   // the fade moving counts as change
   });
   it('a visual scene waits on its own clock: 100 s of one part is fine, 230 s is stuck, a new part resets', () => {
     const w = new StuckWatch();

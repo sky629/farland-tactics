@@ -15,7 +15,7 @@ export interface WalkSnapshot {
   visualPlaying: boolean;
   dialogsOpened: number;     // Dialogs.openedCount
   dialogTemplate: string | null;   // the newest box's template id
-  fadeAlpha: number;         // 0 clear … 1 covered
+  cover: number;             // the share a fade or a black tint covers: 0 clear … 1 covered
   content: boolean;          // a map, the town or a script picture is up — something the frame should show
   pc: number;                // the VM's program counter
 }
@@ -51,11 +51,12 @@ export function blankRatio(rgba: Uint8ClampedArray): number {
 }
 
 /**
- * A frame of one colour is blank unless a fade covers it, a visual scene (whose black is its own) plays, or nothing is up
- * (no map, town or picture: the original's window is black there too — between a save load and its script's first FADE_OUT).
+ * A frame of one colour is blank unless a fade or a black tint covers it (99 % counts as covered: a dark scene under a
+ * 99.5 % fade rounds to black), a visual scene (whose black is its own) plays, or nothing is up (no map, town or
+ * picture: the original's window is black there too — between a save load and its script's first FADE_OUT).
  */
-export function blankFlag(ratio: number, fadeAlpha: number, visualPlaying: boolean, content: boolean): boolean {
-  return ratio >= 0.99 && fadeAlpha < 1 && !visualPlaying && content;
+export function blankFlag(ratio: number, cover: number, visualPlaying: boolean, content: boolean): boolean {
+  return ratio >= 0.99 && cover < 0.99 && !visualPlaying && content;
 }
 
 export interface Rect { left: number; top: number; right: number; bottom: number }
@@ -70,7 +71,7 @@ export class StuckWatch {
   private since = 0;
   constructor(private readonly limitMs = 60_000, private readonly sceneLimitMs = 220_000) {}
   update(s: WalkSnapshot): boolean {
-    const sig = s.visualPlaying ? `scene:${s.visualPart}` : `${s.mode}|${s.pc}|${s.turn}|${s.dialogsOpened}|${s.fadeAlpha.toFixed(2)}`;
+    const sig = s.visualPlaying ? `scene:${s.visualPart}` : `${s.mode}|${s.pc}|${s.turn}|${s.dialogsOpened}|${s.cover.toFixed(2)}`;
     if (sig !== this.sig) { this.sig = sig; this.since = s.t; return false; }
     return s.t - this.since >= (s.visualPlaying ? this.sceneLimitMs : this.limitMs);
   }

@@ -134,9 +134,9 @@ async function run(ctx: WalkContext): Promise<void> {
     const b = core.battle, fx = stage.effects.snapshot(now), map = stage.mapData();
     if (map !== null && map !== lastMap) mapGen++;
     lastMap = map;
-    return { t: now, mode: core.mode, mapGen, turn: b?.state.turn ?? null, phase: b?.state.phase.kind ?? null, selMode: b && b.state.phase.kind === 'player' ? b.state.phase.sel.mode : null, town: stage.townFlags !== null, visualPart: stage.visualPart, visualPlaying: stage.visualPlaying, dialogsOpened: dialogs.openedCount + messages, dialogTemplate: lastTemplate, fadeAlpha: fx.fade?.alpha ?? 0, content: map !== null || stage.townFlags !== null || fx.image !== null, pc: core.vm.state.pc };
+    return { t: now, mode: core.mode, mapGen, turn: b?.state.turn ?? null, phase: b?.state.phase.kind ?? null, selMode: b && b.state.phase.kind === 'player' ? b.state.phase.sel.mode : null, town: stage.townFlags !== null, visualPart: stage.visualPart, visualPlaying: stage.visualPlaying, dialogsOpened: dialogs.openedCount + messages, dialogTemplate: lastTemplate, cover: Math.max(fx.fade?.alpha ?? 0, fx.tint?.color === '#000' ? fx.tint.alpha : 0), content: map !== null || stage.townFlags !== null || fx.image !== null, pc: core.vm.state.pc };
   };
-  const blank = (cur: WalkSnapshot): boolean => { if (cur.mode === 'ended') return false; sctx.drawImage(view, 0, 0, 32, 24); return blankFlag(blankRatio(sctx.getImageData(0, 0, 32, 24).data), cur.fadeAlpha, cur.visualPlaying, cur.content); };   // a game over's black is the script's
+  const blank = (cur: WalkSnapshot): boolean => { if (cur.mode === 'ended') return false; sctx.drawImage(view, 0, 0, 32, 24); return blankFlag(blankRatio(sctx.getImageData(0, 0, 32, 24).data), cur.cover, cur.visualPlaying, cur.content); };   // a game over's black is the script's
   const overflow = (): boolean => {
     const boxes = [...document.querySelectorAll<HTMLElement>('#win .w95-dialog, #win .w95-popup, #win .w95-window')].filter((el) => !el.hidden);
     return boxes.length > 0 && overflowing(boxes.map((el) => el.getBoundingClientRect()), screen.getBoundingClientRect()) > 0;
