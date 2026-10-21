@@ -202,6 +202,12 @@ export class BrowserStage implements Stage {
     window.addEventListener('blur', () => { this.seeThrough = false; });
   }
 
+  /** Asset loads started and not yet settled anywhere on the stage: the map, bitmaps, town sheets, visual bitmaps, sprite files. The auto-play clock waits while this is above zero. */
+  get pendingLoads(): number {
+    return this.assets.inflight + this.bitmaps.inflight + this.sprites.inflight + (this.loading !== null ? 1 : 0)
+      + [...this.sheets.values()].filter((v) => v === null).length + [...this.visualImages.values()].filter((v) => v === null).length;
+  }
+
   // ---- Stage: map ----
   loadMap(n: number): void {
     if (n < 0) { this.mapModel = null; this.loading = null; return; }

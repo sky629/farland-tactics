@@ -11,8 +11,11 @@ export class AssetError extends Error {
 /** Fetches exported assets (tools/ft2_export.py output) relative to `base`. Images are decoded once and cached. */
 export class AssetLoader {
   private readonly images = new Map<string, Promise<IndexedImage>>();
+  private inflightCount = 0;
 
   constructor(private readonly base = 'assets') {}
+  /** Fetches started and not yet settled (the auto-play clock waits while this is above zero). */
+  get inflight(): number { return this.inflightCount; }
 
   async index(): Promise<AssetIndex> {
     const path = `${this.base}/index.json`;
@@ -49,14 +52,20 @@ export class AssetLoader {
   }
 
   private async fetchBytes(path: string): Promise<ArrayBuffer> {
-    const res = await fetch(path);
-    if (!res.ok) throw new AssetError(path, `HTTP ${res.status}`);
-    return res.arrayBuffer();
+    this.inflightCount++;
+    try {
+      const res = await fetch(path);
+      if (!res.ok) throw new AssetError(path, `HTTP ${res.status}`);
+      return await res.arrayBuffer();
+    } finally { this.inflightCount--; }
   }
 
   private async fetchJson(path: string): Promise<unknown> {
-    const res = await fetch(path);
-    if (!res.ok) throw new AssetError(path, `HTTP ${res.status}`);
-    try { return await res.json(); } catch { throw new AssetError(path, 'invalid JSON'); }
+    this.inflightCount++;
+    try {
+      const res = await fetch(path);
+      if (!res.ok) throw new AssetError(path, `HTTP ${res.status}`);
+      try { return await res.json(); } catch { throw new AssetError(path, 'invalid JSON'); }
+    } finally { this.inflightCount--; }
   }
 }

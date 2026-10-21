@@ -17,6 +17,7 @@ export interface ListRow { text: string; enabled?: boolean }
 /** The frame layer the boxes live in, the templates, and the stack of open boxes (top last). */
 export class Dialogs {
   private readonly stack: DialogBox<unknown>[] = [];
+  private openedTotal = 0;
   constructor(readonly layer: HTMLElement, readonly templates: Record<string, DialogTemplate>) {
     const doc = layer.ownerDocument;
     doc.addEventListener('keydown', (e) => {                                   // Esc cancels the top box wherever the focus went; no key reaches the game while a box is open
@@ -29,7 +30,11 @@ export class Dialogs {
     layer.addEventListener('contextmenu', (e) => { if (this.stack.length > 0) e.preventDefault(); });
   }
   get busy(): boolean { return this.stack.length > 0; }
-  opened(box: DialogBox<unknown>): void { this.stack.push(box); }
+  /** How many boxes have ever opened (the auto-play notices a new one by the count going up). */
+  get openedCount(): number { return this.openedTotal; }
+  /** The newest open box's element, or null. */
+  get top(): HTMLElement | null { return this.stack[this.stack.length - 1]?.el ?? null; }
+  opened(box: DialogBox<unknown>): void { this.stack.push(box); this.openedTotal++; }
   closed(box: DialogBox<unknown>): void { const i = this.stack.indexOf(box); if (i >= 0) this.stack.splice(i, 1); }
   /** Every open box is cancelled (a load, a script's end): their promises settle with their cancel value. */
   closeAll(): void { for (const box of [...this.stack].reverse()) box.cancel(true); }
@@ -57,7 +62,7 @@ export class ControlSet {
       const el = this.make(doc, c);
       el.style.left = `${c.left}px`; el.style.top = `${c.top}px`; el.style.width = `${c.width}px`; el.style.height = `${c.height}px`;
       this.body.appendChild(el);
-      if (c.id !== null) this.byId.set(c.id, el);
+      if (c.id !== null) { this.byId.set(c.id, el); el.dataset['id'] = String(c.id); }   // the template's control id, for tests and the auto-play
     }
   }
   private make(doc: Document, c: LaidControl): HTMLElement {
@@ -127,7 +132,7 @@ export class DialogBox<T> extends ControlSet {
     const doc = host.layer.ownerDocument;
     this.cancelValue = opts.cancel ?? null;
     this.backdrop = doc.createElement('div'); this.backdrop.className = 'w95-backdrop';
-    const box = doc.createElement('div'); box.className = 'w95 w95-dialog w95-raised'; box.setAttribute('role', 'dialog'); box.tabIndex = -1;
+    const box = doc.createElement('div'); box.className = 'w95 w95-dialog w95-raised'; box.setAttribute('role', 'dialog'); box.tabIndex = -1; box.dataset['template'] = String(templateId);
     box.style.width = `${this.layout.width + 6}px`; box.style.height = `${this.layout.height + TITLE_H + 6 + extraH}px`;
     const title = doc.createElement('div'); title.className = 'w95-title'; title.textContent = this.layout.title; box.appendChild(title);
     box.appendChild(this.body);

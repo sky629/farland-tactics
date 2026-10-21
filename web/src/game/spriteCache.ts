@@ -8,6 +8,8 @@ export class SpriteCache implements SpriteProvider {
   private readonly models = new Map<string, ApdModel | null>();
   private readonly pending = new Set<string>();
   constructor(private readonly loader: AssetLoader, private readonly renderer: Renderer, private readonly known: Set<string>, private readonly onError: (e: unknown) => void) {}
+  /** APDs requested and not yet ready (or failed). */
+  get inflight(): number { return this.pending.size; }
   apd(name: string): ApdModel | null {
     if (this.models.has(name)) return this.models.get(name)!;
     if (!this.known.has(name)) { this.models.set(name, null); return null; }
@@ -21,6 +23,7 @@ export class SpriteCache implements SpriteProvider {
           await this.renderer.prepareApd(model);
           this.models.set(name, model);
         } catch (e) { this.models.set(name, null); this.onError(e); }
+        finally { this.pending.delete(name); }
       })();
     }
     return null;

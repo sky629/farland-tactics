@@ -4,6 +4,8 @@ export class BitmapCache {
   private readonly pending = new Map<string, Promise<CanvasImageSource | null>>();
 
   constructor(private readonly base: string, private readonly known: Set<string>, private readonly onError: (name: string) => void = () => {}) {}
+  /** Images requested and not yet loaded (or failed). */
+  get inflight(): number { return this.pending.size; }
 
   /** Starts loading on first use; null until the image is ready or when it does not exist. */
   get(name: string): CanvasImageSource | null {
