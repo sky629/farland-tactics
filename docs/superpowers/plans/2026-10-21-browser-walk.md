@@ -65,12 +65,12 @@
   모듈 수준 상태(`REACH`, `LESSONS`, `boldness`, `rushing`)는 그대로 모듈 수준에 둔다 — 한 번에 Walker 하나만 산다(문서 주석에 적는다).
 - Consumes: 테스트의 기존 헬퍼 함수 전부(`enemyField` … `shopping`)는 그대로 `walker.ts` 로 옮긴다(비공개). 테스트의 `it` 본문 중 결정 논리는 `step()` 안으로, `stage.calls` 를 읽어 반응하던 부분은 `onModal`/`onLog` 로 간다.
 
-- [ ] **Step 1: 추출 전 요약을 남긴다**
+- [x] **Step 1: 추출 전 요약을 남긴다**
 
 Run: `cd web && rtk proxy npx vitest run test/campaignWalk.test.ts --reporter=verbose --silent=false 2>&1 | grep -E "^(picks|strikes|stages|battles at|towns|mode) " > /private/tmp/claude-501/-Users-kang-Documents-dev-farland-tactics/c85999d5-2c72-44f9-a278-18cf9d1354e5/scratchpad/walk-summary-before.txt; wc -l $_`
 Expected: 6 줄(picks, strikes, stages, battles at, towns, mode).
 
-- [ ] **Step 2: 실패하는 테스트 `web/test/walker.test.ts`**
+- [x] **Step 2: 실패하는 테스트 `web/test/walker.test.ts`**
 
 ```ts
 import { describe, expect, it } from 'vitest';
@@ -105,14 +105,14 @@ describe('Walker', () => {
 ```
 (세 번째 테스트는 Task 2 의 규칙을 미리 핀다: Task 1 에서는 `it.skip`, Task 2 에서 켠다.)
 
-- [ ] **Step 3: 실패 확인**
+- [x] **Step 3: 실패 확인**
 
 Run: `cd web && rtk proxy npx vitest run test/walker.test.ts`
 Expected: FAIL — `Cannot find module '../src/dev/walker'`.
 
-- [ ] **Step 4: `web/src/dev/walker.ts` 를 만든다** — 테스트의 헬퍼 함수와 `it` 본문을 옮기고, `stage.*` 접근을 전부 `WalkWorld` 와 `GameCore` 로 바꾼다. 매핑: `stage.clicks = 1` → `world.click()`; `stage.modal = v` → `world.answer(kind, v)`; `stage.presenter.busy` → `world.presenterBusy()`; `stage.saves.get(30|31)` → `world.autosave(30|31)`; `res.rng = Rng.fromSeed(s)` → `world.reseed(s)`; `log.push` → 내부 배열 + `world.log`. `stage.visual = null` 과 `stage.fading = false` 는 옮기지 않는다(MapStage 의 일). 파일 머리에 모듈 주석: 결정 논리의 출처(캠페인 워크), 모듈 수준 상태의 제약.
+- [x] **Step 4: `web/src/dev/walker.ts` 를 만든다** — 테스트의 헬퍼 함수와 `it` 본문을 옮기고, `stage.*` 접근을 전부 `WalkWorld` 와 `GameCore` 로 바꾼다. 매핑: `stage.clicks = 1` → `world.click()`; `stage.modal = v` → `world.answer(kind, v)`; `stage.presenter.busy` → `world.presenterBusy()`; `stage.saves.get(30|31)` → `world.autosave(30|31)`; `res.rng = Rng.fromSeed(s)` → `world.reseed(s)`; `log.push` → 내부 배열 + `world.log`. `stage.visual = null` 과 `stage.fading = false` 는 옮기지 않는다(MapStage 의 일). 파일 머리에 모듈 주석: 결정 논리의 출처(캠페인 워크), 모듈 수준 상태의 제약.
 
-- [ ] **Step 5: 테스트 하네스를 얇게 만든다** — `campaignWalk.test.ts` 는 `MapStage` + `WalkWorld` 구현(`click: () => { stage.clicks = 1 }`, `answer: (_, v) => { stage.modal = v }`, `autosave: (n) => stage.saves.get(n) ?? null`, `reseed: (s) => { res.rng = Rng.fromSeed(s) }`) + 루프:
+- [x] **Step 5: 테스트 하네스를 얇게 만든다** — `campaignWalk.test.ts` 는 `MapStage` + `WalkWorld` 구현(`click: () => { stage.clicks = 1 }`, `answer: (_, v) => { stage.modal = v }`, `autosave: (n) => stage.saves.get(n) ?? null`, `reseed: (s) => { res.rng = Rng.fromSeed(s) }`) + 루프:
   ```ts
   for (let frame = 0; frame < 10_000_000 && !walker.finished && …stop conditions; frame++) {
     now += 50;
@@ -125,21 +125,21 @@ Expected: FAIL — `Cannot find module '../src/dev/walker'`.
   ```
   콘솔 요약과 단언은 `walker.summary()` 에서 같은 문구로 찍는다. `WALK_SAVE_DIR`/`WALK_FROM`/`WALK_STOP_*` 는 `WalkerOptions`(`onAutosave`, `from`, `stopStage`, `stopBattles`)로 전달한다.
 
-- [ ] **Step 6: 두 테스트 통과 + 요약 동일 확인**
+- [x] **Step 6: 두 테스트 통과 + 요약 동일 확인**
 
 Run: `cd web && rtk proxy npx vitest run test/walker.test.ts test/campaignWalk.test.ts --reporter=verbose --silent=false 2>&1 | tee /private/tmp/claude-501/-Users-kang-Documents-dev-farland-tactics/c85999d5-2c72-44f9-a278-18cf9d1354e5/scratchpad/walk-after.txt | grep -E "Tests |FAIL"; grep -E "^(picks|strikes|stages|battles at|towns|mode) " /private/tmp/claude-501/-Users-kang-Documents-dev-farland-tactics/c85999d5-2c72-44f9-a278-18cf9d1354e5/scratchpad/walk-after.txt | diff - /private/tmp/claude-501/-Users-kang-Documents-dev-farland-tactics/c85999d5-2c72-44f9-a278-18cf9d1354e5/scratchpad/walk-summary-before.txt && echo SAME`
 Expected: 모두 통과(세 번째 walker 테스트는 skip), `SAME`.
 
-- [ ] **Step 7: 커밋** `refactor(web): the campaign walker as a module (dev/walker.ts) behind WalkWorld; the test is its headless harness`
+- [x] **Step 7: 커밋** `refactor(web): the campaign walker as a module (dev/walker.ts) behind WalkWorld; the test is its headless harness`
 
 ### Task 2: 경험치 받는 이를 대화상자 행 집합에 맞춘다
 
 **Files:** Modify `web/src/dev/walker.ts`(onModal 'result'), `web/test/walker.test.ts`(skip 해제)
 
-- [ ] **Step 1: `it.skip` → `it`; 실패 확인** — Expected: FAIL(숨은 유닛이 풀을 받을 수 있음 또는 선택 집합 차이).
-- [ ] **Step 2: `onModal('result')` 의 `party` 를 `core.campaign.units.filter((u): u is Unit => u !== null && u.slot < PARTY_SLOTS && u.status !== 9)` 로 바꾼다** (대화상자 `dialogue.ts` 122행과 같은 규칙). 사다리(fighter/flyer 선택)는 그대로.
-- [ ] **Step 3: 통과 + 캠페인 워크 초록 확인** — Run: `cd web && rtk proxy npx vitest run test/walker.test.ts test/campaignWalk.test.ts 2>&1 | grep -E "Tests |FAIL"`. Expected: 모두 통과. 요약이 달라졌으면 그 차이를 커밋 메시지에 적는다.
-- [ ] **Step 4: 커밋** `fix(dev): the walker gives the EXP pool only to a unit dialog 162 lists (no hidden member)`
+- [x] **Step 1: `it.skip` → `it`; 실패 확인** — Expected: FAIL(숨은 유닛이 풀을 받을 수 있음 또는 선택 집합 차이).
+- [x] **Step 2: `onModal('result')` 의 `party` 를 `core.campaign.units.filter((u): u is Unit => u !== null && u.slot < PARTY_SLOTS && u.status !== 9)` 로 바꾼다** (대화상자 `dialogue.ts` 122행과 같은 규칙). 사다리(fighter/flyer 선택)는 그대로.
+- [x] **Step 3: 통과 + 캠페인 워크 초록 확인** — Run: `cd web && rtk proxy npx vitest run test/walker.test.ts test/campaignWalk.test.ts 2>&1 | grep -E "Tests |FAIL"`. Expected: 모두 통과. 요약이 달라졌으면 그 차이를 커밋 메시지에 적는다.
+- [x] **Step 4: 커밋** `fix(dev): the walker gives the EXP pool only to a unit dialog 162 lists (no hidden member)`
 
 ### Task 3: 계측 — 자산 미결 카운터, 대화상자 DOM 표식
 
@@ -150,7 +150,7 @@ Expected: 모두 통과(세 번째 walker 테스트는 skip), `SAME`.
 **Interfaces:**
 - Produces: `AssetLoader.inflight: number`(fetch 시작 +1, 끝 −1), `BitmapCache.inflight: number`(= pending.size), `SpriteCache.inflight: number`(= pending.size), `BrowserStage.loading: number` = `assets.inflight + bitmaps.inflight + sprites.inflight + (loading map ? 1 : 0) + (sheets 중 값이 null 인 수) + (visualImages 중 값이 null 인 수)`; `Dialogs.opened: number`(상자가 열릴 때마다 +1, 줄지 않음), `Dialogs.top`.
 
-- [ ] **Step 1: 실패하는 테스트**
+- [x] **Step 1: 실패하는 테스트**
 ```ts
 // web/test/assetInflight.test.ts
 it('AssetLoader.inflight counts fetches from start to settle', async () => {
@@ -162,10 +162,10 @@ it('AssetLoader.inflight counts fetches from start to settle', async () => {
 it('BitmapCache.inflight is the number of images still loading', …);   // Image 를 스텁: onload 를 수동으로 부른다
 it('SpriteCache.inflight …', …);                                        // loader.apd 를 영원히 기다리게 하는 스텁
 ```
-- [ ] **Step 2: 실패 확인** — Run: `cd web && rtk proxy npx vitest run test/assetInflight.test.ts`. Expected: FAIL(`inflight` undefined).
-- [ ] **Step 3: 구현** — 세 카운터와 `BrowserStage.loading`, `Dialogs.opened/top`, `ControlSet` 의 `data-id`(id 가 null 이 아닐 때), `DialogBox` 의 `data-template`.
-- [ ] **Step 4: 통과 + 전체 검사** — Run: `cd web && rtk proxy npx vitest run test/assetInflight.test.ts test/winDialog.test.ts && rtk proxy npx tsc --noEmit -p .`. Expected: 통과, tsc 조용.
-- [ ] **Step 5: 커밋** `feat(web): instrumentation — inflight asset counters, Dialogs.opened/top, data-id/data-template on dialog DOM`
+- [x] **Step 2: 실패 확인** — Run: `cd web && rtk proxy npx vitest run test/assetInflight.test.ts`. Expected: FAIL(`inflight` undefined).
+- [x] **Step 3: 구현** — 세 카운터와 `BrowserStage.loading`, `Dialogs.opened/top`, `ControlSet` 의 `data-id`(id 가 null 이 아닐 때), `DialogBox` 의 `data-template`.
+- [x] **Step 4: 통과 + 전체 검사** — Run: `cd web && rtk proxy npx vitest run test/assetInflight.test.ts test/winDialog.test.ts && rtk proxy npx tsc --noEmit -p .`. Expected: 통과, tsc 조용.
+- [x] **Step 5: 커밋** `feat(web): instrumentation — inflight asset counters, Dialogs.opened/top, data-id/data-template on dialog DOM`
 
 ### Task 4: 순수 판정 모듈 `web/src/dev/walkChecks.ts`
 
@@ -185,11 +185,11 @@ it('SpriteCache.inflight …', …);                                        // l
   export class StuckWatch { constructor(limitMs = 60000, sceneLimitMs = 220000); update(s: WalkSnapshot): boolean /* true = stuck */ }
   //  서명 = mode|pc|turn|dialogsOpened|fadeAlpha(소수 둘째 자리) ; visualPlaying 이면 서명 = `scene:${visualPart}` 에 sceneLimit 적용
   ```
-- [ ] **Step 1: 실패하는 테스트** — 위 Review Focus 1·4·5 를 포함: `momentsBetween` 이 map+dialog 둘을 돌려주는 경우, `blankFlag(1, 1, false) === false`, `blankFlag(1, 0, true) === false`, `blankFlag(0.995, 0, false) === true`, `overflowing([{-1,0,10,10}], screen)=1`, `StuckWatch`: 60초 같은 서명 → true, 씬 중 100초 → false, 씬 중 230초 → true, 부가 바뀌면 리셋.
-- [ ] **Step 2: 실패 확인** — Run: `cd web && rtk proxy npx vitest run test/walkChecks.test.ts`. Expected: FAIL(모듈 없음).
-- [ ] **Step 3: 구현** — 서명·규칙은 위 인터페이스 주석대로.
-- [ ] **Step 4: 통과 확인** — Expected: PASS.
-- [ ] **Step 5: 커밋** `feat(dev): walk checks — capture moments, blank/overflow/stuck rules`
+- [x] **Step 1: 실패하는 테스트** — 위 Review Focus 1·4·5 를 포함: `momentsBetween` 이 map+dialog 둘을 돌려주는 경우, `blankFlag(1, 1, false) === false`, `blankFlag(1, 0, true) === false`, `blankFlag(0.995, 0, false) === true`, `overflowing([{-1,0,10,10}], screen)=1`, `StuckWatch`: 60초 같은 서명 → true, 씬 중 100초 → false, 씬 중 230초 → true, 부가 바뀌면 리셋.
+- [x] **Step 2: 실패 확인** — Run: `cd web && rtk proxy npx vitest run test/walkChecks.test.ts`. Expected: FAIL(모듈 없음).
+- [x] **Step 3: 구현** — 서명·규칙은 위 인터페이스 주석대로.
+- [x] **Step 4: 통과 확인** — Expected: PASS.
+- [x] **Step 5: 커밋** `feat(dev): walk checks — capture moments, blank/overflow/stuck rules`
 
 ### Task 5: 페이지의 자동 플레이 모드 `web/src/play/walk.ts` + `main.ts` 연결
 
@@ -209,9 +209,9 @@ it('SpriteCache.inflight …', …);                                        // l
 - 장 = `walker.summary().battles.length`. `ui-*` 순간: 전투마다 `battle-start` 포착 뒤 한 번, `document.dispatchEvent(new KeyboardEvent('keydown', { key: 'F2' }))` → 탭 4개(`.w95-tab` 순서대로 클릭, 각각 포착 `ui-unitlist-N`) → Esc; F3 → `ui-fullmap` → F3; 행동할 파티원의 셀 중심에 `contextmenu` 이벤트(`stage.cellOf` + 카메라 + 프레임 배율) → `ui-popup` → Esc. 이 동안 Walker 는 쉬게 한다(`presenterBusy` 와 별개로 `uiBusy` 플래그).
 - 시작점: `params.get('from')` 이면 `fetch` → `core.loadGame(bytes)` + `WalkerOptions.from`; 아니면 `core.newGame()`. `stop` 파라미터 → `stopBattles`.
 
-- [ ] **Step 1: `main.ts` 리팩터(tick/frame 분리, walk 분기)** — Run: `cd web && rtk proxy npx tsc --noEmit -p . && rtk proxy npx vitest run 2>&1 | grep -E "Tests |FAIL"`. Expected: tsc 조용, 전체 통과(플레이 경로 불변).
-- [ ] **Step 2: `walk.ts` 구현** — 위 인터페이스대로. 재사용: `Walker`(Task 1), `walkChecks`(Task 4), `stage.loading`·`dialogs.opened/top`·`data-id`(Task 3).
-- [ ] **Step 3: 짧은 브라우저 실행(ego)** — 개발 서버 `cd web && npx vite --port 5199 --strictPort`(백그라운드), 개발용 세이브 복사 `cp <scratchpad>/saves48/battle-04-stage03.bin web/public/assets/save/zz-walk-04.bin`, ego 라운드 파일 `<scratchpad>/walk-browser/<run>/round-01.mjs`:
+- [x] **Step 1: `main.ts` 리팩터(tick/frame 분리, walk 분기)** — Run: `cd web && rtk proxy npx tsc --noEmit -p . && rtk proxy npx vitest run 2>&1 | grep -E "Tests |FAIL"`. Expected: tsc 조용, 전체 통과(플레이 경로 불변).
+- [x] **Step 2: `walk.ts` 구현** — 위 인터페이스대로. 재사용: `Walker`(Task 1), `walkChecks`(Task 4), `stage.loading`·`dialogs.opened/top`·`data-id`(Task 3).
+- [x] **Step 3: 짧은 브라우저 실행(ego)** — 개발 서버 `cd web && npx vite --port 5199 --strictPort`(백그라운드), 개발용 세이브 복사 `cp <scratchpad>/saves48/battle-04-stage03.bin web/public/assets/save/zz-walk-04.bin`, ego 라운드 파일 `<scratchpad>/walk-browser/<run>/round-01.mjs`:
   ```js
   const task = await taskSpace("ft2 browser walk");
   const page = task.page("p1");
@@ -230,8 +230,8 @@ it('SpriteCache.inflight …', …);                                        // l
   console.log({ shots: m.shots.length, done: m.run.done, stopped: m.run.stopped, counts: m.counts });
   ```
   Run: `ego-browser nodejs <round-01.mjs 내용>`. Expected: 전투 1판이 끝나고 `done: true`, `shots` 가 20장 이상, `counts.error` 없음; PNG 몇 장을 눈으로 확인(대화상자·메뉴 바가 보임, 162 의 막대가 Walker 의 선택대로).
-- [ ] **Step 4: 전체 검사** — `cd web && npm run check`. Expected: 통과.
-- [ ] **Step 5: 커밋** `feat(web): play.html?walk=1 — the walker drives the real page on a virtual clock, captures moments and flags frames for an ego-browser harvester`
+- [x] **Step 4: 전체 검사** — `cd web && npm run check`. Expected: 통과.
+- [x] **Step 5: 커밋** `feat(web): play.html?walk=1 — the walker drives the real page on a virtual clock, captures moments and flags frames for an ego-browser harvester`
 
 ### Task 6: 보고서 `tools/walk_report.py`
 
@@ -240,20 +240,20 @@ it('SpriteCache.inflight …', …);                                        // l
 **Interfaces:**
 - `python3 -I tools/walk_report.py <run-dir>` → `<run-dir>/thumbs/*.jpg`(`sips -Z 160`, 없으면 건너뜀), `<run-dir>/report.html`(로컬: 요약 → 걸린 프레임(원본 `<img>`) → 장별 섬네일 격자, 섬네일 `<a href="shots/…">`), `<run-dir>/summary.html`(아티팩트용: 요약 + 걸린 프레임 원본 base64 + 섬네일 base64; 16 MB 넘으면 섬네일을 장당 앞 12장으로 줄인다).
 - 함수: `load_manifest(path) -> dict`, `chapters(shots) -> dict[int, list]`, `render_report(manifest, thumbs: dict[str, str] | None, inline: bool) -> str`, `main(argv) -> int`.
-- [ ] **Step 1: 실패하는 테스트** — `test_walk_report.py`: 작은 매니페스트(장 0·1, 걸린 프레임 1)와 zlib 로 만든 2×2 PNG 로 `render_report` 가 걸린 프레임 섹션을 먼저, 장 제목 `전투 1` 을 포함하는지; `chapters` 가 battle 로 묶는지; `main` 이 `report.html`·`summary.html` 을 쓰는지.
-- [ ] **Step 2: 실패 확인** — Run: `python3 -I -m unittest tools.test_walk_report`. Expected: FAIL(모듈 없음).
-- [ ] **Step 3: 구현** — 표준 라이브러리만; HTML 은 다크/라이트 토큰, 섬네일 격자 CSS grid.
-- [ ] **Step 4: 통과 확인** — Expected: OK. 그리고 Task 5 의 짧은 실행 디렉터리로 `python3 -I tools/walk_report.py <run-dir>` → `report.html` 을 브라우저로 열어 본다.
-- [ ] **Step 5: 커밋** `feat(tools): walk_report.py — thumbnails and the chapter report of a browser walk`
+- [x] **Step 1: 실패하는 테스트** — `test_walk_report.py`: 작은 매니페스트(장 0·1, 걸린 프레임 1)와 zlib 로 만든 2×2 PNG 로 `render_report` 가 걸린 프레임 섹션을 먼저, 장 제목 `전투 1` 을 포함하는지; `chapters` 가 battle 로 묶는지; `main` 이 `report.html`·`summary.html` 을 쓰는지.
+- [x] **Step 2: 실패 확인** — Run: `python3 -I -m unittest tools.test_walk_report`. Expected: FAIL(모듈 없음).
+- [x] **Step 3: 구현** — 표준 라이브러리만; HTML 은 다크/라이트 토큰, 섬네일 격자 CSS grid.
+- [x] **Step 4: 통과 확인** — Expected: OK. 그리고 Task 5 의 짧은 실행 디렉터리로 `python3 -I tools/walk_report.py <run-dir>` → `report.html` 을 브라우저로 열어 본다.
+- [x] **Step 5: 커밋** `feat(tools): walk_report.py — thumbnails and the chapter report of a browser walk`
 
 ### Task 7: 전체 실행과 결함 처리
 
 **Files:** 코드 변경은 발견한 결함에 따라(각각 TDD로 별도 커밋). 결과물은 스크래치패드.
 
-- [ ] **Step 1: 새 게임부터 실행** — `?walk=1&seed=7`, 라운드 파일 `round-01.mjs`…(라운드마다 새 파일, 같은 작업 공간 이름). 라운드 끝마다 `manifest.json` 갱신. Expected: `done: true, stopped: null`, 전투 33, `counts.error`·`stuck`·`warn` 없음.
-- [ ] **Step 2: 보고서 생성** — `python3 -I tools/walk_report.py <run-dir>`; `summary.html` 을 아티팩트로 발행하고 완성 보고 아티팩트에 §13 으로 연결.
-- [ ] **Step 3: 걸린 프레임 분류** — `blank`·`overflow` 는 보고서에서 사람이 판단할 수 있게 그대로; 진짜 결함은 systematic-debugging 으로 원인을 찾고 TDD 로 고친 뒤 그 구간만 `&from=<그 전투의 자동 세이브>&stop=1` 로 다시 돌린다. 결함과 수정은 커밋 메시지와 보고서 §13 에 적는다.
-- [ ] **Step 4: 문서** — `docs/manual.md` §7.10 "끝까지 가는지 확인하는 법" 에 브라우저 워크(명령, 파라미터, 보고서 읽는 법) 추가; `README.md` 검사 행; 메모리 파일. 커밋 `docs: the browser walk`.
+- [x] **Step 1: 새 게임부터 실행** — `?walk=1&seed=7`, 라운드 파일 `round-01.mjs`…(라운드마다 새 파일, 같은 작업 공간 이름). 라운드 끝마다 `manifest.json` 갱신. Expected: `done: true, stopped: null`, 전투 33, `counts.error`·`stuck`·`warn` 없음.
+- [x] **Step 2: 보고서 생성** — `python3 -I tools/walk_report.py <run-dir>`; `summary.html` 을 아티팩트로 발행하고 완성 보고 아티팩트에 §13 으로 연결.
+- [x] **Step 3: 걸린 프레임 분류** — `blank`·`overflow` 는 보고서에서 사람이 판단할 수 있게 그대로; 진짜 결함은 systematic-debugging 으로 원인을 찾고 TDD 로 고친 뒤 그 구간만 `&from=<그 전투의 자동 세이브>&stop=1` 로 다시 돌린다. 결함과 수정은 커밋 메시지와 보고서 §13 에 적는다.
+- [x] **Step 4: 문서** — `docs/manual.md` §7.10 "끝까지 가는지 확인하는 법" 에 브라우저 워크(명령, 파라미터, 보고서 읽는 법) 추가; `README.md` 검사 행; 메모리 파일. 커밋 `docs: the browser walk`.
 
 ### Task 8: 최종 리뷰
 
