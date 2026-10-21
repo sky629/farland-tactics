@@ -257,4 +257,4 @@ it('SpriteCache.inflight …', …);                                        // l
 
 ### Task 8: 최종 리뷰
 
-- [ ] 리뷰 패키지 → Fable 리뷰어(파일 수정 금지) → Critical/Important 수정(RED→GREEN) → `npm run check` + Python → 커밋.
+- [x] 리뷰 패키지 → Fable 리뷰어(파일 수정 금지) → Critical/Important 수정(RED→GREEN) → `npm run check` + Python → 커밋.

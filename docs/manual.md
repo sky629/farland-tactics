@@ -323,7 +323,13 @@ WALK_FROM=/tmp/saves/battle-30-stage16.bin WALK_STOP_STAGE=17 npx vitest run tes
 
 1. 개발 서버를 연다: `cd web && npx vite --port 5199 --strictPort`.
 2. `http://localhost:5199/play.html?walk=1&seed=7` 을 연다. 페이지가 새 게임을 시작하고 가상 시계(프레임당 1000/60 ms, 기다리지 않음)로 돈다. 자산을 읽는 동안에는 시계가 멈춘다. 소리는 끈다. 세이브는 메모리에만 남는다.
-3. 페이지는 그림 요청마다 `window.__walk.pending` 을 두고 멈춘다. 수집기(ego 브라우저의 Node 스크립트: `page.waitForFunction` → `Page.captureScreenshot` → `__walk.resume()`)가 찍고 재개한다. 수집기 없이 돌리려면 `&shots=0`.
+3. 페이지는 그림 요청마다 `window.__walk.pending` 을 두고 멈춘다. 수집기 `tools/walk_browser.mjs`(ego 브라우저의 Node 스크립트: `page.waitForFunction` → `Page.captureScreenshot` → `__walk.resume()`)가 찍고 재개한다. 실행 폴더와 주소를 채워서 넣는다. 수집기 없이 돌리려면 `&shots=0`.
+
+   ```bash
+   DIR=/tmp/walk-$(date +%H%M); mkdir -p "$DIR/shots"
+   sed -e "s#__RUN_DIR__#$DIR#" -e "s#__WALK_URL__#http://localhost:5199/play.html?walk=1\&seed=7#" tools/walk_browser.mjs > "$DIR/round-01.mjs"
+   ego-browser nodejs < "$DIR/round-01.mjs"
+   ```
 4. 실행을 중간에 멈추려면 그 탭을 닫는다(ego 스크립트는 ego 안의 Node 헬퍼에서 돌아 CLI 프로세스를 죽여도 끝나지 않고, 같은 탭을 두 수집기가 나눠 가지면 사진이 섞인다). 끝나면 `__walk.manifest()` 가 사진 목록·판정 수·로그를 준다. `python3 -I tools/walk_report.py <실행 폴더>` 가 `report.html`(장별 섬네일, 걸린 프레임 먼저)과 `summary.html`(공유용 한 파일)을 만든다.
 
 | 파라미터 | 뜻 |
@@ -336,7 +342,7 @@ WALK_FROM=/tmp/saves/battle-30-stage16.bin WALK_STOP_STAGE=17 npx vitest run tes
 
 찍는 순간: 맵이 바뀔 때, 전투의 첫 턴·마지막 일격·결과 대화상자, 마을에 들어갈 때, 연출 장면의 부마다, 대화상자가 열릴 때, 10초마다, 그리고 전투마다 한 번 플레이어가 여는 화면(F2 유니트 일람 탭 넷, F3 전체 맵, 오른쪽 클릭 팝업). 자동 판정: 콘솔 오류, 게임 경고(그림 못 읽음 등), 페이드 중이 아닌데 한 색뿐인 프레임(`blank`), 640×480 밖으로 나간 대화상자(`overflow`), 60초(연출 장면은 220초) 동안 변화 없음(`stuck`). 걸린 프레임은 종류마다 장(전투)당 3장까지 찍고 나머지는 센다. `blank` 는 맵·마을·스크립트 그림이 하나도 올라와 있지 않은 프레임은 세지 않는다(세이브를 불러온 직후 Restart 라벨의 `FADE_OUT` 이 돌기 전의 한 프레임, 마을에서 시설을 고른 뒤 맵 없이 도는 페이드아웃). 그런 프레임은 원작 창도 검다. 페이드 또는 검은 색조(`DIM_UI 0` 의 암전)가 화면의 99 % 이상을 덮은 프레임도 덮인 것으로 본다(어두운 장면은 99.5 % 페이드 아래에서 완전한 검정으로 반올림된다). 걸린 사진마다 `note` 에 그 순간의 스크립트 명령(`eventNN@pc`), 페이드 알파, 맵·마을 유무, 카메라 좌표가 붙어서 원인을 바로 읽을 수 있다. `blank` 와 `overflow` 는 사람이 보고 판단한다.
 
-**2026-10-21 실행 결과.** 씨앗 7로 새 게임에서 엔딩까지 돌렸다: 전투 33개, 사진 4,008장, 1,624,208 프레임(가상 7시간 31분, 실제 2시간 15분), 콘솔 오류 0, 게임 경고 0, `overflow` 0, `stuck` 0. 이 검증이 찾아서 고친 결함은 세 가지다.
+**2026-10-21 실행 결과.** 씨앗 7로 새 게임에서 엔딩까지 돌렸다: 전투 33개, 사진 4,008장, 1,624,208 프레임(가상 7시간 31분, 실제 2시간 15분), 콘솔 오류 0, 게임 경고 0, `overflow` 0, `stuck` 0, 검은 프레임 828개(사진 19장). 이 검증이 찾아서 고친 결함은 세 가지다.
 
 1. 전체 맵 창의 첫 프레임이 맵 조각 하나를 화면에 비추던 것(렌더러가 조각을 화면 밖 캔버스에 그린다).
 2. ASK 질문이 대본 원문(`+일을_받아들이겠습니까?`) 그대로 보이던 것(대본 표기를 풀고, `+` 질문은 작은 확인 상자 163에 띄운다).
