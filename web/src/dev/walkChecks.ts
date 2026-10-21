@@ -6,7 +6,7 @@
 export interface WalkSnapshot {
   t: number;                 // virtual ms
   mode: string;              // GameCore.mode
-  mapReady: boolean;
+  mapGen: number;            // how many distinct maps have been shown (a new map = a new picture, even when it loads within the frame)
   turn: number | null;       // battle turn, null outside a battle
   phase: string | null;      // battle phase kind
   selMode: string | null;    // the player selection mode
@@ -25,7 +25,7 @@ export const TICK_MS = 10_000;
 export function momentsBetween(prev: WalkSnapshot | null, cur: WalkSnapshot, lastTickT: number): string[] {
   if (!prev) return [];
   const out: string[] = [];
-  if (!prev.mapReady && cur.mapReady) out.push('map');
+  if (cur.mapGen > prev.mapGen) out.push('map');
   if (cur.turn === 1 && cur.phase === 'player' && cur.selMode === 'idle' && !(prev.turn === 1 && prev.phase === 'player')) out.push('battle-start');
   if (cur.phase === 'end' && prev.phase !== 'end') out.push('battle-end');
   if (!prev.town && cur.town) out.push('town');

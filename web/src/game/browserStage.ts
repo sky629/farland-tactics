@@ -308,6 +308,8 @@ export class BrowserStage implements Stage {
   }
   visualDone(): boolean { return !this.player.playing; }
   get visualPlaying(): boolean { return this.player.playing; }
+  /** The part the visual scene is in, null when none plays. */
+  get visualPart(): number | null { return this.player.playing ? this.player.part : null; }
   /** Slot image of the current scene with the object's color key; null while it loads or when the list has no such slot. */
   private visualImage(slot: number, key: number | null): VisualImage | null {
     const name = this.visualNames.get(this.visualScene)?.get(slot);

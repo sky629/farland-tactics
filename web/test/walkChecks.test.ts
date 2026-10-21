@@ -1,19 +1,19 @@
 import { describe, expect, it } from 'vitest';
 import { blankFlag, blankRatio, momentsBetween, overflowing, StuckWatch, type WalkSnapshot } from '../src/dev/walkChecks';
 
-const snap = (over: Partial<WalkSnapshot> = {}): WalkSnapshot => ({ t: 0, mode: 'script', mapReady: false, turn: null, phase: null, selMode: null, town: false, visualPart: null, visualPlaying: false, dialogsOpened: 0, dialogTemplate: null, fadeAlpha: 0, pc: 0, ...over });
+const snap = (over: Partial<WalkSnapshot> = {}): WalkSnapshot => ({ t: 0, mode: 'script', mapGen: 0, turn: null, phase: null, selMode: null, town: false, visualPart: null, visualPlaying: false, dialogsOpened: 0, dialogTemplate: null, fadeAlpha: 0, pc: 0, ...over });
 
 describe('momentsBetween: what a frame is worth a picture for', () => {
   it('the first frame sets the baseline and is no moment', () => {
     expect(momentsBetween(null, snap(), 0)).toEqual([]);
   });
   it('a map arriving and a dialog opening in the same frame are both moments, in that order', () => {
-    const prev = snap(), cur = snap({ mapReady: true, dialogsOpened: 1, dialogTemplate: '126' });
+    const prev = snap(), cur = snap({ mapGen: 1, dialogsOpened: 1, dialogTemplate: '126' });
     expect(momentsBetween(prev, cur, 0)).toEqual(['map', 'dialog-126']);
   });
   it('battle-start fires once at the first idle player phase of turn 1; battle-end at the first end phase', () => {
-    const t1 = snap({ mode: 'battle', mapReady: true, turn: 1, phase: 'player', selMode: 'idle' });
-    expect(momentsBetween(snap({ mode: 'battle', mapReady: true }), t1, 0)).toEqual(['battle-start']);
+    const t1 = snap({ mode: 'battle', mapGen: 1, turn: 1, phase: 'player', selMode: 'idle' });
+    expect(momentsBetween(snap({ mode: 'battle', mapGen: 1 }), t1, 0)).toEqual(['battle-start']);
     expect(momentsBetween(t1, { ...t1, selMode: 'menu' }, 0)).toEqual([]);
     expect(momentsBetween({ ...t1, turn: 3 }, { ...t1, turn: 3, phase: 'end' }, 0)).toEqual(['battle-end']);
   });

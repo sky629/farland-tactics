@@ -47,7 +47,10 @@ let core: GameCore | null = null;
 let stage: BrowserStage | null = null;
 let panel: Panel | null = null;                                               // the developer's side panel (?dev=1): logs, raw unit data, errors
 let menuBar: MenuBar | null = null; let menuSig = ''; let popup: PopupMenu | null = null;
-const dev = new URLSearchParams(location.search).get('dev') === '1';
+const params = new URLSearchParams(location.search);
+const dev = params.get('dev') === '1';
+const walk = params.get('walk') === '1';                                      // the browser auto-play (play/walk.ts): the walker plays, a virtual clock drives the frames
+let walkLog: ((kind: 'warn' | 'info', text: string) => void) | null = null;
 let shownEvents: BattleEvent[] | null = null;
 let saves: SaveStore | null = null;
 let saveList: (SaveSummary | null)[] = [];
@@ -56,14 +59,14 @@ const refreshSaves = async (): Promise<void> => { if (saves) saveList = await sa
 const showError = (e: unknown) => { const msg = e instanceof AssetError || e instanceof DataError ? e.message : e instanceof Error ? `${e.name}: ${e.message}` : String(e); $('error').textContent = msg; console.error(e); };
 /** A failure that leaves no game to play (missing assets, no dialog templates): shown in the frame, dev panel or not. */
 const showFatal = (e: unknown) => { showError(e); notice(`${$('error').textContent}\n(python3 -I tools/ft2_export.py extracted/FarlandTactics2 web/public/assets 로 자산을 다시 내보낸다)`); };
-const log = (kind: 'warn' | 'info', text: string) => { panel?.log(kind === 'warn' ? `⚠ ${text}` : text); if (kind === 'warn') { console.warn(text); notice(text); } else console.info(text); };
+const log = (kind: 'warn' | 'info', text: string) => { panel?.log(kind === 'warn' ? `⚠ ${text}` : text); if (kind === 'warn') { console.warn(text); notice(text); } else console.info(text); walkLog?.(kind, text); };
 /** The frame's notice strip: a warning the player should see (a missing asset, a save that could not be read); a click hides it. */
 function notice(text: string): void { const el = $('fatal'); el.textContent = text; el.hidden = false; }
 
 /** The game window (menu bar + 640×480 surface) scales as one by an integer factor; the dialogue and Win95 chrome inside scale with it. */
 function resize(): void {
   const host = $('stage');
-  const k = frameScale(host.clientWidth - 16, host.clientHeight - 16);
+  const k = walk ? 1 : frameScale(host.clientWidth - 16, host.clientHeight - 16);   // the auto-play's pictures are 1:1
   $('frameBox').style.width = `${VIEW_W * k}px`; $('frameBox').style.height = `${(VIEW_H + MENU_BAR_H) * k}px`;
   $('frame').style.transform = `scale(${k})`;
 }
@@ -182,13 +185,25 @@ function applySettings(): void {
 }
 
 let endedShown = false;
-function frame(now: number): void {
+/** One frame of the page: the game, the menu state, then the picture (draw). The real loop (frame) and the auto-play's virtual clock both call it. */
+function tick(now: number): void {
   try {
     if (core && stage) {
       core.frame(now);
       if (menuBar && menuRef) { const sig = menuSignature(); if (sig !== menuSig) { menuSig = sig; menuBar.setModel(currentMenu()); } }
-      if (core.mode === 'ended' && !endedShown) { endedShown = true; stage.hideTown(); void showTitle(); }   // the ending (or a game over with nowhere to go) returns to the title
+      if (core.mode === 'ended' && !endedShown) { endedShown = true; stage.hideTown(); if (!walk) void showTitle(); }   // the ending (or a game over with nowhere to go) returns to the title
       if (core.mode !== 'ended') endedShown = false;
+    }
+    draw(now);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);                  // one bad frame must not stop the game
+    if (msg !== lastFrameError) { lastFrameError = msg; showError(e); }
+  }
+}
+/** The picture of the frame: the stage, the 전체맵 window and the dev panel (the auto-play redraws after assets arrive). */
+function draw(now: number): void {
+  {
+    if (core && stage) {
       stage.cellMode = core.mode === 'battle';
       const b = core.battle;
       stage.draw(now, core.campaign.units, b?.state.phase ?? IDLE);
@@ -203,12 +218,9 @@ function frame(now: number): void {
         panel?.showResult(core.result);
       }
     } else renderer.draw({ map: null, sprites: [], camera: { x: 0, y: 0 }, overlay: { grid: false, height: false, land: false, blocked: false }, seeThrough: false });
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);                  // one bad frame must not stop the game
-    if (msg !== lastFrameError) { lastFrameError = msg; showError(e); }
   }
-  requestAnimationFrame(frame);
 }
+function frame(now: number): void { tick(now); requestAnimationFrame(frame); }
 
 /** Every roster a LOAD_UNITS instruction names, so the VM can apply them synchronously. */
 function rosterIds(programs: Program[]): number[] {
@@ -220,7 +232,7 @@ function rosterIds(programs: Program[]): number[] {
 async function boot(): Promise<void> {
   window.addEventListener('resize', resize);
   resize();
-  requestAnimationFrame(frame);
+  if (!walk) requestAnimationFrame(frame);
   try {
     const index = await assets.index();
     if (!(index as { data?: boolean }).data || !index.events || !index.bmp) throw new AssetError('assets/index.json', 'no story data: run tools/ft2_export.py again');
@@ -234,11 +246,14 @@ async function boot(): Promise<void> {
     const rosters = new Map<number, RosterUnit[]>();
     await Promise.all(rosterIds(programs).map(async (n) => { try { rosters.set(n, await data.roster(n)); } catch (e) { showError(e); } }));
     const byStage = new Map(programs.map((p) => [p.stage, p]));
-    const res: Resources = { program: (n) => byStage.get(n) ?? null, roster: (n) => rosters.get(n) ?? null, tables, rng: Rng.fromSeed(Date.now() % 1_000_000) };
+    const res: Resources = { program: (n) => byStage.get(n) ?? null, roster: (n) => rosters.get(n) ?? null, tables, rng: Rng.fromSeed(walk ? Number(params.get('seed') ?? 7) : Date.now() % 1_000_000) };
     const memory = (why: string) => { log('warn', `IndexedDB 를 열 수 없어 세이브는 이 페이지에만 남는다 (${why})`); return new MemoryBackend(); };
-    const opening = IdbBackend.open().catch((e: unknown) => memory(e instanceof Error ? e.message : String(e)));
-    const timeout = new Promise<null>((resolve) => setTimeout(() => resolve(null), 2000));
-    saves = new SaveStore((await Promise.race([opening, timeout])) ?? memory('2초 안에 열리지 않음'));   // a hanging open must not keep the title dead
+    if (walk) saves = new SaveStore(new MemoryBackend());                   // the auto-play never touches the browser's saves
+    else {
+      const opening = IdbBackend.open().catch((e: unknown) => memory(e instanceof Error ? e.message : String(e)));
+      const timeout = new Promise<null>((resolve) => setTimeout(() => resolve(null), 2000));
+      saves = new SaveStore((await Promise.race([opening, timeout])) ?? memory('2초 안에 열리지 않음'));   // a hanging open must not keep the title dead
+    }
     const bmpSet = new Set(index.bmp);
     const bitmaps = new BitmapCache('assets', bmpSet, (name) => log('warn', `bitmap ${name} failed to load`));
     const faceUrl = (name: string) => (bmpSet.has(name) ? `assets/bmp/${name}.png` : null);
@@ -274,6 +289,7 @@ async function boot(): Promise<void> {
     core = new GameCore(res, stage); dialogueRef = dialogue;
     if (dev) panel = new Panel(document, { onStart: () => {}, onCommand: (cmd) => core?.dispatch(cmd) }, tables);
     loadSettings();
+    if (walk) stage.setVolumes(0, 0);
     const ui = await data.ui().catch((e: unknown) => { showFatal(e); return null; });
     if (ui) {
       menuRef = ui.menu; midiTracks = [...(index.midi ?? [])]; const model = currentMenu(); menuSig = menuSignature();
@@ -288,7 +304,8 @@ async function boot(): Promise<void> {
     }
     document.addEventListener('visibilitychange', () => { if (!document.hidden) stage?.resumeAudio(); });
     await refreshSaves();
-    void showTitle();
+    if (walk && dialogHost) { $('title').hidden = true; const { startWalk } = await import('./walk'); startWalk({ tick, draw, core, stage, dialogs: dialogHost, dialogue, res, tables, params, onLog: (fn) => { walkLog = fn; } }); }   // no title screen: the walker starts the game itself
+    else void showTitle();
     void bitmaps.load('title');
   } catch (e) { showFatal(e); }
 }
