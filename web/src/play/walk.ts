@@ -131,7 +131,7 @@ async function run(ctx: WalkContext): Promise<void> {
     lastMap = map;
     return { t: now, mode: core.mode, mapGen, turn: b?.state.turn ?? null, phase: b?.state.phase.kind ?? null, selMode: b && b.state.phase.kind === 'player' ? b.state.phase.sel.mode : null, town: stage.townFlags !== null, visualPart: stage.visualPart, visualPlaying: stage.visualPlaying, dialogsOpened: dialogs.openedCount + messages, dialogTemplate: lastTemplate, fadeAlpha: fx.fade?.alpha ?? 0, pc: core.vm.state.pc };
   };
-  const blank = (cur: WalkSnapshot): boolean => { sctx.drawImage(view, 0, 0, 32, 24); return blankFlag(blankRatio(sctx.getImageData(0, 0, 32, 24).data), cur.fadeAlpha, cur.visualPlaying); };
+  const blank = (cur: WalkSnapshot): boolean => { if (cur.mode === 'ended') return false; sctx.drawImage(view, 0, 0, 32, 24); return blankFlag(blankRatio(sctx.getImageData(0, 0, 32, 24).data), cur.fadeAlpha, cur.visualPlaying); };   // a game over's black is the script's
   const overflow = (): boolean => {
     const boxes = [...document.querySelectorAll<HTMLElement>('#win .w95-dialog, #win .w95-popup, #win .w95-window')].filter((el) => !el.hidden);
     return boxes.length > 0 && overflowing(boxes.map((el) => el.getBoundingClientRect()), screen.getBoundingClientRect()) > 0;
@@ -176,13 +176,13 @@ async function run(ctx: WalkContext): Promise<void> {
     const cur = snapshot();
     const moments = momentsBetween(prev, cur, lastTick); prev = cur;
     if (moments.includes('tick')) lastTick = now;
-    if (moments.includes('battle-start')) chapterNo++;
+    const newBattle = walker.battleCount() > chapterNo; chapterNo = walker.battleCount();   // a retry replays the same chapter
     if (blank(cur)) flag('blank');
     if (overflow()) flag('overflow');
     if (stuck.update(cur)) { flag('stuck'); stopped = 'stuck'; }
     const flags = pendingFlags.splice(0);
     for (const m of [...moments, ...flags]) await capture(m, flags);
-    if (moments.includes('battle-start')) { await uiTour(); prev = snapshot(); }   // the tour's own boxes are not moments
+    if (moments.includes('battle-start') && newBattle) { await uiTour(); prev = snapshot(); }   // once a battle, not again on its retries; the tour's own boxes are not moments
     if (stopped) break;
     if (walker.finished) { await capture('end', []); break; }
     await yieldNow();

@@ -484,6 +484,8 @@ export class Walker {
   readonly onLog: (kind: 'warn' | 'info', text: string) => void;
   readonly step: (now: number) => StepResult;
   readonly summary: () => WalkSummary;
+  /** How many battles have begun (their BATTLE_START autosaves): the browser walk's chapter number. */
+  readonly battleCount: () => number;
   /** The game ended and not in defeat. */
   get finished(): boolean { return this.core.mode === 'ended' && this.core.result !== 'defeat'; }
   constructor(private readonly core: GameCore, tables: Tables, world: WalkWorld, opts: WalkerOptions = {}) {
@@ -922,6 +924,7 @@ export class Walker {
 
 
 
+    this.battleCount = () => battles.length;
     this.summary = (): WalkSummary => {
       const log2 = [...log];
       const ins = core.vm.state.program?.code[core.vm.state.pc];
