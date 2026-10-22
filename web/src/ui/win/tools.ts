@@ -13,7 +13,7 @@ export function turnUndoButton(doc: Document, onUndo: () => void): ToolButton {
   return toolButton(doc, 'w95-undo', '턴 되돌리기', '이 턴의 처음으로 되돌린다. 아무것도 하지 않은 상태에서 누르면 이전 턴으로 간다 (Ctrl+Z)', onUndo);
 }
 
-export const GOLD_STEP = 1000;
+export const GOLD_STEP = 10000;
 
 /** 돈 추가: GOLD_STEP into the party purse per click; the label shows the purse. */
 export function goldButton(doc: Document, onAdd: () => void): { el: HTMLElement; set(enabled: boolean, gold: number): void } {
