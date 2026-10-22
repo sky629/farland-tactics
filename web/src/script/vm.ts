@@ -227,24 +227,27 @@ export class ScriptVm {
     if (first === null && ins.op === 'REMOVE_UNIT') return 'next';
     const un = first === 'skip' ? null : first;
     const sprite = (u: Unit, patch: Partial<NonNullable<Unit['sprite']>>) => { u.sprite = { ...u.sprite, ...patch }; };
+    const recreate = (u: Unit, apd: string, bare: boolean) => { const rest = { ...u.sprite }; delete rest.anim; delete rest.offset; u.sprite = { ...rest, apd, bare }; };   // FUN_00429630: a new sprite record starts at anim −1 with zero offsets; layer and visibility are kept [추정]. bare: no field pose until a rebuild (ATTACH_SPRITE); RESPRITE_UNIT rebuilds at once (FUN_0041ea40 → FUN_0041e350)
+    const rebuilt = (u: Unit | null | undefined) => { if (u?.sprite?.bare) u.sprite = { ...u.sprite, bare: false }; };   // FUN_0041e9e0 remakes the unit's body sprite with its field pose (STAND/SET/…)
+    const rebuiltAll = () => { for (const v of this.c.units) rebuilt(v); };
     switch (ins.op) {
       case 'NOP_UNIT': return 'next';
       case 'SET_POS': if (un) { un.c = i(1) ?? un.c; un.r = i(2) ?? un.r; this.host.unitsChanged(); } return 'next';
-      case 'SET_DIR': { const d = i(1) ?? 4; if (un && d >= 0 && d <= 3) un.dir = d as Dir; return 'next'; }
-      case 'FACE_UNIT': { const b = unitArg(1); if (un && b && b !== 'skip' && (un.c !== b.c || un.r !== b.r)) b.dir = dirTo(b.c, b.r, un.c, un.r); return 'next'; }
-      case 'ALL_FACE': if (un) for (const v of this.c.units) if (v && v !== un && (v.c !== un.c || v.r !== un.r)) v.dir = dirTo(v.c, v.r, un.c, un.r); return 'next';
+      case 'SET_DIR': { const d = i(1) ?? 4; if (un && d >= 0 && d <= 3) un.dir = d as Dir; rebuilt(un); return 'next'; }   // 0x40978d rebuilds the sprite (a SET_DIR 4 too)
+      case 'FACE_UNIT': { const b = unitArg(1); if (un && b && b !== 'skip') { if (un.c !== b.c || un.r !== b.r) b.dir = dirTo(b.c, b.r, un.c, un.r); rebuilt(b); } return 'next'; }   // 0x409866
+      case 'ALL_FACE': if (un) for (const v of this.c.units) if (v && v !== un) { if (v.c !== un.c || v.r !== un.r) v.dir = dirTo(v.c, v.r, un.c, un.r); rebuilt(v); } return 'next';
       case 'REMOVE_UNIT': if (un) { this.c.units[un.slot] = null; this.host.unitsChanged(); } return 'next';
       case 'REMOVE_SCRIPT_UNITS': removeScriptUnits(this.c); this.host.unitsChanged(); return 'next';
       case 'REMOVE_DEAD': removeDead(this.c); this.host.unitsChanged(); return 'next';
       case 'LOAD_SPRITE': { const apd = (str(a[0]) ?? '').toLowerCase(); const id = idx(1); this.c.lastSprite = apd; if (!createScriptUnit(this.c, id, 7, idx(2), idx(3), apd, id < 4000 ? 3 : 5)) this.host.log('warn', 'no free unit slot'); this.host.unitsChanged(); return 'next'; }
       case 'SPRITE_REUSE': { const id = idx(0); if (this.c.lastSprite) createScriptUnit(this.c, id, 7, idx(1), idx(2), this.c.lastSprite, id < 4000 ? 3 : 5); this.host.unitsChanged(); return 'next'; }
-      case 'ATTACH_SPRITE': { const apd = this.c.lastSprite; if (!apd) return 'next'; const target = un ?? createScriptUnit(this.c, idx(0), 7, 0, 0, apd, 3); if (target) sprite(target, { apd }); this.host.unitsChanged(); return 'next'; }
-      case 'RESPRITE_UNIT': if (un) { const apd = `char_${String(un.race).padStart(2, '0')}${str(a[1]) ?? 'a'}`; sprite(un, { apd }); this.c.lastSprite = apd; this.host.unitsChanged(); } return 'next';
+      case 'ATTACH_SPRITE': { const apd = this.c.lastSprite; if (!apd) return 'next'; const target = un ?? createScriptUnit(this.c, idx(0), 7, 0, 0, apd, 3); if (target) recreate(target, apd, true); this.host.unitsChanged(); return 'next'; }
+      case 'RESPRITE_UNIT': if (un) { const apd = `char_${String(un.race).padStart(2, '0')}${str(a[1]) ?? 'a'}`; recreate(un, apd, false); this.c.lastSprite = apd; this.host.unitsChanged(); } return 'next';
       case 'ANIM': if (un) { const raw = str(a[1]) ?? ''; const force = raw.startsWith('*'); const name = force ? raw.slice(1) : raw; const loop = idx(2) === 0; sprite(un, { anim: { name, loop, force } }); this.host.anim(un, name, loop, force); } return 'next';
       case 'MOVE_PATH': if (un) { const base = str(a[1]) ?? 'run'; const dirs = [...(str(a[2]) ?? '').toLowerCase()].map((ch) => PATH_DIR[ch]).filter((d): d is Dir => d !== undefined); for (const d of dirs) [un.c, un.r] = stepCell(un.c, un.r, d); if (dirs.length > 0) un.dir = dirs[dirs.length - 1]!; this.host.moveUnit(un, dirs, base); } return 'next';
       case 'MOVE_TO': if (un) this.host.moveTo(un, str(a[1]) ?? ''); return 'next';
-      case 'WAIT_UNIT': return un && this.host.unitBusy(un, true) ? 'wait' : 'next';
-      case 'WAIT_UNIT2': return un && this.host.unitBusy(un, false) ? 'wait' : 'next';
+      case 'WAIT_UNIT': if (un && this.host.unitBusy(un, true)) return 'wait'; rebuilt(un); return 'next';     // 0x409247: the unit's sprite is rebuilt once its walk is over
+      case 'WAIT_UNIT2': if (un && this.host.unitBusy(un, false)) return 'wait'; rebuilt(un); return 'next';   // 0x409ee9
       case 'CAMERA_UNIT': if (un) this.host.cameraUnit(un); return 'next';
       case 'SPRITE_OFFSET': if (un) sprite(un, { offset: { x: idx(1), y: idx(2) } }); return 'next';
       case 'SPRITE_RAISE': if (un) sprite(un, { offset: { x: un.sprite?.offset?.x ?? 0, y: (un.sprite?.offset?.y ?? 0) - 32 } }); return 'next';
@@ -254,17 +257,17 @@ export class ScriptVm {
       case 'SWEAT': if (un) this.host.sweat(un); return 'next';
       case 'SPRITE_APPEAR': if (un) { sprite(un, { hidden: false }); this.host.appear(un, idx(1)); } return 'next';
       case 'SPRITE_VANISH': if (un) { sprite(un, { hidden: true }); this.host.vanish(un, idx(1)); } return 'next';
-      case 'SET_VISIBLE': if (un) { const on = idx(1) !== 0; if (on && un.status === 9) un.status = 0; sprite(un, { hidden: !on }); this.host.setVisible(un, on); } return 'next';
-      case 'ALL_VISIBLE': { const on = idx(0) !== 0; for (const v of this.c.units) if (v) { if (on && v.status === 9) v.status = 0; sprite(v, { hidden: !on }); } this.host.allVisible(on); return 'next'; }
-      case 'SHOW_ONLY': if (un) { for (const v of this.c.units) if (v) sprite(v, { hidden: v !== un }); this.host.showOnly(un); } return 'next';
-      case 'RESET_SPRITES': for (const v of this.c.units) if (v) { v.sprite = undefined; v.moved = true; v.acted = true; } this.host.resetSprites(); return 'next';
+      case 'SET_VISIBLE': if (un) { const on = idx(1) !== 0; if (on && un.status === 9) un.status = 0; sprite(un, { hidden: !on, bare: false }); this.host.setVisible(un, on); } return 'next';   // the EXT unit ops rebuild the sprites (FUN_0040a5c0 calls FUN_0041e9e0 at ten places) [추정: which cases]
+      case 'ALL_VISIBLE': { const on = idx(0) !== 0; for (const v of this.c.units) if (v) { if (on && v.status === 9) v.status = 0; sprite(v, { hidden: !on, bare: false }); } this.host.allVisible(on); return 'next'; }
+      case 'SHOW_ONLY': if (un) { for (const v of this.c.units) if (v) sprite(v, { hidden: v !== un, bare: false }); this.host.showOnly(un); } return 'next';
+      case 'RESET_SPRITES': for (const v of this.c.units) if (v) { v.sprite = undefined; v.moved = true; v.acted = true; } this.host.resetSprites(); return 'next';   // +0x5c/+0x60 = 1 = moved and acted (FUN_0041e350: both 1 → COMPLETE in the field, SET for a named party unit while a script runs)
       case 'UNLOCK_ANIMS': case 'LOCK_ANIMS': return 'next';
-      case 'SET_ACT_FLAGS': if (un) { const on = idx(1) !== 0; un.moved = on; un.acted = on; } return 'next';
-      case 'SET_STATUS8': if (un) un.status = 8; return 'next';
-      case 'UNIT_TO_ID8': if (un) { un.id = 8; un.hp = 0; un.status = 1; } return 'next';
-      case 'KILL': if (un) { un.hp = 0; un.mp = 0; un.status = 1; sprite(un, { hidden: true }); this.host.unitsChanged(); } return 'next';
-      case 'REVIVE': if (un) { un.hp = un.hpMax; un.status = 0; } return 'next';
-      case 'HEAL_ALL': for (const v of this.c.units) if (v) { v.hp = v.hpMax; v.mp = Math.trunc(v.mpMax / 2); if (v.status !== 9) v.status = 0; v.special = false; } return 'next';
+      case 'SET_ACT_FLAGS': if (un) { const done = idx(1) !== 0; un.moved = done; un.acted = done; } return 'next';   // +0x5c/+0x60 = n (1 = moved/acted; unused by the shipped scripts)
+      case 'SET_STATUS8': if (un) { un.status = 8; rebuilt(un); } return 'next';
+      case 'UNIT_TO_ID8': if (un) { un.id = 8; un.hp = 0; un.status = 1; rebuilt(un); } return 'next';
+      case 'KILL': if (un) { un.hp = 0; un.mp = 0; un.status = 1; sprite(un, { hidden: true, bare: false }); this.host.unitsChanged(); } return 'next';
+      case 'REVIVE': if (un) { un.hp = un.hpMax; un.status = 0; rebuilt(un); } return 'next';
+      case 'HEAL_ALL': for (const v of this.c.units) if (v) { v.hp = v.hpMax; v.mp = Math.trunc(v.mpMax / 2); if (v.status !== 9) v.status = 0; v.special = false; rebuilt(v); } return 'next';
       case 'DOPPEL_COPY': {
         const actor = this.c.actor === null ? null : this.c.units[this.c.actor]; const t = findUnit(this.c, 24);
         if (actor && actor.side === 0 && t) {
@@ -287,9 +290,9 @@ export class ScriptVm {
       case 'ADD_GOLD': addGold(this.c.inventory, idx(0)); return 'next';
       // map and battle
       case 'LOAD_MAP': { if (!this.wait || this.wait.pc !== this.state.pc) { this.host.loadMap(idx(0)); this.wait = { pc: this.state.pc, until: 0 }; } if (this.host.mapBusy()) return 'wait'; this.wait = null; return 'next'; }
-      case 'LOAD_UNITS': { const n = idx(0); const recs = this.res.roster(n); if (!recs) { this.host.log('warn', `roster ${n} missing`); return 'next'; } applyRoster(this.c.units, recs, this.res.tables, this.res.rng); this.host.unitsChanged(); return 'next'; }
+      case 'LOAD_UNITS': { const n = idx(0); const recs = this.res.roster(n); if (!recs) { this.host.log('warn', `roster ${n} missing`); return 'next'; } applyRoster(this.c.units, recs, this.res.tables, this.res.rng); rebuiltAll(); this.host.unitsChanged(); return 'next'; }   // FUN_0041fae0 → FUN_0041e9e0 for every placed unit
       case 'BATTLE_START': case 'BATTLE_START_HEAL':
-        startBattle(this.c.units, ins.op === 'BATTLE_START_HEAL');
+        startBattle(this.c.units, ins.op === 'BATTLE_START_HEAL'); rebuiltAll();                                             // 0x4085f0 rebuilds every unit's sprites
         this.c.turn = 0; this.state.restore = 'battle'; this.host.enterBattle(); return 'next';
       case 'BATTLE_RESULT': {                                                  // FUN_0040a5c0 case 9: gold, then dialog 0xA2 hands the party an EXP pool to share, then level-ups
         if (!this.result) { const gold = idx(0); if (gold > 0) addGold(this.c.inventory, gold); this.result = { pool: idx(1), text: null }; }

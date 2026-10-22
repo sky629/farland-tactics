@@ -5,7 +5,9 @@ export const PARTY_SLOTS = 10;
 export const MAX_SLOTS = 50;
 
 /** Presentation state the story scripts set on a unit (the original keeps sprite handles in the unit record too). */
-export interface SpriteOverride { apd?: string; layer?: number; anim?: { name: string; loop: boolean; force: boolean }; hidden?: boolean; offset?: { x: number; y: number }; marker?: boolean }
+export interface SpriteOverride { apd?: string; layer?: number; anim?: { name: string; loop: boolean; force: boolean }; hidden?: boolean; offset?: { x: number; y: number }; marker?: boolean; bare?: boolean }
+// bare: a sprite record just made by LOAD_SPRITE / SPRITE_REUSE / ATTACH_SPRITE / RESPRITE_UNIT — anim −1 (FUN_00429630), so nothing is drawn and the field's body pose does not apply
+//       until an ANIM or a rebuild of the unit's sprites (FUN_0041e9e0: SET_DIR, FACE_UNIT, WAIT_UNIT, LOAD_UNITS, BATTLE_START, the EXT unit ops).
 
 /** The battle-relevant fields of the original 124-byte unit record (battle_rules.md §7). */
 export interface Unit {

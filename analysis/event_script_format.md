@@ -46,7 +46,7 @@ list   := number* 0                   ; SHOP 전용, 0 으로 종료
 | 04 | MSG_TOP | n(spk) [+2B] | 상단 대화창. spk=0 닫기. spk≠0 이면 2바이트 추가(표정 문자, 0): 초상 `bmp\face%02d%c.bmp`(FUN_004202f0, 포맷 idx5). 다른 화자 창이 열려 있으면 닫고 재시도 | [관찰] 0x408845 |
 | 05 | MSG_BOTTOM | n(spk) [+2B] | 하단 대화창. 동일. 초상은 spk<30 일 때만 | [관찰] 0x4089cb |
 | 06 | TEXT | s | 현재 창에 한 줄 출력. `[Snn]` 글자 크기(기본 16), `[Cnn]` 색(기본 30). 첫 줄이면 화자 이름 출력: spk 14 → `SET_SPEAKER_NAME` 값, spk<30 → 이름표(6절), spk≥30 → 유닛 이름 | [관찰] 0x408b46 |
-| 07 | RESPRITE_UNIT | u, 문자, 0 | 유닛 클래스(u[1])의 스프라이트를 `sprite\char_%02d%c.apd`(클래스, 문자)로 다시 로드하고 "마지막 스프라이트"(`DAT_00449950`)로 설정. 이어서 0x21 과 같은 스프라이트 재생성 | [관찰] 0x408e1b asm: `mov al,[pc]; push eax; push unit; call FUN_0041ea40` |
+| 07 | RESPRITE_UNIT | u, 문자, 0 | 유닛 클래스(u[1])의 스프라이트를 `sprite\char_%02d%c.apd`(클래스, 문자)로 다시 로드하고 "마지막 스프라이트"(`DAT_00449950`)로 설정. 재생성은 `FUN_0041ea40`: 종족 스프라이트 캐시(`DAT_00456378[종족]`)를 비우고 `FUN_0041e350`으로 본체를 다시 만들어 **그 순간의 필드 자세**(STAND/SET/…, field_mode.md §2.2)를 건다. 그 이름이 새 파일에 없으면 본체가 없다 | [관찰] 0x408e1b asm: `mov al,[pc]; push eax; push unit; call FUN_0041ea40` |
 | 08 | ANIM | u, s(anim), n | 스프라이트 애니메이션 지정 `FUN_00429a50`. n=0 → 플래그 0x11(반복), n≠0 → 0x01(1회). 이름 앞 `*` → 플래그 \|2 (강제/우선) | [관찰] 0x408f13 |
 | 09 | WAIT_FADE | – | 팔레트 페이드가 끝날 때까지 재시도 | [관찰] 0x408fd7 |
 | 0A | LOAD_MAP | n | `map\stage%02d.map` 로드 `FUN_0042d5d0(n)`, 위성뷰 갱신 | [관찰] 0x408ff0 |
@@ -56,10 +56,10 @@ list   := number* 0                   ; SHOP 전용, 0 으로 종료
 | 0E | MUSIC | n | `midi\bgm%02d.mid`(또는 `_gs`) 재생 후 볼륨 최대. n<0 정지 | [관찰] 0x40912a, FUN_0042e8c0 |
 | 0F | MUSIC_FADE | n ms, n dir | 음악 볼륨 페이드 `FUN_00436500(ms, dir)`. dir 0=끄기, 1=켜기. ms=0 즉시 | [관찰] 0x409150 |
 | 10 | SOUND | s | `wave\%s.wav` 재생. 앞 `*` → 채널 0 고정(플래그 1). 빈 문자열 → 채널 0 정지 | [관찰] 0x409180, FUN_0040d950 |
-| 11 | WAIT_UNIT | u | 애니/이동/효과(0x3c) 완료까지 재시도 | [관찰] 0x4091d8 |
+| 11 | WAIT_UNIT | u | 애니/이동/효과(0x3c) 완료까지 재시도. 완료되면 `FUN_0041e9e0`으로 유닛 스프라이트 재구성(필드 자세) | [관찰] 0x4091d8, 0x409247 |
 | 12 | CAMERA_SCROLL | n dx, n dy, n tx, n ty, n ms | 자동 스크롤: 매 ms 마다 (dx,dy)px 이동, 타일(tx,ty) 도달/통과 시 정지. (0,0) 타겟 없음 | [관찰] 0x409274 + 0x408660 |
-| 13 | LOAD_SPRITE | s, n id, n x, n y | `sprite\%s.apd` 를 빈 슬롯(20개)에 로드, id 로 오브젝트 유닛(side 7 템플릿) 생성, 좌표 설정. id<4000 → 레이어 3, 아니면 5 | [관찰] 0x40931a |
-| 14 | SPRITE_REUSE | n id, n x, n y | 마지막 로드 스프라이트로 오브젝트 유닛 생성 | [관찰] 0x40934c |
+| 13 | LOAD_SPRITE | s, n id, n x, n y | `sprite\%s.apd` 를 빈 슬롯(20개)에 로드, id 로 오브젝트 유닛(side 7 템플릿) 생성, 좌표 설정. id<4000 → 레이어 3, 아니면 5. 레코드는 애니 −1(`FUN_00429630` +0x4c)로 시작하고 `FUN_0042a560`은 −1이면 그리지 않으므로 **ANIM 전까지 보이지 않는다** | [관찰] 0x40931a |
+| 14 | SPRITE_REUSE | n id, n x, n y | 마지막 로드 스프라이트로 오브젝트 유닛 생성. 0x13 과 같이 ANIM 전까지 보이지 않는다 | [관찰] 0x40934c |
 | 15 | REMOVE_UNIT | u | 유닛 슬롯 삭제. 없는 유닛이면 아무 일도 하지 않는다(구현: 15일째 beat29는 REMOVE_DEAD 뒤에 적 27·28을 다시 지운다 — 전리품을 주워 슬롯이 빈 경우) | [관찰] 0x4093b8 |
 | 16 | GIVE_ITEM | n item, n cnt | 파티 소지품 추가(장비는 1번 유닛 슬롯) `FUN_0041ecc0` | [관찰] 0x4093dd |
 | 17 | TAKE_ITEM | n item, n cnt | 소지품 감소 `FUN_0041eda0` | [관찰] 0x409417 |
@@ -70,13 +70,13 @@ list   := number* 0                   ; SHOP 전용, 0 으로 종료
 | 1C | SET_POS | u, n x, n y | 유닛 타일 좌표 설정 | [관찰] 0x4095cd |
 | 1D | BATTLE_START_HEAL | – | 전 유닛 HP=max, MP=max/2, status(≠9)=0 — 쓰러진 유닛도 완전히 회복해 선다 (0x40a5c0 case 0x28) — 후 0x35 와 동일 | [관찰] 0x40960e |
 | 1E | NEXT_STAGE | – | 플래그 100개 초기화, 비파티 유닛 삭제, END 시 `stage+1`의 `begin` 로드(`ForcedStage` INI 키가 있으면 현재 stage 재시작). 데이터에서 미사용 | [관찰] 0x40971d, 0x40a0bf |
-| 1F | SET_DIR | u, n | 방향 0=S 1=E 2=W 3=N, 4=유지 | [관찰] 0x40975f, FUN_0041f4d0 |
+| 1F | SET_DIR | u, n | 방향 0=S 1=E 2=W 3=N, 4=유지. 이어서 `FUN_0041e9e0`으로 유닛 스프라이트 재구성(필드 자세; 4 여도) | [관찰] 0x40975f, FUN_0041f4d0, 0x40978d |
 | 20 | JUMP | L | 라벨로 점프 (`Jump:'%s'` 디버그) | [관찰] 0x40a001 |
-| 21 | ATTACH_SPRITE | n id | id 유닛이 없으면 템플릿(class 7, side 1)으로 생성하고 마지막 스프라이트 부착; 있으면 그 유닛의 스프라이트 재생성 | [관찰] 0x408e58 |
+| 21 | ATTACH_SPRITE | n id | id 유닛이 없으면 템플릿(class 7, side 1)으로 생성하고 마지막 스프라이트 부착; 있으면 그 유닛의 스프라이트 레코드를 `FUN_00429630`으로 다시 만든다(0x408edb). 레코드는 애니 −1이라 **ANIM 전까지 보이지 않고**, 필드 자세도 다음 재구성(SET_DIR 등)까지 걸리지 않는다. EVENT00 의 연기 스프라이트 100 이 이 경우다 | [관찰] 0x408e58 |
 | 22 | WAIT_SCROLL | – | CAMERA_SCROLL 종료까지 재시도 | [관찰] 0x40a2e7 |
 | 23 | RESET_SPRITES | – | 전 유닛 스프라이트 삭제, 20슬롯 해제, 행동 플래그(0x5c/0x60)=1 | [관찰] 0x4097a2 |
 | 24 | END_RESUME | – | END 처리 후 `FUN_0043afd0(-1)`: 보류 중인 전투 행동 재개. `battle%02d` 라벨용 | [관찰] 0x40a0bf default + `'$'` 검사 |
-| 25 | FACE_UNIT | u a, u b | b 가 a 를 바라보도록 방향 설정 | [관찰] 0x40980b |
+| 25 | FACE_UNIT | u a, u b | b 가 a 를 바라보도록 방향 설정. 이어서 `FUN_0041e9e0`으로 b 의 스프라이트 재구성 | [관찰] 0x40980b, 0x409866 |
 | 26 | SPRITE_OFFSET | u, n dx, n dy | 스프라이트 픽셀 오프셋 | [관찰] 0x409873 |
 | 27 | JUMP_IF_RESULT | n, L | `(result != 0) == (n != 0)` 이면 점프. result = `DAT_0044f16c` | [관찰] 0x4098c3 |
 | 28 | JUMP_IF_LESS | n, L | `(less != 0) == (n != 0)` 이면 점프. less = `DAT_0044ec00` (FLAG_CMP 가 설정) | [관찰] 0x4098c3 |
@@ -102,7 +102,7 @@ list   := number* 0                   ; SHOP 전용, 0 으로 종료
 | 3C | LOAD_SCRIPT | n stage, L | 현재 스크립트 해제, `event%02d.dat` 로드 후 라벨 실행 | [관찰] 0x409de6 |
 | 3D | SET_SPEAKER_NAME | s | 화자 id 14 의 이름(`DAT_0044ecb0`) | [관찰] 0x409e32 |
 | 3E | MESSAGE | s | 중앙 메시지 박스(클릭 대기, 모드 7). 문자열은 `DAT_0046cb20`에 남아 세이브 헤더(장면 설명)에 기록됨 | [관찰] 0x409e5b, FUN_00423820 |
-| 3F | WAIT_UNIT2 | u | 0x11 과 같으나 효과 스프라이트(0x3c)는 검사 안 함 | [관찰] 0x409e92 |
+| 3F | WAIT_UNIT2 | u | 0x11 과 같으나 효과 스프라이트(0x3c)는 검사 안 함. 완료되면 `FUN_0041e9e0` 재구성 | [관찰] 0x409e92, 0x409ee9 |
 | FF | END | – | switch default: 스크립트 해제, 모드 복원, NEXT_STAGE 처리 | [관찰] 0x40a0bf |
 
 0x40 이상 다른 값도 default(END)로 가지만 데이터에는 `FF FF`만 존재한다.
@@ -113,7 +113,7 @@ list   := number* 0                   ; SHOP 전용, 0 으로 종료
 |---|---|---|---|---|
 | 01 | REMOVE_SCRIPT_UNITS | – | 슬롯 10.. 중 side(u[9])==1 (스크립트 생성 유닛) 삭제 | [관찰] |
 | 02 | MARKER | u, n | n≠0: `LARGE.M` 애니 스프라이트(마커)를 유닛 위치에 생성(레이어 2); 0: 삭제 | [관찰] |
-| 03 | SET_ACT_FLAGS | u, n | 유닛 +0x5c/+0x60 (이동/행동 가능 플래그) = n | [관찰] 필드 의미 [추정] |
+| 03 | SET_ACT_FLAGS | u, n | 유닛 +0x5c/+0x60 (이동·행동 **완료** 플래그: 1 = 마침. `FUN_0041fae0` 가 생성 시 1, BATTLE_START 가 0, `FUN_0041e350` 은 둘 다 1인 파티 유닛을 COMPLETE/SET 으로 그린다) = n. 출시 데이터에는 쓰인 곳이 없다 | [관찰] |
 | 04 | TOWN_FLAG_SET | n i, n v | `DAT_0044b210[i] = v`. 마을 화면(FUN_0042b080)에서 참조 → 시설 활성 플래그 | [관찰]/[추정] |
 | 05 | SHOW_ONLY | u | 다른 모든 유닛 스프라이트 숨김 | [관찰] |
 | 06 | STAGE_FROM_FLAG | n i | `stage(DAT_0044b73c) = Flag[i]` | [관찰] |

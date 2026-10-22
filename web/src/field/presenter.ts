@@ -38,10 +38,12 @@ const step = (...items: Item[]): Step => ({ items, start: null });
 export class Presenter {
   hover: [number, number] | null = null;
   focus: [number, number] | null = null;
+  scriptMode = false;                        // a script is running (the original's mode 4): waiting party units stand in SET (bodyAnim)
   private snapshot: (Unit | null)[] = [];
   private visuals = new Map<number, Visual>();
   private queue: Step[] = [];
   private players = new Map<string, AnimPlayer>();
+  private lastBody = new Map<number, Playing>();   // each slot's current body animation: a name its file lacks changes nothing (FUN_00429a50 returns 0), so the last one stays while the record lives
   private now = 0;
 
   constructor(private readonly provider: SpriteProvider, private readonly tables: Tables) {}
@@ -57,6 +59,7 @@ export class Presenter {
     const kept = new Map([...this.visuals].filter(([slot]) => walking.has(slot)));
     this.visuals.clear();
     for (const u of this.snapshot) if (u) this.visuals.set(u.slot, kept.get(u.slot) ?? { c: u.c, r: u.r, dir: u.dir, offset: { x: 0, y: 0 } });
+    for (const slot of [...this.lastBody.keys()]) if (!this.snapshot[slot]) this.lastBody.delete(slot);   // an emptied slot takes no pose into its next unit
   }
 
   enqueue(events: BattleEvent[]): void {
@@ -275,10 +278,12 @@ export class Presenter {
   /** Walking body: <base>1/<base>2 by step parity (FUN_00438100: "%s%d" with 1 on even, 2 on odd steps); the script's base first, then RUN, WALK, FLY; else null (→ STAND). */
   private runSprite(u: Unit, prefix: string, flipH: boolean, step: number, first: string): Playing | null {
     const n = step % 2 + 1;
+    const own = u.sprite?.apd ? this.provider.apd(u.sprite.apd) : null;      // the walk is set on the unit's own record (FUN_00438100 "%s%d"), so a RESPRITE'd letter file walks with its own WALK/RUN; the 'b' file is the fallback for a body file without one [추정]
     for (const base of [...new Set([first, 'RUN', 'WALK', 'FLY'])]) {
-      const model = this.provider.apd(animApd(u.race, `${base}${n}`));
-      const tl = model ? pickTimeline(model, `${prefix}${base}${n}`) : undefined;
-      if (model && tl) return { model, player: this.player(`${u.slot}:${model.name}:${tl.name}:${flipH}`, tl, true, flipH) };
+      for (const model of [own, this.provider.apd(animApd(u.race, `${base}${n}`))]) {
+        const tl = model ? pickTimeline(model, `${prefix}${base}${n}`) : undefined;
+        if (model && tl) return { model, player: this.player(`${u.slot}:${model.name}:${tl.name}:${flipH}`, tl, true, flipH) };
+      }
     }
     return null;
   }
@@ -307,7 +312,7 @@ export class Presenter {
       const v = this.visuals.get(u.slot)!;
       const shown = { ...u, dir: v.dir };
       const scripted = u.sprite?.apd ? this.provider.apd(u.sprite.apd) : null;          // LOAD_SPRITE / RESPRITE_UNIT body file
-      const body = bodyAnim(shown, this.tables.item);
+      const body = bodyAnim(shown, this.tables.item, this.scriptMode);
       const model = scripted ?? this.provider.apd(bodyApd(u.race));
       if (model && (body || scripted)) {
         const move = moves.get(u.slot);
@@ -315,15 +320,17 @@ export class Presenter {
         let playing = overrides.get(u.slot) ?? (move ? this.runSprite(u, prefix, flipH, move.step, move.base) : null);
         const scriptAnim = u.sprite?.anim;
         if (!playing && scriptAnim) { const tl = pickTimeline(model, scriptAnim.name.toUpperCase()); if (tl) playing = { model, player: this.player(`${u.slot}:${model.name}:${tl.name}:${flipH}:${scriptAnim.loop}`, tl, scriptAnim.loop, flipH) }; }
-        if (!playing) {
-          const tl = (body ? pickTimeline(model, body.name) : undefined) ?? pickTimeline(model, `${prefix}STAND`) ?? (scripted ? model.anim(model.animNames()[0] ?? '') : undefined);
+        if (!playing && !u.sprite?.bare && u.race !== 7) {                    // the field pose (FUN_0041e350 "STAND"/"SET"…) is given at a rebuild, never to a race-7 object, and only when the file has it (FUN_00429a50 ignores a missing name); a just-made record stays at anim −1 and is not drawn (FUN_00429630 / FUN_0042a560)
+          const tl = (body ? pickTimeline(model, body.name) : undefined) ?? pickTimeline(model, `${prefix}STAND`);
           if (tl) playing = { model, player: this.player(`${u.slot}:${model.name}:${tl.name}:${flipH}`, tl, true, flipH) };
         }
+        if (playing) this.lastBody.set(u.slot, playing);
+        else { const last = this.lastBody.get(u.slot); if (last && last.model === model) playing = last; }   // the same record (same file): keep what it was showing; another file is a new record at anim −1
         const layer = u.sprite?.layer ?? (u.side === 7 ? LAYER.object : LAYER.unit);
         const offset = { x: v.offset.x + (u.sprite?.offset?.x ?? 0), y: v.offset.y + (u.sprite?.offset?.y ?? 0) };
         if (playing) sprites.push({ model: playing.model, player: playing.player, c: v.c, r: v.r, layer, offset, flipH });
         if (system && u.sprite?.marker) { const tl = pickTimeline(system, 'LARGE.M'); if (tl) sprites.push({ model: system, player: this.player('marker:LARGE.M', tl, true), c: v.c, r: v.r, layer: LAYER.shadow, offset: v.offset }); }
-        if (system) {
+        if (system && u.race !== 7) {                                          // FUN_0041e350 returns at race 7 before the shadow and the icon: a template object has neither
           const race = this.tables.race[u.race];
           const shadow = race ? shadowAnim(shown, race) : null;
           const stl = shadow ? pickTimeline(system, shadow) : undefined;

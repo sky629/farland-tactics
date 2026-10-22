@@ -116,6 +116,7 @@ export class GameCore implements Host {
     if (this.mode === 'script') { if (!this.stage.presenter.busy) this.stage.presenter.sync(this.campaign); this.vm.step(now); }   // SET_DIR & co. have no host call
     else if (this.mode === 'battle' && this.battle) this.battleFrame();
     this.followFocus(size);
+    this.stage.presenter.scriptMode = this.mode === 'script';                    // the frame is drawn after this: waiting party units stand in SET while a script runs
   }
 
   private battleFrame(): void {

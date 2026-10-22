@@ -50,7 +50,7 @@ export function createScriptUnit(c: Campaign, id: number, race: number, col: num
   const u: Unit = {
     slot, id, race, level: 1, dir: 0, c: col, r: row, status: 0, side: 1, weapon: 0, armor: 0, acc: [0, 0], dropItem: 0, dropGold: 0, bag: [0, 0, 0, 0],
     hpMax: 0, hp: 0, mpMax: 0, mp: 0, exp: 0, str: 0, def: 0, wis: 0, mgr: 0, agi: 0, spells: [], buff: { str: 0, def: 0, wis: 0, mgr: 0, agi: 0 }, elem: [0, 0, 0],
-    moved: true, acted: true, special: false, statusCounter: 0, sprite: { apd, layer },
+    moved: true, acted: true, special: false, statusCounter: 0, sprite: { apd, layer, bare: true },
   };
   c.units[slot] = u;
   return u;

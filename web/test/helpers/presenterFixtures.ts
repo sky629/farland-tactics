@@ -13,7 +13,7 @@ export function apd(anims: Record<string, string>): ApdModel {
     patterns: [{ yOffset: 0, images: [0] }], anims: Object.entries(anims).map(([name, script]) => ({ name, script })) };
   return new ApdModel(`apd${++apdSeq}`, data, [{ width: 8, height: 8, indices: new Uint8Array(64), palette: new Uint8Array(768) }]);
 }
-export const hero = apd({ 'F.STAND': 'P0', 'B.STAND': 'P0', 'F.COMPLETE': 'P0', 'F.MIDDLE_DAMAGE': 'S100 P0 P0', 'F.DEAD': 'P0', 'F.DOWN_DAMAGE': 'P0', 'F.DEFENSE': 'S100 P0 P0' });
+export const hero = apd({ 'F.STAND': 'P0', 'B.STAND': 'P0', 'F.COMPLETE': 'P0', 'F.SET': 'P0', 'F.MIDDLE_DAMAGE': 'S100 P0 P0', 'F.DEAD': 'P0', 'F.DOWN_DAMAGE': 'P0', 'F.DEFENSE': 'S100 P0 P0' });
 export const heroB = apd({ 'F.RUN1': 'S100 P0 P0', 'F.RUN2': 'S100 P0 P0', 'B.RUN1': 'S100 P0 P0', 'B.RUN2': 'S100 P0 P0', 'F.WALK1': 'S100 P0 P0', 'F.ATTACK1': 'S150 P0 P0' });
 export const heroE = apd({ 'F.CAST1A': 'S100 P0 P0', 'F.CAST1B': 'S100 P0 P0' });
 export const slime = apd({ 'F.STAND': 'P0', 'B.STAND': 'P0', 'F.DOWN_DAMAGE': 'P0', 'F.MIDDLE_DAMAGE': 'S100 P0 P0', 'F.DEFENSE': 'S100 P0 P0' });

@@ -28,14 +28,15 @@ export function facing(dir: Dir, race: number): { prefix: string; flipH: boolean
 }
 
 /** FUN_0041e350 in battle mode: facing prefix + state token, with the facing's flip. null = no body sprite. */
-export function bodyAnim(u: Unit, items: ItemData[]): { name: string; flipH: boolean } | null {
+export function bodyAnim(u: Unit, items: ItemData[], scriptMode = false): { name: string; flipH: boolean } | null {
   const { prefix, flipH } = facing(u.dir, u.race);
+  const waiting = scriptMode && u.side === 0 && u.id !== 8 && u.id < 30 && u.moved && u.acted;   // FUN_0041e9e0 bVar2: a named party unit (id ≠ 8, < 30) whose move and act flags are both spent while a script runs — its status reads as 0 (or 9) and it stands in "SET"
   const levitateItem = [u.weapon, u.armor, u.acc[0], u.acc[1]].some((i) => items[i]?.status_code === 11);
-  const status = u.status === 0 && levitateItem ? 11 : u.status;
+  const status = waiting ? (u.status === 9 ? 9 : 0) : u.status === 0 && levitateItem ? 11 : u.status;
   let token: string | null;
   switch (status) {
     case 0: case 6: case 7:
-      token = u.moved && u.acted && u.side === 0 ? 'COMPLETE' : 'STAND';
+      token = waiting && u.race !== 0x17 && u.race !== 0x49 ? 'SET' : u.moved && u.acted && u.side === 0 ? 'COMPLETE' : 'STAND';   // the behemoth and the seraph never SET
       break;
     case 1: token = u.side === 0 ? 'DEAD' : 'DOWN_DAMAGE'; break;
     case 4: token = 'S/DAMAGE'; break;

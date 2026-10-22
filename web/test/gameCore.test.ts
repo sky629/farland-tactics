@@ -93,6 +93,16 @@ describe('GameCore', () => {
     expect(stage.calls).toContainEqual(['playSound', 'hit']);
     expect(stage.calls.some((c) => c[0] === 'log' && c[1] === 'warn')).toBe(false);
   });
+  it('the presenter knows while a script runs (SET poses, FUN_0041f580 bVar2): scriptMode is true in the script and false once the battle starts', () => {
+    const stage = new FakeStage(); stage.ready = false;
+    const core = new GameCore(res([prog(0, ['begin', ['LOAD_UNITS', 5], ['LOAD_MAP', 49], ['BATTLE_START_HEAL'], ['END']])], { 5: [...party, slime] }), stage);
+    core.newGame(); core.frame(0);
+    expect(core.mode).toBe('script');
+    expect(stage.presenter.scriptMode).toBe(true);
+    stage.ready = true; core.frame(16);
+    expect(core.mode).toBe('battle');
+    expect(stage.presenter.scriptMode).toBe(false);
+  });
   it('LOAD_MAP waits for the stage; BATTLE_START + END creates a Battle over the campaign units and inventory', () => {
     const stage = new FakeStage(); stage.ready = false;
     const core = new GameCore(res([prog(0, ['begin', ['LOAD_UNITS', 5], ['LOAD_MAP', 49], ['BATTLE_START_HEAL'], ['END']])], { 5: [...party, slime] }), stage);

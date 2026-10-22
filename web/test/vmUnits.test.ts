@@ -61,6 +61,30 @@ describe('ScriptVm: units and sprites', () => {
     expect(c.units[1]!.sprite?.apd).toBe('char_00c');
     expect(c.lastSprite).toBe('char_00c');
   });
+  it('RESPRITE_UNIT and ATTACH_SPRITE recreate the sprite record: the earlier ANIM and SPRITE_OFFSET are gone (FUN_00429630 starts a record at anim −1 with zero offsets)', () => {
+    const { c, vm } = start(['begin', ['ANIM', 1, 'b.kick', 1], ['SPRITE_OFFSET', 1, 4, -8], ['ANIM', 2, 'f.event05', 1], ['LOAD_SPRITE', 'npc_02', 15, 20, 30], ['ATTACH_SPRITE', 2], ['RESPRITE_UNIT', 1, 'v'], ['END']]);
+    vm.step(0);
+    expect(c.units[1]!.sprite).toEqual({ apd: 'npc_02', bare: true });                                                       // ATTACH_SPRITE: the record alone — nothing drawn until an ANIM or a rebuild
+    expect(c.units[0]!.sprite).toEqual({ apd: `char_${String(c.units[0]!.race).padStart(2, '0')}v`, bare: false });          // RESPRITE_UNIT rebuilds at once (FUN_0041ea40 → FUN_0041e350): the field pose applies
+    expect(c.units[10]!.sprite).toMatchObject({ apd: 'npc_02', bare: true });                                                 // LOAD_SPRITE: the record alone
+  });
+  it('RESET_SPRITES and SET_ACT_FLAGS write the done flags (+0x5c/+0x60): 1 = moved and acted, as FUN_0041fae0 sets them on a fresh unit', () => {
+    const { c, vm } = start(['begin', ['RESET_SPRITES'], ['SET_ACT_FLAGS', 2, 0], ['END']]);
+    vm.step(0);
+    expect(c.units[0]).toMatchObject({ moved: true, acted: true });     // RESET_SPRITES: both flags 1
+    expect(c.units[1]).toMatchObject({ moved: false, acted: false });   // SET_ACT_FLAGS 0: may move and act
+  });
+  it('LOAD_UNITS leaves every placed unit with both flags 1 and rebuilds the sprites of the party members it keeps', () => {
+    const roster = [
+      { unit_id: 1, race: 0, level: 1, dir: 2, c: 7, r: 7, status: 0, side: 0, weapon: 1, armor: 0, drop_item: 0, drop_gold: 0 },
+      { unit_id: 3, race: 0, level: 1, dir: 0, c: 1, r: 1, status: 0, side: 0, weapon: 1, armor: 0, drop_item: 0, drop_gold: 0 },
+    ];
+    const { c, vm } = start(['begin', ['LOAD_UNITS', 49], ['END']], { 49: roster });
+    c.units[0]!.sprite = { apd: 'char_00v', bare: true };
+    vm.step(0);
+    expect(c.units[0]).toMatchObject({ moved: true, acted: true, sprite: { apd: 'char_00v', bare: false } });
+    expect(c.units[2]).toMatchObject({ id: 3, moved: true, acted: true });
+  });
   it('ANIM, MOVE_PATH and WAIT_UNIT go through the host; MOVE_PATH updates the position and the last direction', () => {
     const { c, vm, host } = start(['begin', ['ANIM', 1, '*f.event01', 1], ['MOVE_PATH', 1, 'run', 'sseN'], ['WAIT_UNIT', 1], ['END']]);
     expect(host.calls).not.toContainEqual(['moveTo', 0, 'f.event04']);

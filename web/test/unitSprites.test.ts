@@ -19,6 +19,16 @@ describe('bodyApd / bodyAnim (FUN_0041e350)', () => {
     expect(bodyAnim(unit({ slot: 0, moved: true, acted: true }), items)!.name).toBe('F.COMPLETE');
     expect(bodyAnim(unit({ slot: 10, side: 4, moved: true, acted: true }), items)!.name).toBe('F.STAND');
     expect(bodyAnim(unit({ slot: 0, status: 1 }), items)!.name).toBe('F.DEAD');
+  });
+  it('while a script runs (FUN_0041f580 bVar2) a party unit done moving and acting shows SET whatever its status; the rest keep the field rule', () => {
+    expect(bodyAnim(unit({ slot: 0, id: 1, moved: true, acted: true }), items, true)!.name).toBe('F.SET');
+    expect(bodyAnim(unit({ slot: 0, id: 1, moved: true, acted: true, status: 1 }), items, true)!.name).toBe('F.SET');
+    expect(bodyAnim(unit({ slot: 0, id: 1, moved: true, acted: true, status: 9 }), items, true)).toBeNull();
+    expect(bodyAnim(unit({ slot: 0, id: 8, moved: true, acted: true }), items, true)!.name).toBe('F.COMPLETE');   // a nameless party unit (id 8)
+    expect(bodyAnim(unit({ slot: 0, moved: true }), items, true)!.name).toBe('F.STAND');                        // still has its action
+    expect(bodyAnim(unit({ slot: 10, side: 4, moved: true, acted: true }), items, true)!.name).toBe('F.STAND');   // an enemy
+    expect(bodyAnim(unit({ slot: 0, moved: true, acted: true, race: 0x17 }), items, true)!.name).toBe('F.COMPLETE');   // the behemoth never SETs
+    expect(bodyAnim(unit({ slot: 0, moved: true, acted: true }), items)!.name).toBe('F.COMPLETE');               // the field: no script
     expect(bodyAnim(unit({ slot: 10, side: 4, status: 1 }), items)!.name).toBe('F.DOWN_DAMAGE');
   });
   it('status tokens: petrified S/DAMAGE, frozen A/DAMAGE, levitating LEVITATE (also via a status-11 item), hidden → none, others DOWN_DAMAGE', () => {

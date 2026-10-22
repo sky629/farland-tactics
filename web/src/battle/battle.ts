@@ -31,10 +31,10 @@ export function applyRoster(units: (Unit | null)[], roster: RosterUnit[], tables
   for (const rec of roster) {
     if (rec.side === 0) {
       const existing = units.slice(0, PARTY_SLOTS).find((u) => u && u.id === rec.unit_id);
-      if (existing) { existing.c = rec.c; existing.r = rec.r; existing.dir = (rec.dir & 3) as Dir; existing.status = rec.status; continue; }
+      if (existing) { existing.c = rec.c; existing.r = rec.r; existing.dir = (rec.dir & 3) as Dir; existing.status = rec.status; existing.moved = true; existing.acted = true; continue; }
     }
     const slot = rec.side === 0 ? freeSlot(units, 0, PARTY_SLOTS) : freeSlot(units, PARTY_SLOTS, MAX_SLOTS);
-    if (slot >= 0) units[slot] = createUnit(rec, slot, tables, rng);
+    if (slot >= 0) { const u = createUnit(rec, slot, tables, rng); u.moved = true; u.acted = true; units[slot] = u; }   // FUN_0041fae0 ends with +0x5c = +0x60 = 1 for a kept and a new unit alike (BATTLE_START clears them)
   }
 }
 
