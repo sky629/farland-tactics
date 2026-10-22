@@ -103,6 +103,14 @@ describe('GameCore', () => {
     expect(core.mode).toBe('battle');
     expect(stage.presenter.scriptMode).toBe(false);
   });
+  it('the battle entry carries the story\'s objective — the script\'s MESSAGE text (underscores as spaces) with the EPISODE title: what 클리어 조건 shows', () => {
+    const stage = new FakeStage();
+    const core = new GameCore(res([prog(0, ['begin', ['LOAD_UNITS', 5], ['LOAD_MAP', 49], ['EPISODE', '첫업무', 0], ['MESSAGE', '슬라임을_전멸시켜라!?'], ['BATTLE_START_HEAL'], ['END']])], { 5: [...party, slime] }), stage);
+    core.newGame(); core.frame(0);
+    stage.modal = 0; core.frame(16); core.frame(32);
+    expect(core.mode).toBe('battle');
+    expect(core.battle!.state.entry).toMatchObject({ episode: '첫업무', objective: '슬라임을 전멸시켜라!?' });
+  });
   it('LOAD_MAP waits for the stage; BATTLE_START + END creates a Battle over the campaign units and inventory', () => {
     const stage = new FakeStage(); stage.ready = false;
     const core = new GameCore(res([prog(0, ['begin', ['LOAD_UNITS', 5], ['LOAD_MAP', 49], ['BATTLE_START_HEAL'], ['END']])], { 5: [...party, slime] }), stage);

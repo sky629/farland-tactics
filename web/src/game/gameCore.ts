@@ -9,7 +9,7 @@ import type { Presenter } from '../field/presenter';
 import { VIEW_H, VIEW_W } from '../iso/grid';
 import type { Host, ModalKind, Resources, Restore, Tint, Where } from '../script/host';
 import { findLabel } from '../script/program';
-import { ScriptVm } from '../script/vm';
+import { ScriptVm, scriptText } from '../script/vm';
 import { townLabel } from '../town/town';
 import { clampCamera } from '../viewer/scale';
 import { scenes } from '../visual/scenes';
@@ -225,7 +225,7 @@ export class GameCore implements Host {
     if (!map) { this.stage.log('warn', `${fresh ? 'BATTLE_START' : 'FIELD_MODE'} without a loaded map`); this.mode = 'ended'; return; }
     const grid = new BattleGrid(map);
     if (fresh) placeUnplacedParty(this.campaign.units, grid);
-    const entry = { event: this.campaign.stage, label: 'script', map: `stage${String(this.lastMap).padStart(2, '0')}`, roster: this.lastRoster, episode: this.campaign.episode, objective: '', heal: false };
+    const entry = { event: this.campaign.stage, label: 'script', map: `stage${String(this.lastMap).padStart(2, '0')}`, roster: this.lastRoster, episode: this.campaign.episode, objective: scriptText(this.campaign.message), heal: false };   // 클리어 조건 shows the script's last MESSAGE (saved in the header too)
     const turn = Math.max(this.campaign.turn, 0) + 1;                          // the header counts finished rounds
     this.battle = new Battle({ entry, map, grid, units: this.campaign.units, turn, phase: { kind: 'player', sel: { mode: 'idle' } }, rng: this.res.rng, lastPath: [], inventory: this.campaign.inventory }, this.res.tables,
       { beforeAction: (a, _action, targets) => this.beforeAction(a, targets), deferSettle: true });
