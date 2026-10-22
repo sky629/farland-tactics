@@ -116,7 +116,7 @@ class DecodeProgram(unittest.TestCase):
 
 - [ ] **Step 2: 실패 확인**
 
-Run: `cd /Users/kang/Documents/dev/farland_tactics && python3 -I -m unittest tools.test_ft2_export -k DecodeProgram 2>&1 | tail -3`
+Run: `python3 -I -m unittest tools.test_ft2_export -k DecodeProgram 2>&1 | tail -3`
 Expected: `ImportError: cannot import name 'decode_program'`.
 
 - [ ] **Step 3: 디코더 구현**
@@ -226,7 +226,7 @@ def format_arg(op, spec_code, v):
 
 - [ ] **Step 4: 디스어셈블리 회귀 확인**
 
-Run: `cd /Users/kang/Documents/dev/farland_tactics && python3 -I tools/ft2_event_disasm.py extracted/FarlandTactics2/DATA/EVENT*.dat > /tmp/claude-501/-Users-kang-Documents-dev-farland-tactics/c85999d5-2c72-44f9-a278-18cf9d1354e5/scratchpad/events/after.txt && diff /tmp/claude-501/-Users-kang-Documents-dev-farland-tactics/c85999d5-2c72-44f9-a278-18cf9d1354e5/scratchpad/events/all.txt /tmp/claude-501/-Users-kang-Documents-dev-farland-tactics/c85999d5-2c72-44f9-a278-18cf9d1354e5/scratchpad/events/after.txt | head`
+Run: `python3 -I tools/ft2_event_disasm.py extracted/FarlandTactics2/DATA/EVENT*.dat > /tmp/ft2-scratch/events/after.txt && diff /tmp/ft2-scratch/events/all.txt /tmp/ft2-scratch/events/after.txt | head`
 Expected: 차이 없음(또는 `(?)`·`pad` 표시만 다른 줄 — 있으면 형식을 맞춘다).
 
 - [ ] **Step 5: exporter**
@@ -264,7 +264,7 @@ def export_events(game: Path, out: Path, report: Report) -> list[int]:
 
 - [ ] **Step 6: 테스트 통과 + 내보내기 실행**
 
-Run: `cd /Users/kang/Documents/dev/farland_tactics && python3 -I -m unittest discover -s tools -p 'test_*.py' 2>&1 | tail -2 && python3 -I tools/ft2_export.py extracted/FarlandTactics2 web/public/assets | tail -4 && ls web/public/assets/data/event*.json | wc -l && ls web/public/assets/bmp | wc -l`
+Run: `python3 -I -m unittest discover -s tools -p 'test_*.py' 2>&1 | tail -2 && python3 -I tools/ft2_export.py extracted/FarlandTactics2 web/public/assets | tail -4 && ls web/public/assets/data/event*.json | wc -l && ls web/public/assets/bmp | wc -l`
 Expected: `OK`; `events 20, bmp 397`(또는 Thumbs 제외 수); 20개 JSON; 397개 PNG; errors 0.
 
 - [ ] **Step 7: 커밋**

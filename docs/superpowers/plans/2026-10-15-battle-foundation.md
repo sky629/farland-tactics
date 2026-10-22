@@ -121,7 +121,7 @@ class RosterJson(unittest.TestCase):
 
 - [ ] **Step 2: 실패 확인**
 
-Run: `cd /Users/kang/Documents/dev/farland_tactics && python3 -I -m unittest discover -s tools -p 'test_*.py' 2>&1 | tail -3`
+Run: `python3 -I -m unittest discover -s tools -p 'test_*.py' 2>&1 | tail -3`
 Expected: `ImportError: cannot import name 'battles_from_listing'`
 
 - [ ] **Step 3: 구현**

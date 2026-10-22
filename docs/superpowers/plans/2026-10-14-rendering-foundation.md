@@ -121,7 +121,7 @@ if __name__ == '__main__':
 
 - [ ] **Step 2: 테스트가 실패하는지 확인**
 
-Run: `cd /Users/kang/Documents/dev/farland_tactics && python3 -I -m unittest discover -s tools -p 'test_ft2_export.py'`
+Run: `python3 -I -m unittest discover -s tools -p 'test_ft2_export.py'`
 Expected: `ModuleNotFoundError: No module named 'ft2_export'`
 
 - [ ] **Step 3: 변환기 작성**

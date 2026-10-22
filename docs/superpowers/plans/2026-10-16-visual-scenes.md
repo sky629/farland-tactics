@@ -90,7 +90,7 @@ class VisualExportTest(unittest.TestCase):
             self.assertEqual(len(report.errors), 1)
 ```
 
-- [ ] **Step 2: RED** — `cd /Users/kang/Documents/dev/farland_tactics && python3 -I -m unittest tools.test_ft2_visual -v` → FAIL `AttributeError: module 'ft2_export' has no attribute 'export_visual'`.
+- [ ] **Step 2: RED** — `python3 -I -m unittest tools.test_ft2_visual -v` → FAIL `AttributeError: module 'ft2_export' has no attribute 'export_visual'`.
 - [ ] **Step 3: 구현**
 
 ```python

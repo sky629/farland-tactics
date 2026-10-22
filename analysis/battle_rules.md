@@ -467,4 +467,4 @@ if side == 0: [0x1c..] = { m | magic[m].mask & 1<<(id-1), 0 < magic[m].lv ≤ le
 
 ## 9. 산출물
 - 본 문서: `analysis/battle_rules.md`
-- 디컴파일·데이터 덤프: `/private/tmp/claude-501/-Users-kang-Documents-dev-farland-tactics/c85999d5-2c72-44f9-a278-18cf9d1354e5/scratchpad/agent_battle/` (`fn_0x43b4a0.c`, `fn_0x438d70.c`, `fn_0x42eaa0.c`, `fn_0x43e1e0.c`, `magic_dump2.txt`, `item_dump.txt`, `race_dump.txt`)
+- 디컴파일·데이터 덤프: `/tmp/ft2-scratch/agent_battle/` (`fn_0x43b4a0.c`, `fn_0x438d70.c`, `fn_0x42eaa0.c`, `fn_0x43e1e0.c`, `magic_dump2.txt`, `item_dump.txt`, `race_dump.txt`)

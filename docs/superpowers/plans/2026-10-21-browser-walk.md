@@ -67,7 +67,7 @@
 
 - [x] **Step 1: 추출 전 요약을 남긴다**
 
-Run: `cd web && rtk proxy npx vitest run test/campaignWalk.test.ts --reporter=verbose --silent=false 2>&1 | grep -E "^(picks|strikes|stages|battles at|towns|mode) " > /private/tmp/claude-501/-Users-kang-Documents-dev-farland-tactics/c85999d5-2c72-44f9-a278-18cf9d1354e5/scratchpad/walk-summary-before.txt; wc -l $_`
+Run: `cd web && rtk proxy npx vitest run test/campaignWalk.test.ts --reporter=verbose --silent=false 2>&1 | grep -E "^(picks|strikes|stages|battles at|towns|mode) " > /tmp/ft2-scratch/walk-summary-before.txt; wc -l $_`
 Expected: 6 줄(picks, strikes, stages, battles at, towns, mode).
 
 - [x] **Step 2: 실패하는 테스트 `web/test/walker.test.ts`**
@@ -127,7 +127,7 @@ Expected: FAIL — `Cannot find module '../src/dev/walker'`.
 
 - [x] **Step 6: 두 테스트 통과 + 요약 동일 확인**
 
-Run: `cd web && rtk proxy npx vitest run test/walker.test.ts test/campaignWalk.test.ts --reporter=verbose --silent=false 2>&1 | tee /private/tmp/claude-501/-Users-kang-Documents-dev-farland-tactics/c85999d5-2c72-44f9-a278-18cf9d1354e5/scratchpad/walk-after.txt | grep -E "Tests |FAIL"; grep -E "^(picks|strikes|stages|battles at|towns|mode) " /private/tmp/claude-501/-Users-kang-Documents-dev-farland-tactics/c85999d5-2c72-44f9-a278-18cf9d1354e5/scratchpad/walk-after.txt | diff - /private/tmp/claude-501/-Users-kang-Documents-dev-farland-tactics/c85999d5-2c72-44f9-a278-18cf9d1354e5/scratchpad/walk-summary-before.txt && echo SAME`
+Run: `cd web && rtk proxy npx vitest run test/walker.test.ts test/campaignWalk.test.ts --reporter=verbose --silent=false 2>&1 | tee /tmp/ft2-scratch/walk-after.txt | grep -E "Tests |FAIL"; grep -E "^(picks|strikes|stages|battles at|towns|mode) " /tmp/ft2-scratch/walk-after.txt | diff - /tmp/ft2-scratch/walk-summary-before.txt && echo SAME`
 Expected: 모두 통과(세 번째 walker 테스트는 skip), `SAME`.
 
 - [x] **Step 7: 커밋** `refactor(web): the campaign walker as a module (dev/walker.ts) behind WalkWorld; the test is its headless harness`
