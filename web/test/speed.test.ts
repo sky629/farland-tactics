@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { GameClock } from '../src/play/clock';
 import { accelOf, menuModel, type MenuTemplate } from '../src/ui/win/menubar';
-import { addSpeedMenu, nextSpeed, SPEED_IDS, speedOfId } from '../src/ui/win/speed';
+import { addSpeedMenu, nextSpeed, SPEED_IDS, speedBadge, speedOfId } from '../src/ui/win/speed';
+import { fakeDocument } from './helpers/fakeDom';
 import menu103 from './helpers/menu103.json';
 
 const menu = menu103 as MenuTemplate;
@@ -39,5 +40,17 @@ describe('the 배속 submenu', () => {
     const popupSys = m.popups['시스템']!.items.find((i) => i.label === '시스템(S)')!.items!;
     expect(popupSys.some((i) => i.label === '배속(X)')).toBe(true);
     expect(accelOf(m, 'F6', false)).toBeNull();
+  });
+});
+
+describe('the 배속 badge in the game window', () => {
+  it('shows the current speed and a click asks for the next one; set() redraws it', () => {
+    let cycles = 0;
+    const b = speedBadge(fakeDocument([]), 2, () => { cycles++; });
+    expect(b.el.textContent).toBe('배속 2배');
+    b.el.click();
+    expect(cycles).toBe(1);
+    b.set(4);
+    expect(b.el.textContent).toBe('배속 4배');
   });
 });

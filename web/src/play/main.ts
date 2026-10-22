@@ -32,7 +32,7 @@ import { scenes } from '../visual/scenes';
 import { FULL_MAP_H, FULL_MAP_W, FullMapWindow, fullMapMarkers } from '../ui/win/fullMap';
 import { faceName } from '../ui/names';
 import { settingsDialog, type Settings } from '../ui/win/screens/settings';
-import { addSpeedMenu, isSpeed, nextSpeed, speedOfId } from '../ui/win/speed';
+import { addSpeedMenu, isSpeed, nextSpeed, speedBadge, speedOfId } from '../ui/win/speed';
 import { GameClock } from './clock';
 import { bgmDialog } from '../ui/win/screens/bgm';
 import { frameScale, MENU_BAR_H } from '../viewer/scale';
@@ -180,11 +180,14 @@ let lastFrameError = '';
 /** Dialog 156's choices, remembered per browser: 효과음 ON/OFF and 전화면 표시 (the music is always the MIDI synth, as the original's MIDI setting). */
 let settings: Settings = { fullscreen: false, sound: true, speed: 1 };
 const clock = new GameClock();                                                 // 배속: real frame time → game time
+let speedBadgeRef: ReturnType<typeof speedBadge> | null = null;
+/** 배속 1 → 2 → 4 → 1: F6 and the badge; a modal dialog holds it like the menu. */
+function cycleSpeed(): void { if (dialogHost?.busy) return; settings = { ...settings, speed: nextSpeed(settings.speed) }; applySettings(); }
 function loadSettings(): void { try { const saved = JSON.parse(localStorage.getItem('ft2.settings') ?? 'null') as Partial<Settings> | null; if (saved) settings = { ...settings, ...saved }; } catch { /* storage unavailable */ } if (!isSpeed(settings.speed)) settings = { ...settings, speed: 1 }; applySettings(); }
 document.addEventListener('fullscreenchange', () => { if (settings.fullscreen !== (document.fullscreenElement !== null)) { settings = { ...settings, fullscreen: document.fullscreenElement !== null }; try { localStorage.setItem('ft2.settings', JSON.stringify(settings)); } catch { /* storage unavailable */ } } });
 function applySettings(): void {
   stage?.setVolumes(0.8, settings.sound ? 0.8 : 0);
-  clock.speed = settings.speed; if (dialogueRef) dialogueRef.timeScale = settings.speed;
+  clock.speed = settings.speed; if (dialogueRef) dialogueRef.timeScale = settings.speed; speedBadgeRef?.set(settings.speed);
   try { localStorage.setItem('ft2.settings', JSON.stringify(settings)); } catch { /* storage unavailable */ }
   const full = document.fullscreenElement !== null;
   if (settings.fullscreen && !full) void $('stage').requestFullscreen?.().catch(() => {});
@@ -299,11 +302,12 @@ async function boot(): Promise<void> {
     if (ui) {
       menuRef = ui.menu; midiTracks = [...(index.midi ?? [])]; const model = currentMenu(); menuSig = menuSignature();
       menuBar = new MenuBar($('menubar'), model, menuCommand, () => dialogHost?.busy ?? false); popup = new PopupMenu($('win'));
+      if (!walk) { speedBadgeRef = speedBadge(document, settings.speed, cycleSpeed); $('frame').appendChild(speedBadgeRef.el); }   // the 배속 badge at the right of the menu bar (not in the auto-play's pictures)
       dialogHost = new Dialogs($('win'), ui.dialogs); dialogue.attach(dialogHost);
       fullMap = new FullMapWindow($('win'), (x, y) => stage?.scrollTo(x, y));
       document.addEventListener('keydown', (e) => {                            // the original's accelerators: F1 불러오기, F2 유니트 일람, F4 전체 화면, F5 저장, F10 턴 종료 …
         if (dialogHost?.busy || e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement || e.target instanceof HTMLTextAreaElement) return;
-        if (e.key === 'F6') { e.preventDefault(); settings = { ...settings, speed: nextSpeed(settings.speed) }; applySettings(); return; }   // 배속 1 → 2 → 4 → 1 (web-only)
+        if (e.key === 'F6') { e.preventDefault(); cycleSpeed(); return; }      // 배속 (web-only)
         const id = accelOf(currentMenu(), e.key, e.ctrlKey || e.metaKey);
         if (id !== null) { e.preventDefault(); menuCommand(id); }
       });
