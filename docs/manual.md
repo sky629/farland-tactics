@@ -591,7 +591,7 @@ requestAnimationFrame(frame);
 
 | 문서 | 내용 |
 |---|---|
-| `README.md` | 요약과 빠른 시작 |
+| `README.md` | 게임 실행과 게임 방법 |
 | `docs/manual.md` | 이 문서 |
 | `docs/superpowers/specs/2026-10-14-rendering-foundation-design.md` | 하위 프로젝트 1 설계. 색 키·셀 기준점·그리기 순서의 관찰 근거, 스크립트 문법(§8), 뷰어(§9) |
 | `docs/superpowers/specs/2026-10-15-battle-foundation-design.md` | 하위 프로젝트 2 설계. 규칙 코어, 적 AI, 연출, 전투 페이지, 파티 규칙 |
