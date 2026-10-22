@@ -32,6 +32,8 @@ import { scenes } from '../visual/scenes';
 import { FULL_MAP_H, FULL_MAP_W, FullMapWindow, fullMapMarkers } from '../ui/win/fullMap';
 import { faceName } from '../ui/names';
 import { settingsDialog, type Settings } from '../ui/win/screens/settings';
+import { addSpeedMenu, isSpeed, nextSpeed, speedOfId } from '../ui/win/speed';
+import { GameClock } from './clock';
 import { bgmDialog } from '../ui/win/screens/bgm';
 import { frameScale, MENU_BAR_H } from '../viewer/scale';
 
@@ -74,6 +76,8 @@ function resize(): void {
 /** Menu 103 and the popups' command ids → actions (commands.ts). */
 function menuCommand(id: number): void {
   if (!core || !stage || dialogHost?.busy) return;                                           // a dialog box is modal: the menu waits, as the Win32 owner did
+  const speed = speedOfId(id);
+  if (speed !== null) { settings = { ...settings, speed }; applySettings(); return; }        // 배속 ▸ 1배/2배/4배 (web-only)
   const act = menuAction(id);
   if (act === null) return;
   if (typeof act === 'object') { core.townSelect(act.facility); return; }                               // 이동하다 ▸ a facility
@@ -100,12 +104,13 @@ function menuFlags(): Record<number, boolean> {
 let dialogueRef: Dialogue | null = null; let tablesRef: Tables | null = null; let menuRef: MenuTemplate | null = null; let dialogHost: Dialogs | null = null; let midiTracks: number[] = [];
 let fullMap: FullMapWindow | null = null;
 let faceOf: (u: Unit) => string | null = () => null;                          // a party member's portrait URL (names.ts faceName over the exported bitmaps)
-/** The menu's state in one string: enabled flags, BGM 선택 after the ending, the 전체 맵 check. */
-function menuSignature(): string { return JSON.stringify(menuFlags()) + (core?.complete ? '+' : '') + (fullMap?.visible ? 'M' : ''); }
-/** The menu as the original builds it at the time: menu 103 plus 'BGM 선택(&B)' (0x44b524, id 0x6b) once the game has been completed. */
+/** The menu's state in one string: enabled flags, BGM 선택 after the ending, the 전체 맵 check, the 배속 check. */
+function menuSignature(): string { return JSON.stringify(menuFlags()) + (core?.complete ? '+' : '') + (fullMap?.visible ? 'M' : '') + settings.speed; }
+/** The menu as the original builds it at the time: menu 103 plus 'BGM 선택(&B)' (0x44b524, id 0x6b) once the game has been completed, plus the web's 배속 submenu. */
 function currentMenu(): ReturnType<typeof menuModel> {
   const m = menuModel(menuRef!, menuFlags(), dev, { 40030: fullMap?.visible ?? false });
   if (core?.complete) m.bar[0]?.items.push({ label: 'BGM 선택(B)', ul: 7, key: 'b', accel: null, id: 107, enabled: true, separator: false });
+  addSpeedMenu(m, settings.speed);
   return m;
 }
 
@@ -173,11 +178,13 @@ async function titleLoop(): Promise<void> {
 
 let lastFrameError = '';
 /** Dialog 156's choices, remembered per browser: 효과음 ON/OFF and 전화면 표시 (the music is always the MIDI synth, as the original's MIDI setting). */
-let settings: Settings = { fullscreen: false, sound: true };
-function loadSettings(): void { try { const saved = JSON.parse(localStorage.getItem('ft2.settings') ?? 'null') as Partial<Settings> | null; if (saved) settings = { ...settings, ...saved }; } catch { /* storage unavailable */ } applySettings(); }
+let settings: Settings = { fullscreen: false, sound: true, speed: 1 };
+const clock = new GameClock();                                                 // 배속: real frame time → game time
+function loadSettings(): void { try { const saved = JSON.parse(localStorage.getItem('ft2.settings') ?? 'null') as Partial<Settings> | null; if (saved) settings = { ...settings, ...saved }; } catch { /* storage unavailable */ } if (!isSpeed(settings.speed)) settings = { ...settings, speed: 1 }; applySettings(); }
 document.addEventListener('fullscreenchange', () => { if (settings.fullscreen !== (document.fullscreenElement !== null)) { settings = { ...settings, fullscreen: document.fullscreenElement !== null }; try { localStorage.setItem('ft2.settings', JSON.stringify(settings)); } catch { /* storage unavailable */ } } });
 function applySettings(): void {
   stage?.setVolumes(0.8, settings.sound ? 0.8 : 0);
+  clock.speed = settings.speed; if (dialogueRef) dialogueRef.timeScale = settings.speed;
   try { localStorage.setItem('ft2.settings', JSON.stringify(settings)); } catch { /* storage unavailable */ }
   const full = document.fullscreenElement !== null;
   if (settings.fullscreen && !full) void $('stage').requestFullscreen?.().catch(() => {});
@@ -218,7 +225,7 @@ function draw(now: number): void {
     }
   } else renderer.draw({ map: null, sprites: [], camera: { x: 0, y: 0 }, overlay: { grid: false, height: false, land: false, blocked: false }, seeThrough: false });
 }
-function frame(now: number): void { tick(now); requestAnimationFrame(frame); }
+function frame(now: number): void { tick(clock.at(now)); requestAnimationFrame(frame); }   // the game runs on the 배속 clock; the auto-play feeds tick its own virtual time
 
 /** Every roster a LOAD_UNITS instruction names, so the VM can apply them synchronously. */
 function rosterIds(programs: Program[]): number[] {
@@ -296,6 +303,7 @@ async function boot(): Promise<void> {
       fullMap = new FullMapWindow($('win'), (x, y) => stage?.scrollTo(x, y));
       document.addEventListener('keydown', (e) => {                            // the original's accelerators: F1 불러오기, F2 유니트 일람, F4 전체 화면, F5 저장, F10 턴 종료 …
         if (dialogHost?.busy || e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement || e.target instanceof HTMLTextAreaElement) return;
+        if (e.key === 'F6') { e.preventDefault(); settings = { ...settings, speed: nextSpeed(settings.speed) }; applySettings(); return; }   // 배속 1 → 2 → 4 → 1 (web-only)
         const id = accelOf(currentMenu(), e.key, e.ctrlKey || e.metaKey);
         if (id !== null) { e.preventDefault(); menuCommand(id); }
       });

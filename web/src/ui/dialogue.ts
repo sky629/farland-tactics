@@ -130,11 +130,12 @@ export class Dialogue {
 
   takeModalResult(): number | null { const r = this.result; this.result = null; return r; }
 
+  timeScale = 1;                                                               // 배속: the caption's real-time span shrinks with the game speed
   showEpisode(title: string): void {
     this.episode.textContent = title;
     this.episode.hidden = false;
     if (this.episodeTimer) clearTimeout(this.episodeTimer);
-    this.episodeTimer = setTimeout(() => { this.episode.hidden = true; }, 2500);
+    this.episodeTimer = setTimeout(() => { this.episode.hidden = true; }, 2500 / this.timeScale);
   }
 
   closeAll(): void {
