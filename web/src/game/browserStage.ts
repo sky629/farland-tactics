@@ -17,7 +17,7 @@ import type { Backdrop, Renderer } from '../render/renderer';
 import type { ModalKind, Where } from '../script/host';
 import { IndexedBitmaps } from '../gfx/indexed';
 import { LoadTable } from '../assets/loadTable';
-import { HOTSPOTS, hitTest, layerFrame, townLayerKey, townLayers } from '../town/town';
+import { hitTest, townLayerKey, townLayers, townPieces } from '../town/town';
 import type { Dialogue, ModalContext } from '../ui/dialogue';
 import { clampCamera } from '../viewer/scale';
 import type { Stage } from './gameCore';
@@ -119,21 +119,16 @@ export class BrowserStage implements Stage {
     return s ? s.bmp.get(s.key) : null;
   }
 
+  /** The town picture in the original's draw order (town.ts townPieces); every sheet is requested each frame so all of them load at once. */
   private townBackdrop(now: number): Backdrop[] {
     const t = this.town!;
+    const names = townLayers(t.set, t.extra);
+    const images = names.map((name, i) => this.sheet(name, i));
     const out: Backdrop[] = [];
-    townLayers(t.set, t.extra).forEach((name, i) => {
-      const image = this.sheet(name, i);
-      if (!image) return;
-      if (i === 0) out.push({ image, sx: 0, sy: 0, w: VIEW_W, h: VIEW_H, dx: 0, dy: 0 });
-      else if (i === 3) {
-        HOTSPOTS.forEach((h, k) => {
-          if ((t.flags[k] ?? 0) === 0 || !(t.showAll || t.hover === k)) return;
-          const [l, tp, r, b] = h.highlight;
-          out.push({ image, sx: l, sy: tp, w: r - l, h: b - tp, dx: l, dy: tp });
-        });
-      } else out.push({ image, ...layerFrame(i as 1 | 2 | 4, now) });
-    });
+    for (const p of townPieces(t.set, t.extra, t.flags, t.showAll, t.hover, now)) {
+      const image = images[p.layer];
+      if (image) out.push({ image, sx: p.sx, sy: p.sy, w: p.w, h: p.h, dx: p.dx, dy: p.dy });
+    }
     return out;
   }
 

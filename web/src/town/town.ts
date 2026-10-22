@@ -1,4 +1,5 @@
 import type { IndexedImage } from '../assets/png';
+import { VIEW_H, VIEW_W } from '../iso/grid';
 import { findLabel } from '../script/program';
 import type { Resources } from '../script/host';
 
@@ -64,6 +65,25 @@ export function layerFrame(layer: 1 | 2 | 4, now: number): SheetFrame {
   const k = Math.floor((tick % 15) / 3);
   const [w, h, dx, dy] = layer === 1 ? [112, 64, 528, 0] : [288, 160, 352, 320];
   return { sx: Math.floor(k / 3) * w, sy: (k % 3) * h, w, h, dx, dy };
+}
+
+export interface TownPiece extends SheetFrame { layer: number }
+
+/**
+ * FUN_0042ad70: the town picture's pieces in the original's draw order — layer 0 whole, layers 1 and 2 by frame, the 128×128 extra
+ * layer 4 (night set with TOWN_EXTRA), and last of all the lit facilities' highlight rects copied in place from layer 3, so a
+ * bubble such as 여관's (468..512, 170..202) lies over the lights layer (496..624, 160..288). A facility is lit when its flag is on
+ * and either every highlight is shown or the mouse is over it.
+ */
+export function townPieces(set: 1 | 2 | 3, extra: boolean, flags: number[], showAll: boolean, hover: number | null, now: number): TownPiece[] {
+  const out: TownPiece[] = [{ layer: 0, sx: 0, sy: 0, w: VIEW_W, h: VIEW_H, dx: 0, dy: 0 }, { layer: 1, ...layerFrame(1, now) }, { layer: 2, ...layerFrame(2, now) }];
+  if (townLayers(set, extra).length > 4) out.push({ layer: 4, ...layerFrame(4, now) });
+  HOTSPOTS.forEach((h, k) => {
+    if ((flags[k] ?? 0) === 0 || !(showAll || hover === k)) return;
+    const [l, t, r, b] = h.highlight;
+    out.push({ layer: 3, sx: l, sy: t, w: r - l, h: b - t, dx: l, dy: t });
+  });
+  return out;
 }
 
 /** FUN_0042b080: a facility's label is looked up in the stage file first, then in EVENT00. */

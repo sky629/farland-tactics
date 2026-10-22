@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { HOTSPOTS, hitTest, layerFrame, townLabel, townLayerKey, townLayers } from '../src/town/town';
+import { HOTSPOTS, hitTest, layerFrame, townLabel, townLayerKey, townLayers, townPieces } from '../src/town/town';
 import { prog, res } from './helpers/scriptFixtures';
 
 const all = Array(15).fill(1);
@@ -16,6 +16,16 @@ describe('town screen model (story_flow.md §3)', () => {
     expect(hitTest(639, 30, all)).toBeNull();                                  // right edge excluded
     expect(hitTest(10, 10, all)).toBeNull();
     expect(hitTest(440, 188, all)).toBe(1);                                    // inn (1) before farm (13) where they overlap
+  });
+  it('townPieces draws the background, the two frame sheets, the extra layer, and the lit facilities\' highlights last (FUN_0042ad70) — the 여관 bubble over the 128×128 lights', () => {
+    const flags = Array(15).fill(0); flags[1] = 1; flags[2] = 1;             // 여관, 길드 open
+    const night = townPieces(2, true, flags, true, null, 0);
+    expect(night.map((p) => p.layer)).toEqual([0, 1, 2, 4, 3, 3]);
+    expect(night[3]).toMatchObject({ layer: 4, dx: 496, dy: 160, w: 128, h: 128 });
+    expect(night[4]).toMatchObject({ layer: 3, sx: 468, sy: 168, w: 46, h: 36, dx: 468, dy: 168 });   // the inn's highlight rect, copied in place
+    const hover = townPieces(2, true, flags, false, 2, 0);                    // no showAll: only the hovered facility
+    expect(hover.filter((p) => p.layer === 3).map((p) => p.dx)).toEqual([296]);
+    expect(townPieces(1, false, flags, false, null, 0).map((p) => p.layer)).toEqual([0, 1, 2]);   // day set: no extra layer, nothing lit
   });
   it('townLayers names the sheet files of a set; the 128×128 extra layer exists only for the night set', () => {
     expect(townLayers(1, false)).toEqual(['town00', 'town01', 'town02', 'town03']);
