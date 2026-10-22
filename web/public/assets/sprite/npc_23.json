@@ -1,0 +1,1 @@
+{"version": 3, "sheets": ["shadow", "npc_23"], "images": [{"sheet": 0, "key": 249, "x": 144, "y": 64, "w": 48, "h": 32, "ox": -20, "oy": -16}, {"sheet": 1, "key": 253, "x": 0, "y": 8, "w": 49, "h": 72, "ox": -16, "oy": -60}], "patterns": [{"yOffset": 0, "images": [0, 1]}], "anims": [{"name": "B.SET", "script": "P0"}]}

@@ -1,8 +1,8 @@
-# original game data and archives (copyrighted, not redistributed)
+# the original game's archives and the extracted install (the web assets exported from them are committed: web/public/assets/)
 extracted/
 *.egg
-# generated web assets (from tools/ft2_export.py)
-web/public/assets/
+# the developer's own save files beside the exported assets (tools/ft2_setup.py never writes here)
+web/public/assets/save/
 # toolchains
 node_modules/
 __pycache__/

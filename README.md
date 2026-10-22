@@ -17,19 +17,20 @@
 
 ## 빠른 시작
 
-원본 게임 파일이 필요하다. 저장소에는 코드와 문서만 있다.
+변환된 게임 자료(`web/public/assets/`, 약 71 MB)가 저장소에 들어 있으므로 받아서 바로 실행한다. 필요한 것은 Node.js 22.12 이상(npm 포함)뿐이다.
 
 ```bash
-# 1. 원본 아카이브 풀기 (18개 .egg 파일을 저장소 루트에 둔 뒤)
-python3 -I tools/ft2_unegg.py 파랜드택틱스2.vol1.egg extracted
-mv extracted/FarlandTactics2_Package.vol1 extracted/FarlandTactics2
+git clone https://github.com/sky629/farland-tactics.git
+cd farland-tactics/web
+npm install
+npm run dev      # 게임 http://localhost:5173/play.html · 전투 테스트 /game.html · 뷰어 /
+```
 
-# 2. 웹 자산 변환 (약 20초) + 음악용 GM 사운드폰트 (약 14 MB, 1회)
-python3 -I tools/ft2_export.py extracted/FarlandTactics2 web/public/assets
-python3 -I tools/ft2_soundfont.py web/public/assets
+자료를 원작 파일에서 다시 만들려면(또는 자료 없이 받은 사본을 채우려면) 설치 도구 한 번이면 된다. Python 3.10 이상이 필요하다.
 
-# 3. 뷰어 실행
-cd web && npm install && npm run dev      # 게임 http://localhost:5173/play.html · 전투 테스트 /game.html · 뷰어 /
+```bash
+python3 -I tools/ft2_setup.py /경로/파랜드택틱스2.vol1.egg            # 추출 → 변환(약 20초) → 사운드폰트(14 MB, 1회) → npm install
+python3 -I tools/ft2_setup.py extracted/FarlandTactics2 --force --run   # 설치된 게임 폴더로 다시 변환하고 바로 실행
 ```
 
 자세한 절차, 뷰어 조작, 검사, 분석 도구, 문제 해결은 **[사용 설명서 `docs/manual.md`](docs/manual.md)** 에 있다.
@@ -42,11 +43,11 @@ web/            TypeScript 렌더러와 개발용 뷰어 (Vite, Vitest)
 analysis/       FT2.exe 역공학 결과: 보고서, 파일 포맷, 이벤트 스크립트, 전투 규칙
 docs/           사용 설명서, 설계 문서(specs), 구현 계획(plans)
 extracted/      원본 게임 폴더 (git 제외)
-web/public/assets/   변환 자산 (git 제외)
+web/public/assets/   변환 자산 (저장소에 포함; 개인 세이브 save/ 만 제외)
 ```
 
 ## 데이터 정책
 
-원본 게임 파일(`*.egg`, `extracted/`)과 변환 결과(`web/public/assets/`)는 저작권이 있는 자료다. `.gitignore`가 이 경로를 막는다. 사용자가 가진 원본으로 자기 컴퓨터에서 변환한다.
+원본 게임 파일(`*.egg`, `extracted/`)은 저장소에 넣지 않는다(`.gitignore`). 변환 결과(`web/public/assets/`)는 받은 사람이 바로 실행할 수 있도록 저장소에 들어 있다. 원작 게임의 그림·지도·음악·대사는 원 저작권자의 것이며, 이 저장소는 그 권리를 주장하지 않는다. 권리자의 요청이 있으면 자료를 내린다. 자료는 `tools/ft2_setup.py` 로 원작 파일에서 다시 만들 수 있다.
 
 이 저장소의 코드·문서·도구는 MIT 라이선스(`LICENSE`)로 공개한다. 원본 게임과 그 자료는 라이선스 대상이 아니며, 그림이 들어간 화면 캡처도 저장소에 싣지 않는다.

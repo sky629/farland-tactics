@@ -1,0 +1,1 @@
+{"version": 3, "sheets": ["st42i"], "images": [{"sheet": 0, "key": 255, "x": 0, "y": 0, "w": 160, "h": 96, "ox": -80, "oy": 0}], "patterns": [{"yOffset": 0, "images": [0]}], "anims": [{"name": "F.SET", "script": "P0"}]}

@@ -24,8 +24,9 @@
 
 ### 1.3 데이터 정책
 
-- 원본 게임 파일(`*.egg`, `extracted/`)과 변환 결과(`web/public/assets/`)는 저장소에 넣지 않는다. `.gitignore`가 이 경로를 막는다.
-- 사용자가 가진 원본으로 자기 컴퓨터에서 변환한다. 저장소에는 코드와 문서만 있다.
+- 원본 게임 파일(`*.egg`, `extracted/`)은 저장소에 넣지 않는다. `.gitignore`가 이 경로를 막는다.
+- 변환 결과(`web/public/assets/`, 약 71 MB)는 받은 사람이 바로 실행할 수 있도록 저장소에 들어 있다(2026-10-22부터). 원작의 그림·지도·음악·대사는 원 저작권자의 것이며, 권리자의 요청이 있으면 내린다. 개발자의 세이브 파일(`assets/save/`)만 제외한다.
+- 자료는 `tools/ft2_setup.py` 로 원작 파일에서 다시 만들 수 있다(§3).
 
 ## 2. 준비물
 
@@ -35,20 +36,28 @@
 | Node.js | 22.12 이상 (Vite 8과 Vitest 5의 요구) | `node --version` |
 | npm | Node.js에 포함 | `npm --version` |
 | 브라우저 | Canvas 2D, `DecompressionStream`, `ImageBitmap`을 지원하는 버전. Chrome 80, Firefox 113, Safari 16.4 이상 | |
-| 원본 게임 | 분할 EGG 아카이브 `파랜드택틱스2.vol1.egg` ~ `.vol18.egg`, 또는 설치된 게임 폴더 | |
+| 원본 게임 | 분할 EGG 아카이브 `파랜드택틱스2.vol1.egg` ~ `.vol18.egg`, 또는 설치된 게임 폴더. **자료를 다시 만들 때만** 필요하다(변환 자료는 저장소에 들어 있다) | |
 
 검증한 환경: macOS 26 (arm64), Python 3.14.6, Node 24.18.0, npm 11.
 
 ## 3. 설치
 
 1. 저장소를 받는다. 모든 명령은 저장소 루트에서 실행한다. `web/` 안에서 실행하는 npm 명령만 예외다.
-2. 웹 패키지의 개발 의존성을 설치한다.
+2. 웹 패키지의 의존성을 설치한다. 변환 자료가 저장소에 들어 있으므로, 이것으로 설치는 끝이다(§5의 `npm run dev` 로 실행).
 
 ```bash
 cd web && npm install && cd ..
 ```
 
-설치하는 패키지는 `typescript`, `vite`, `vitest`, `@types/node` 네 개뿐이다. 런타임 의존성은 없다.
+설치하는 패키지는 개발용 `typescript`, `vite`, `vitest`, `@types/node` 와 MIDI 합성용 `spessasynth_lib`, `spessasynth_core` 다.
+
+자료를 원작 파일에서 다시 만들어야 할 때(§4의 과정 전체)는 설치 도구 한 번으로 끝낸다. 추출 → 변환 → 사운드폰트 → `npm install` 을 차례로 실행하고, 이미 있는 단계는 건너뛴다.
+
+```bash
+python3 -I tools/ft2_setup.py /경로/파랜드택틱스2.vol1.egg        # .egg 한 권(어느 권이든) 또는 그 폴더
+python3 -I tools/ft2_setup.py extracted/FarlandTactics2 --force  # 설치된 게임 폴더에서 자료를 다시 내보낸다
+python3 -I tools/ft2_setup.py --run                              # 저장소 루트의 .egg 를 쓰고, 끝나면 npm run dev
+```
 
 ## 4. 원본 데이터 준비
 
@@ -415,7 +424,7 @@ F.ATTACK6#0/23
 
 | 명령 | 실행 위치 | 내용 | 기대 결과 |
 |---|---|---|---|
-| `python3 -I -m unittest discover -s tools -p 'test_*.py'` | 루트 | 변환기 5개, EGG 추출기 3개 | `Ran 8 tests … OK` |
+| `python3 -I -m unittest discover -s tools -p 'test_*.py'` | 루트 | 변환기·EGG 추출기·UI 자원·설치 도구·보고서 | `Ran 43 tests … OK` |
 | `npm run check` | `web/` | `tsc --noEmit` 뒤 Vitest | 타입 오류 0, 테스트 전부 통과 |
 | `npm test` | `web/` | Vitest만 | 테스트 전부 통과 |
 

@@ -1,0 +1,1 @@
+{"version": 3, "sheets": ["shadow", "npc_15"], "images": [{"sheet": 0, "key": 249, "x": 144, "y": 72, "w": 48, "h": 16, "ox": -24, "oy": 16}, {"sheet": 1, "key": 255, "x": 0, "y": 0, "w": 48, "h": 80, "ox": -20, "oy": -42}], "patterns": [{"yOffset": 24, "images": [0, 1]}], "anims": [{"name": "F.SET", "script": "P0"}]}

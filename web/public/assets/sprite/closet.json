@@ -1,0 +1,1 @@
+{"version": 3, "sheets": ["st28b"], "images": [{"sheet": 0, "key": 249, "x": 0, "y": 8, "w": 168, "h": 192, "ox": 0, "oy": -184}], "patterns": [{"yOffset": 0, "images": [0]}], "anims": [{"name": "F.SLIDE", "script": "S50\r\nP0\r\nN86\r\nM-172,86\r\n"}, {"name": "F.SET", "script": "P0"}]}

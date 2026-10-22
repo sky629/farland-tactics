@@ -1,0 +1,1 @@
+{"version": 3, "sheets": ["npc_27"], "images": [{"sheet": 0, "key": 253, "x": 0, "y": 0, "w": 96, "h": 112, "ox": -88, "oy": -160}, {"sheet": 0, "key": 253, "x": 0, "y": 120, "w": 48, "h": 72, "ox": -72, "oy": -120}], "patterns": [{"yOffset": 0, "images": [0]}, {"yOffset": 0, "images": [1]}], "anims": [{"name": "F.VIPOR", "script": "P1"}, {"name": "F.SORN", "script": "P0"}]}
