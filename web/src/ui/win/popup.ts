@@ -28,10 +28,14 @@ export function unitPopupItems(u: Unit, inv: Inventory, tables: Tables): PopupIt
   });
   const items = usableItems(inv, tables.item).map((s): PopupItem => ({ label: tables.item[s.id]!.name, ul: -1, key: null, accel: `${String(s.count).padStart(3, ' ')}개`, id: 6000 + s.id, enabled: true, separator: false, cmd: { type: 'beginTarget', action: 1000 + s.id } }));
   const tool = mnemonicItem('도구를 사용하다(&U)');
+  // why an entry is greyed (the row's tooltip; the original says nothing): the first reason that applies
+  const why = (...reasons: (string | false)[]): string | undefined => reasons.find((r): r is string => r !== false);
+  const stuck = helpless && '행동할 수 없는 상태입니다', acted = u.acted && '이미 행동했습니다';
+  const hint = (h: string | undefined) => (h === undefined ? {} : { hint: h });
   return [
-    { label: `${name}의 행동`, ul: -1, key: null, accel: `(HP:${u.hp}/${u.hpMax})`, id: 102, enabled: !u.moved && !helpless, separator: false, cmd: { type: 'beginMove' } },
-    { label: `${name}의 마법/특기`, ul: -1, key: null, accel: `(MP:${u.mp}/${u.mpMax})`, id: null, enabled: !u.acted && !helpless && u.status !== 6 && spells.length > 0, separator: false, items: spells },
-    { ...tool, id: null, enabled: !u.acted && !helpless && items.length > 0, separator: false, items },
+    { label: `${name}의 행동`, ul: -1, key: null, accel: `(HP:${u.hp}/${u.hpMax})`, id: 102, enabled: !u.moved && !helpless, separator: false, cmd: { type: 'beginMove' }, ...hint(why(stuck, u.moved && '이미 이동했습니다')) },
+    { label: `${name}의 마법/특기`, ul: -1, key: null, accel: `(MP:${u.mp}/${u.mpMax})`, id: null, enabled: !u.acted && !helpless && u.status !== 6 && spells.length > 0, separator: false, items: spells, ...hint(why(stuck, acted, u.status === 6 && '침묵 상태입니다', spells.length === 0 && '배운 마법이 없습니다')) },
+    { ...tool, id: null, enabled: !u.acted && !helpless && items.length > 0, separator: false, items, ...hint(why(stuck, acted, items.length === 0 && '쓸 수 있는 도구가 없습니다')) },
     { label: '-', ul: -1, key: null, accel: null, id: null, enabled: false, separator: true },
   ];
 }

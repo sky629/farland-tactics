@@ -14,6 +14,7 @@ export class FakeElement {
   replaceChildren(...nodes: FakeElement[]): void { this.children = nodes; for (const n of nodes) n.parent = this; }
   appendChild<T extends FakeElement>(node: T): T { this.children.push(node); node.parent = this; return node; }
   append(...nodes: FakeElement[]): void { for (const n of nodes) this.appendChild(n); }
+  prepend(...nodes: FakeElement[]): void { for (const n of nodes) n.parent = this; this.children.unshift(...nodes); }
   remove(): void { if (this.parent) this.parent.children = this.parent.children.filter((c) => c !== this); this.parent = null; }
   addEventListener(type: string, fn: (ev: unknown) => void): void { this.listeners.set(type, [...(this.listeners.get(type) ?? []), fn]); }
   click(): void { for (const fn of this.listeners.get('click') ?? []) fn({ target: this, stopPropagation() {} }); }
@@ -27,5 +28,6 @@ export class FakeElement {
 
 export function fakeDocument(ids: string[]): Document {
   const byId = new Map(ids.map((id) => [id, new FakeElement('div', id)]));
-  return { getElementById: (id: string) => byId.get(id) ?? null, createElement: (tag: string) => new FakeElement(tag) } as unknown as Document;
+  const createTextNode = (text: string) => { const n = new FakeElement('#text'); n.textContent = text; return n; };
+  return { getElementById: (id: string) => byId.get(id) ?? null, createElement: (tag: string) => new FakeElement(tag), createTextNode } as unknown as Document;
 }

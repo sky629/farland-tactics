@@ -9,7 +9,8 @@ import { accelText } from './keys';
 import { mnemonic } from './layout';
 
 export type { MenuTemplate };
-export interface MenuItem { label: string; ul: number; key: string | null; accel: string | null; id: number | null; enabled: boolean; separator: boolean; checked?: boolean; items?: MenuItem[] }
+export interface MenuItem { label: string; ul: number; key: string | null; accel: string | null; id: number | null; enabled: boolean; separator: boolean; checked?: boolean; items?: MenuItem[]; hint?: string }
+// hint: the row's tooltip — the web's one addition to the original's popups: a greyed entry says why it is greyed
 export interface MenuPopup { label: string; ul: number; key: string | null; items: MenuItem[] }
 export interface MenuBarModel { bar: MenuPopup[]; popups: Record<string, MenuPopup> }
 
@@ -61,6 +62,7 @@ export function buildMenuList(doc: Document, items: MenuItem[], pick: (id: numbe
   for (const it of items) {
     if (it.separator) { const sep = doc.createElement('div'); sep.className = 'w95-sep'; box.appendChild(sep); continue; }
     const row = doc.createElement('div'); row.className = `w95-item${it.enabled ? '' : ' disabled'}`;
+    if (it.hint) row.title = it.hint;
     const label = doc.createElement('span'); label.append(...labelNodes(doc, it.label, it.ul)); row.appendChild(label);
     if (it.checked) { const c = doc.createElement('span'); c.className = 'check'; c.textContent = '✓'; row.prepend(c); }
     if (it.accel) { const a = doc.createElement('span'); a.className = 'accel'; a.textContent = accelText(it.accel); row.appendChild(a); }   // "F1 · 1": the digit works too (keys.ts)
