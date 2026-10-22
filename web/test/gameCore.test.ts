@@ -111,6 +111,17 @@ describe('GameCore', () => {
     expect(core.mode).toBe('battle');
     expect(core.battle!.state.entry).toMatchObject({ episode: '첫업무', objective: '슬라임을 전멸시켜라!?' });
   });
+  it('addGold puts money in the party purse up to the cap, in any mode of a running game, and not before one starts', () => {
+    const stage = new FakeStage();
+    const core = new GameCore(res([prog(0, ['begin', ['LOAD_UNITS', 5], ['LOAD_MAP', 49], ['BATTLE_START_HEAL'], ['END']])], { 5: [...party, slime] }), stage);
+    expect(core.addGold(1000)).toBe(false);                                   // the title: no game yet
+    core.newGame(); core.frame(0); core.frame(16);
+    const before = core.campaign.inventory.gold;
+    expect(core.addGold(1000)).toBe(true);
+    expect(core.campaign.inventory.gold).toBe(before + 1000);
+    core.addGold(10_000_000);
+    expect(core.campaign.inventory.gold).toBe(999999);
+  });
   it('undoTurn: after the party acted it returns to the start of this turn; with nothing done it goes one turn back; the battle start is the floor', () => {
     const stage = new FakeStage();
     const core = new GameCore(res([prog(0, ['begin', ['LOAD_UNITS', 5], ['LOAD_MAP', 49], ['BATTLE_START_HEAL'], ['END'], 'Restart', ['LOAD_MAP', 49], ['FIELD_MODE'], ['END']])], { 5: [...party, slime] }), stage);

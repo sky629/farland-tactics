@@ -34,7 +34,7 @@ import { faceName } from '../ui/names';
 import { settingsDialog, type Settings } from '../ui/win/screens/settings';
 import { accelKey } from '../ui/win/keys';
 import { addSpeedMenu, isSpeed, nextSpeed, speedBadge, speedOfId } from '../ui/win/speed';
-import { turnUndoButton } from '../ui/win/turnUndo';
+import { GOLD_STEP, goldButton, turnUndoButton } from '../ui/win/tools';
 import { GameClock } from './clock';
 import { bgmDialog } from '../ui/win/screens/bgm';
 import { frameScale, MENU_BAR_H } from '../viewer/scale';
@@ -96,6 +96,7 @@ function menuCommand(id: number): void {
     case 'showPlaces': stage.toggleTownHighlights(); break;                                               // 갈 수 있는 장소 표시
     case 'fullMap': fullMap?.toggle(); break;                                                              // 전체 맵 F3: the 전체맵 window (fullMap.ts)
     case 'undoTurn': undoTurn(); break;                                                                    // 디버그 ▸ 턴 회복 (dev menu)
+    case 'addGold': addGold(); break;                                                                      // 디버그 ▸ 부자 (dev menu)
   }
 }
 /** Which menu items are live right now: 턴 종료 only in our battle phase; 클리어 조건 only in a battle; the rest of the system menu waits for its dialogs. */
@@ -185,6 +186,9 @@ let settings: Settings = { fullscreen: false, sound: true, speed: 1 };
 const clock = new GameClock();                                                 // 배속: real frame time → game time
 let speedBadgeRef: ReturnType<typeof speedBadge> | null = null;
 let undoRef: ReturnType<typeof turnUndoButton> | null = null;
+let goldRef: ReturnType<typeof goldButton> | null = null;
+/** 돈 추가 (the button, the 디버그 popup's 부자 [추정: the original's amount is unknown]): GOLD_STEP into the purse while a game runs and no dialog is open. */
+function addGold(): void { if (!dialogHost?.busy) core?.addGold(GOLD_STEP); }
 /** 턴 되돌리기 (the button, Ctrl+Z, the 디버그 popup's 턴 회복): back to the start of this turn, or one turn further when nothing was done yet. */
 function undoTurn(): void { if (core?.canUndoTurn()) core.undoTurn(); }
 /** 배속 1 → 2 → 4 → 1: F6 and the badge; a modal dialog holds it like the menu. */
@@ -208,6 +212,7 @@ function tick(now: number): void {
       core.frame(now);
       if (menuBar && menuRef) { const sig = menuSignature(); if (sig !== menuSig) { menuSig = sig; menuBar.setModel(currentMenu()); } }
       undoRef?.set(core.canUndoTurn());
+      goldRef?.set(core.mode !== 'title' && core.mode !== 'ended' && !(dialogHost?.busy ?? false), core.campaign.inventory.gold);
       if (core.mode === 'ended' && !endedShown) { endedShown = true; stage.hideTown(); if (!walk) void showTitle(); }   // the ending (or a game over with nowhere to go) returns to the title
       if (core.mode !== 'ended') endedShown = false;
     }
@@ -311,8 +316,8 @@ async function boot(): Promise<void> {
       menuBar = new MenuBar($('menubar'), model, menuCommand, () => dialogHost?.busy ?? false); popup = new PopupMenu($('win'));
       if (!walk) {                                                               // the web's tools at the right of the menu bar: 턴 되돌리기, 배속 (not in the auto-play's pictures)
         const tools = document.createElement('div'); tools.className = 'w95 w95-tools';
-        undoRef = turnUndoButton(document, undoTurn); speedBadgeRef = speedBadge(document, settings.speed, cycleSpeed);
-        tools.append(undoRef.el, speedBadgeRef.el); $('frame').appendChild(tools);
+        goldRef = goldButton(document, addGold); undoRef = turnUndoButton(document, undoTurn); speedBadgeRef = speedBadge(document, settings.speed, cycleSpeed);
+        tools.append(goldRef.el, undoRef.el, speedBadgeRef.el); $('frame').appendChild(tools);
       }
       dialogHost = new Dialogs($('win'), ui.dialogs); dialogue.attach(dialogHost);
       fullMap = new FullMapWindow($('win'), (x, y) => stage?.scrollTo(x, y));

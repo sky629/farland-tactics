@@ -10,6 +10,7 @@ import { VIEW_H, VIEW_W } from '../iso/grid';
 import type { Host, ModalKind, Resources, Restore, Tint, Where } from '../script/host';
 import { findLabel } from '../script/program';
 import { ScriptVm, scriptText } from '../script/vm';
+import { addGold } from '../battle/inventory';
 
 const TURN_HISTORY = 20;                                                       // turn starts kept for 턴 되돌리기
 import { townLabel } from '../town/town';
@@ -303,6 +304,13 @@ export class GameCore implements Host {
     this.stage.writeSave(slot, bytes); this.stage.log('info', `save ${String(slot).padStart(2, '0')}`);
     if (slot === 30) this.turnStarts = [bytes];                                 // the battle start is the floor of 턴 되돌리기
     else if (slot === 31) { this.turnStarts.push(bytes); if (this.turnStarts.length > TURN_HISTORY) this.turnStarts.splice(0, this.turnStarts.length - TURN_HISTORY); }
+  }
+
+  /** 돈 추가 (web-only): money into the party purse, capped (inventory.ts GOLD_MAX); nothing before a game runs. */
+  addGold(delta: number): boolean {
+    if (this.mode === 'title' || this.mode === 'ended') return false;
+    addGold(this.campaign.inventory, delta);
+    return true;
   }
 
   /** 턴 되돌리기 (web-only): the state at each turn's start — the battle-start autosave, then every turn-end autosave — newest last. */
