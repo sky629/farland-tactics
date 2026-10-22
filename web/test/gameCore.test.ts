@@ -111,6 +111,27 @@ describe('GameCore', () => {
     expect(core.mode).toBe('battle');
     expect(core.battle!.state.entry).toMatchObject({ episode: '첫업무', objective: '슬라임을 전멸시켜라!?' });
   });
+  it('undoTurn: after the party acted it returns to the start of this turn; with nothing done it goes one turn back; the battle start is the floor', () => {
+    const stage = new FakeStage();
+    const core = new GameCore(res([prog(0, ['begin', ['LOAD_UNITS', 5], ['LOAD_MAP', 49], ['BATTLE_START_HEAL'], ['END'], 'Restart', ['LOAD_MAP', 49], ['FIELD_MODE'], ['END']])], { 5: [...party, slime] }), stage);
+    let now = 0;
+    const settle = (): void => { for (let i = 0; i < 400 && (core.mode !== 'battle' || stage.presenter.busy); i++) { now += 50; core.frame(now); } };
+    core.newGame(); core.frame(0); core.frame(16); settle();
+    expect(core.mode).toBe('battle');
+    expect(core.canUndoTurn()).toBe(false);                                   // the battle start, nothing done: nowhere to go
+    const hero = core.battle!.state.units[0]!, c0 = hero.c;
+    hero.c = c0 + 1; hero.moved = true;
+    expect(core.canUndoTurn()).toBe(true);
+    expect(core.undoTurn()).toBe(true); settle();
+    expect(core.battle!.state.units[0]).toMatchObject({ c: c0, moved: false });
+    expect(core.battle!.state.turn).toBe(1);
+    core.dispatch({ type: 'endTurn' }); settle();                              // the slime's round; round 2 begins with the turn-end autosave
+    expect(core.battle!.state.turn).toBe(2);
+    expect(core.canUndoTurn()).toBe(true);                                    // nothing done in round 2, but round 1's start is behind us
+    expect(core.undoTurn()).toBe(true); settle();
+    expect(core.battle!.state.turn).toBe(1);
+    expect(core.canUndoTurn()).toBe(false);
+  });
   it('LOAD_MAP waits for the stage; BATTLE_START + END creates a Battle over the campaign units and inventory', () => {
     const stage = new FakeStage(); stage.ready = false;
     const core = new GameCore(res([prog(0, ['begin', ['LOAD_UNITS', 5], ['LOAD_MAP', 49], ['BATTLE_START_HEAL'], ['END']])], { 5: [...party, slime] }), stage);

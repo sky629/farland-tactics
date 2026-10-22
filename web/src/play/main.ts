@@ -34,6 +34,7 @@ import { faceName } from '../ui/names';
 import { settingsDialog, type Settings } from '../ui/win/screens/settings';
 import { accelKey } from '../ui/win/keys';
 import { addSpeedMenu, isSpeed, nextSpeed, speedBadge, speedOfId } from '../ui/win/speed';
+import { turnUndoButton } from '../ui/win/turnUndo';
 import { GameClock } from './clock';
 import { bgmDialog } from '../ui/win/screens/bgm';
 import { frameScale, MENU_BAR_H } from '../viewer/scale';
@@ -94,6 +95,7 @@ function menuCommand(id: number): void {
     case 'quit': if (dialogHost) void confirm(dialogHost, '게임을 종료합니까?').then((yes) => { if (yes) location.reload(); }); break;   // 게임종료: the web's exit is the title page; the question is ours [추정]
     case 'showPlaces': stage.toggleTownHighlights(); break;                                               // 갈 수 있는 장소 표시
     case 'fullMap': fullMap?.toggle(); break;                                                              // 전체 맵 F3: the 전체맵 window (fullMap.ts)
+    case 'undoTurn': undoTurn(); break;                                                                    // 디버그 ▸ 턴 회복 (dev menu)
   }
 }
 /** Which menu items are live right now: 턴 종료 only in our battle phase; 클리어 조건 only in a battle; the rest of the system menu waits for its dialogs. */
@@ -182,6 +184,9 @@ let lastFrameError = '';
 let settings: Settings = { fullscreen: false, sound: true, speed: 1 };
 const clock = new GameClock();                                                 // 배속: real frame time → game time
 let speedBadgeRef: ReturnType<typeof speedBadge> | null = null;
+let undoRef: ReturnType<typeof turnUndoButton> | null = null;
+/** 턴 되돌리기 (the button, Ctrl+Z, the 디버그 popup's 턴 회복): back to the start of this turn, or one turn further when nothing was done yet. */
+function undoTurn(): void { if (core?.canUndoTurn()) core.undoTurn(); }
 /** 배속 1 → 2 → 4 → 1: F6 and the badge; a modal dialog holds it like the menu. */
 function cycleSpeed(): void { if (dialogHost?.busy) return; settings = { ...settings, speed: nextSpeed(settings.speed) }; applySettings(); }
 function loadSettings(): void { try { const saved = JSON.parse(localStorage.getItem('ft2.settings') ?? 'null') as Partial<Settings> | null; if (saved) settings = { ...settings, ...saved }; } catch { /* storage unavailable */ } if (!isSpeed(settings.speed)) settings = { ...settings, speed: 1 }; applySettings(); }
@@ -202,6 +207,7 @@ function tick(now: number): void {
     if (core && stage) {
       core.frame(now);
       if (menuBar && menuRef) { const sig = menuSignature(); if (sig !== menuSig) { menuSig = sig; menuBar.setModel(currentMenu()); } }
+      undoRef?.set(core.canUndoTurn());
       if (core.mode === 'ended' && !endedShown) { endedShown = true; stage.hideTown(); if (!walk) void showTitle(); }   // the ending (or a game over with nowhere to go) returns to the title
       if (core.mode !== 'ended') endedShown = false;
     }
@@ -303,13 +309,18 @@ async function boot(): Promise<void> {
     if (ui) {
       menuRef = ui.menu; midiTracks = [...(index.midi ?? [])]; const model = currentMenu(); menuSig = menuSignature();
       menuBar = new MenuBar($('menubar'), model, menuCommand, () => dialogHost?.busy ?? false); popup = new PopupMenu($('win'));
-      if (!walk) { speedBadgeRef = speedBadge(document, settings.speed, cycleSpeed); $('frame').appendChild(speedBadgeRef.el); }   // the 배속 badge at the right of the menu bar (not in the auto-play's pictures)
+      if (!walk) {                                                               // the web's tools at the right of the menu bar: 턴 되돌리기, 배속 (not in the auto-play's pictures)
+        const tools = document.createElement('div'); tools.className = 'w95 w95-tools';
+        undoRef = turnUndoButton(document, undoTurn); speedBadgeRef = speedBadge(document, settings.speed, cycleSpeed);
+        tools.append(undoRef.el, speedBadgeRef.el); $('frame').appendChild(tools);
+      }
       dialogHost = new Dialogs($('win'), ui.dialogs); dialogue.attach(dialogHost);
       fullMap = new FullMapWindow($('win'), (x, y) => stage?.scrollTo(x, y));
       document.addEventListener('keydown', (e) => {                            // the original's accelerators: F1 불러오기, F2 유니트 일람, F4 전체 화면, F5 저장, F10 턴 종료 …
         if (dialogHost?.busy || e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement || e.target instanceof HTMLTextAreaElement) return;
         const ctrl = e.ctrlKey || e.metaKey, key = ctrl ? e.key : accelKey(e.key);   // 1–6, 0, 9 stand in for F1–F6, F10, F11 (a keyboard without an F row)
         if (key === 'F6') { e.preventDefault(); cycleSpeed(); return; }        // 배속 (web-only)
+        if (ctrl && e.key.toLowerCase() === 'z') { e.preventDefault(); undoTurn(); return; }   // 턴 되돌리기 (the original's 디버그 accelerator)
         const id = accelOf(currentMenu(), key, ctrl);
         if (id !== null) { e.preventDefault(); menuCommand(id); }
       });

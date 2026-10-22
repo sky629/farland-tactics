@@ -10,6 +10,8 @@ import { VIEW_H, VIEW_W } from '../iso/grid';
 import type { Host, ModalKind, Resources, Restore, Tint, Where } from '../script/host';
 import { findLabel } from '../script/program';
 import { ScriptVm, scriptText } from '../script/vm';
+
+const TURN_HISTORY = 20;                                                       // turn starts kept for 턴 되돌리기
 import { townLabel } from '../town/town';
 import { clampCamera } from '../viewer/scale';
 import { scenes } from '../visual/scenes';
@@ -92,6 +94,7 @@ export class GameCore implements Host {
     this.campaign = c;
     this.vm = new ScriptVm(this.res, c, this);
     this.battle = null; this.result = null; this.hooks = []; this.pendingBattle = false; this.completed = false;
+    this.turnStarts = [bytes];                                                 // a loaded save is where 턴 되돌리기 stops
     this.stage.closeAll(); this.stage.hideTown();
     this.mode = 'title'; this.prevMode = 'title';
     this.stage.presenter.sync(c);
@@ -294,7 +297,32 @@ export class GameCore implements Host {
     this.stage.startVisual(def, d.part);
   }
   visualBusy(): boolean { return !this.stage.visualDone(); }
-  save(slot: number): void { if (slot < 0) return; this.stage.writeSave(slot, this.saveBytes()); this.stage.log('info', `save ${String(slot).padStart(2, '0')}`); }
+  save(slot: number): void {
+    if (slot < 0) return;
+    const bytes = this.saveBytes();
+    this.stage.writeSave(slot, bytes); this.stage.log('info', `save ${String(slot).padStart(2, '0')}`);
+    if (slot === 30) this.turnStarts = [bytes];                                 // the battle start is the floor of 턴 되돌리기
+    else if (slot === 31) { this.turnStarts.push(bytes); if (this.turnStarts.length > TURN_HISTORY) this.turnStarts.splice(0, this.turnStarts.length - TURN_HISTORY); }
+  }
+
+  /** 턴 되돌리기 (web-only): the state at each turn's start — the battle-start autosave, then every turn-end autosave — newest last. */
+  private turnStarts: Uint8Array[] = [];
+  /** Possible in a battle during the player's phase with nothing in flight, when the party did something this turn or an earlier turn start is kept. */
+  canUndoTurn(): boolean {
+    const b = this.battle;
+    if (this.mode !== 'battle' || !b || b.state.phase.kind !== 'player' || this.stage.presenter.busy || this.hooks.length > 0) return false;
+    return this.partyActed() || this.turnStarts.length > 1;
+  }
+  private partyActed(): boolean { return this.battle!.state.units.some((u) => u !== null && u.side === 0 && (u.moved || u.acted)); }
+  /** Back to the start of this turn; with nothing done this turn, to the start of the previous one. The reload runs the stage's Restart like a loaded save. */
+  undoTurn(): boolean {
+    if (!this.canUndoTurn()) return false;
+    const stack = this.turnStarts;
+    if (!this.partyActed()) stack.pop();
+    const ok = this.loadGame(stack[stack.length - 1]!);
+    this.turnStarts = stack;                                                   // loadGame made the snapshot the new floor; the history stays
+    return ok;
+  }
   quitComplete(): void { this.battle = null; this.mode = 'ended'; this.stage.log('info', 'game complete'); }
   /** INI CompleteFlag in the original; here it marks the ending: event17 writes it, shows the title picture and ENDs. */
   writeCompleteFlag(): void { this.completed = true; }
