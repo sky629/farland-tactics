@@ -11,7 +11,7 @@ export function speedOfId(id: number): Speed | null { return SPEEDS.find((s) => 
 /** The 배속 badge at the right end of the menu bar: it reads "배속 N배" and a click asks for the next speed (the same as F6). */
 export function speedBadge(doc: Document, speed: Speed, onCycle: () => void): { el: HTMLElement; set(speed: Speed): void } {
   const el = doc.createElement('button');
-  el.className = 'w95 w95-speed'; el.title = '배속 바꾸기 (F6)'; el.setAttribute?.('type', 'button');
+  el.className = 'w95 w95-speed'; el.title = '배속 바꾸기 (F6 또는 6)'; el.setAttribute?.('type', 'button');
   const set = (s: Speed): void => { el.textContent = `배속 ${s}배`; };
   set(speed);
   el.addEventListener('click', onCycle);

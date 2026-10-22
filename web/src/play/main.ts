@@ -32,6 +32,7 @@ import { scenes } from '../visual/scenes';
 import { FULL_MAP_H, FULL_MAP_W, FullMapWindow, fullMapMarkers } from '../ui/win/fullMap';
 import { faceName } from '../ui/names';
 import { settingsDialog, type Settings } from '../ui/win/screens/settings';
+import { accelKey } from '../ui/win/keys';
 import { addSpeedMenu, isSpeed, nextSpeed, speedBadge, speedOfId } from '../ui/win/speed';
 import { GameClock } from './clock';
 import { bgmDialog } from '../ui/win/screens/bgm';
@@ -307,8 +308,9 @@ async function boot(): Promise<void> {
       fullMap = new FullMapWindow($('win'), (x, y) => stage?.scrollTo(x, y));
       document.addEventListener('keydown', (e) => {                            // the original's accelerators: F1 불러오기, F2 유니트 일람, F4 전체 화면, F5 저장, F10 턴 종료 …
         if (dialogHost?.busy || e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement || e.target instanceof HTMLTextAreaElement) return;
-        if (e.key === 'F6') { e.preventDefault(); cycleSpeed(); return; }      // 배속 (web-only)
-        const id = accelOf(currentMenu(), e.key, e.ctrlKey || e.metaKey);
+        const ctrl = e.ctrlKey || e.metaKey, key = ctrl ? e.key : accelKey(e.key);   // 1–6, 0, 9 stand in for F1–F6, F10, F11 (a keyboard without an F row)
+        if (key === 'F6') { e.preventDefault(); cycleSpeed(); return; }        // 배속 (web-only)
+        const id = accelOf(currentMenu(), key, ctrl);
         if (id !== null) { e.preventDefault(); menuCommand(id); }
       });
     }

@@ -5,6 +5,7 @@
  * only in the developer mode. Labels, mnemonics and accelerators are read off the resource strings (layout.ts mnemonic).
  */
 import type { MenuItemTemplate, MenuTemplate } from '../../data/types';
+import { accelText } from './keys';
 import { mnemonic } from './layout';
 
 export type { MenuTemplate };
@@ -62,7 +63,7 @@ export function buildMenuList(doc: Document, items: MenuItem[], pick: (id: numbe
     const row = doc.createElement('div'); row.className = `w95-item${it.enabled ? '' : ' disabled'}`;
     const label = doc.createElement('span'); label.append(...labelNodes(doc, it.label, it.ul)); row.appendChild(label);
     if (it.checked) { const c = doc.createElement('span'); c.className = 'check'; c.textContent = '✓'; row.prepend(c); }
-    if (it.accel) { const a = doc.createElement('span'); a.className = 'accel'; a.textContent = it.accel; row.appendChild(a); }
+    if (it.accel) { const a = doc.createElement('span'); a.className = 'accel'; a.textContent = accelText(it.accel); row.appendChild(a); }   // "F1 · 1": the digit works too (keys.ts)
     if (it.items) {
       const arrow = doc.createElement('span'); arrow.className = 'arrow'; arrow.textContent = '▶'; row.appendChild(arrow);
       let sub: HTMLElement | null = null;

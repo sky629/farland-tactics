@@ -11,7 +11,7 @@ export interface Settings { fullscreen: boolean; sound: boolean; speed: Speed }
 /** The web-only row under the template: 배속 1배/2배/4배 (F6 cycles it in the game window). */
 function speedStrip(host: DialogHost, current: Speed): { el: HTMLElement; value: () => Speed } {
   const doc = host.layer.ownerDocument, strip = doc.createElement('div'); strip.className = 'w95-strip';
-  const cap = doc.createElement('span'); cap.textContent = '배속 (F6):'; strip.appendChild(cap);
+  const cap = doc.createElement('span'); cap.textContent = '배속 (F6 · 6):'; strip.appendChild(cap);
   const radios = SPEEDS.map((s) => {
     const label = doc.createElement('label'), r = doc.createElement('input');
     r.type = 'radio'; r.name = 'speed'; r.value = String(s); r.checked = s === current;
